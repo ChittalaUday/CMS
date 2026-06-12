@@ -15,7 +15,7 @@ import { motion, type Variants } from "framer-motion"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { loginAction } from "@/app/actions/auth"
+import { loginAction } from "@/app/_actions/auth"
 import { useSessionStore } from "@/lib/stores/session-store"
 
 const container: Variants = {
@@ -55,12 +55,15 @@ export function LoginForm({
     setLoading(true)
     const toastId = toast.loading("Signing in…")
     try {
-      const user = await loginAction(email, password)
-      setUser(user)
+      const result = await loginAction({ email, password })
+      if (result?.serverError || result?.validationErrors || !result?.data) {
+        throw new Error(result?.serverError || "Invalid email or password")
+      }
+      setUser(result.data)
       toast.success("Welcome back!", { id: toastId })
       router.push("/dashboard")
-    } catch {
-      toast.error("Invalid email or password", { id: toastId })
+    } catch (err: any) {
+      toast.error(err.message || "Invalid email or password", { id: toastId })
     } finally {
       setLoading(false)
     }

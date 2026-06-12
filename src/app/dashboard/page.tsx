@@ -1,59 +1,33 @@
-import { AppSidebar } from "@/components/app-sidebar"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
-import { ModeToggle } from "@/components/ModeToggle"
+export const dynamic = "force-dynamic"
 
 export default function Page() {
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Build Your Application
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+    <>
+      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+        <div className="aspect-video rounded-xl bg-muted/50 flex items-center justify-center p-6 border border-border">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-foreground">Editors</h3>
+            <p className="text-3xl font-bold mt-2">Active</p>
           </div>
-          <div className="flex items-center gap-2">
-            <ModeToggle />
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-          </div>
-          <div className="min-h-screen flex-1 rounded-xl bg-muted/50 md:min-h-min" />
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+        <div className="aspect-video rounded-xl bg-muted/50 flex items-center justify-center p-6 border border-border">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-foreground">Blogs</h3>
+            <p className="text-3xl font-bold mt-2">Drafts</p>
+          </div>
+        </div>
+        <div className="aspect-video rounded-xl bg-muted/50 flex items-center justify-center p-6 border border-border">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-foreground">Settings</h3>
+            <p className="text-sm text-muted-foreground mt-2">Manage system settings</p>
+          </div>
+        </div>
+      </div>
+      <div className="min-h-[400px] flex-1 rounded-xl bg-muted/50 border border-border p-6 flex flex-col justify-center items-center text-center">
+        <h2 className="text-xl font-bold mb-2">Welcome to your CMS Dashboard</h2>
+        <p className="text-muted-foreground max-w-md">Use the sidebar navigation to manage editors, check blog configurations, and control system settings.</p>
+      </div>
+    </>
   )
 }
+
