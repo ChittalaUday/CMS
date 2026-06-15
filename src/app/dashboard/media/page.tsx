@@ -82,7 +82,9 @@ export default function MediaLibraryPage() {
   }
 
   const copyToClipboard = (url: string, id: string) => {
-    const fullUrl = `${window.location.origin}${url}`
+    const fullUrl = url.startsWith("http://") || url.startsWith("https://") 
+      ? url 
+      : `${window.location.origin}${url}`
     navigator.clipboard.writeText(fullUrl)
     setCopiedId(id)
     toast.success("Copied file URL to clipboard")

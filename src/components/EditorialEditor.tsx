@@ -177,6 +177,8 @@ function deserializeHtmlToSlate(html: string): any[] {
 export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditorProps) {
   const router = useRouter()
 
+  // Role-based permissions
+  const canPublish = user.role === "SUPER_ADMIN" || user.role === "ADMIN"
   // Editor core state
   const [title, setTitle] = useState(initialData?.title || "")
   const [slug, setSlug] = useState(initialData?.slug || "")
@@ -211,6 +213,9 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
   // Track whether the user has interacted — prevents auto-save on initial mount
   const hasUserInteracted = useRef(false)
   const isFirstMount = useRef(true)
+
+  // Dedicated timer ref for the 1-second keyboard-stop debounce
+  const contentSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Word & Character count
   const [wordCount, setWordCount] = useState(0)
@@ -249,46 +254,61 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
     updateStats()
   }, [editor, editor.children])
 
-  // Mark first mount as done after initial render — subsequent dep changes are user-driven
+  // Mark first mount as done after initial render
   useEffect(() => {
     isFirstMount.current = false
   }, [])
 
-  // Auto-save draft effect — only fires after the user has interacted
+  // Shared auto-save helper — called by both content onChange and field-level effect.
+  // Shows "Saving draft..." for at least 1 second so it's always readable.
+  const triggerAutoSave = (children?: any[]) => {
+    if (!initialData?.id) return
+    if (!title.trim() || !slug.trim()) return
+
+    setIsSavingStatus("Saving draft...")
+
+    const minDelay = new Promise<void>((res) => setTimeout(res, 1000))
+    const save = onSubmit({
+      title,
+      slug,
+      content: serializeSlateToHtml(children ?? editor.children),
+      contentJson: children ?? editor.children,
+      published,
+      featuredImageId,
+      categoryIds: selectedCategoryIds,
+      metadata: { seoDescription, tags },
+    })
+
+    Promise.all([save, minDelay])
+      .then(() => setIsSavingStatus("Saved to Drafts"))
+      .catch(() => setIsSavingStatus("Failed to Save"))
+  }
+
+  // ─── 1-second debounce on keyboard interaction (content changes) ───────────
+  // Called from Plate's onChange — clears and resets the timer on every keystroke
+  const handleEditorChange = ({ value }: { value: any[] }) => {
+    hasUserInteracted.current = true
+
+    if (contentSaveTimer.current) {
+      clearTimeout(contentSaveTimer.current)
+    }
+
+    contentSaveTimer.current = setTimeout(() => {
+      triggerAutoSave(value)
+    }, 1000)
+  }
+
+  // ─── 2-second debounce on metadata / field changes ─────────────────────────
+  // Watches slug, categories, tags, etc. — NOT editor.children (handled above)
   useEffect(() => {
-    // Skip on the very first mount (page load)
-    if (isFirstMount.current) return;
+    if (isFirstMount.current) return
+    if (!hasUserInteracted.current) return
 
-    if (!initialData?.id || !editor) return;
-    if (!title.trim() || !slug.trim()) return;
+    const timer = setTimeout(() => {
+      triggerAutoSave()
+    }, 2000)
 
-    // Skip if the user hasn't touched anything yet
-    if (!hasUserInteracted.current) return;
-
-    setIsSavingStatus("Saving...");
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        await onSubmit({
-          title,
-          slug,
-          content: serializeSlateToHtml(editor.children),
-          contentJson: editor.children,
-          published,
-          featuredImageId,
-          categoryIds: selectedCategoryIds,
-          metadata: {
-            seoDescription,
-            tags,
-          },
-        });
-        setIsSavingStatus("Saved to Drafts");
-      } catch (err) {
-        setIsSavingStatus("Failed to Save");
-      }
-    }, 2000);
-
-    return () => clearTimeout(delayDebounceFn);
+    return () => clearTimeout(timer)
   }, [
     title,
     slug,
@@ -297,7 +317,6 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
     selectedCategoryIds,
     seoDescription,
     tags,
-    editor.children,
     initialData?.id,
   ])
 
@@ -398,7 +417,7 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
   }
 
   return (
-    <Plate editor={editor} onChange={() => { hasUserInteracted.current = true }}>
+    <Plate editor={editor} onChange={handleEditorChange}>
       <div className="flex flex-col flex-1 bg-background rounded-lg font-sans text-foreground antialiased overflow-hidden select-none -mx-4 -mb-4 h-[calc(100vh-4rem)]">
 
         {/* 1. Header */}
@@ -420,7 +439,21 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+
+            {/* Preview — admin/super-admin only */}
+            {canPublish && initialData?.slug && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`/posts/${initialData.slug}`, "_blank")}
+                className="h-8 text-xs font-semibold px-3 gap-1.5 rounded-md border-border/60 hover:bg-muted"
+                title="Preview post"
+              >
+                <Eye className="size-3.5" />
+                Preview
+              </Button>
+            )}
 
             <Button
               onClick={handleFormSubmit}
@@ -432,7 +465,9 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
               ) : (
                 <Send className="size-3.5" />
               )}
-              {published ? "Publish" : "Save Changes"}
+              {canPublish
+                ? published ? "Update & Publish" : "Publish"
+                : "Save Draft"}
             </Button>
 
           </div>
@@ -639,14 +674,17 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
                     />
                   </div>
 
-                  <div className="flex items-center justify-between py-1 px-1">
-                    <Label htmlFor="published-toggle" className="cursor-pointer text-xs font-semibold text-muted-foreground uppercase">Publish Post Immediately</Label>
-                    <Switch
-                      id="published-toggle"
-                      checked={published}
-                      onCheckedChange={(v) => { hasUserInteracted.current = true; setPublished(v) }}
-                    />
-                  </div>
+                  {/* Publish toggle — admin/super-admin only */}
+                  {canPublish && (
+                    <div className="flex items-center justify-between py-1 px-1">
+                      <Label htmlFor="published-toggle" className="cursor-pointer text-xs font-semibold text-muted-foreground uppercase">Publish Post Immediately</Label>
+                      <Switch
+                        id="published-toggle"
+                        checked={published}
+                        onCheckedChange={(v) => { hasUserInteracted.current = true; setPublished(v) }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -654,7 +692,7 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
         </div>
 
         {/* 3. Footer */}
-        <footer className="h-8 rounded-xl mx-2 mb-4 bg-card flex items-center justify-between px-6 shrink-0 text-[10px] text-muted-foreground font-medium font-mono select-none">
+        <footer className="h-8 rounded-md mx-2 mb-2 bg-card flex items-center justify-between px-6 shrink-0 text-[10px] text-muted-foreground font-medium font-mono select-none">
           <div className="flex items-center gap-4">
             <span>Words: {wordCount}</span>
             <span>Characters: {charCount}</span>

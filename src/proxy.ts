@@ -39,9 +39,18 @@ export default async function proxy(req: NextRequest) {
   res.headers.set("X-Content-Type-Options", "nosniff")
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
   res.headers.set("X-XSS-Protection", "1; mode=block")
+
+  const r2PublicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL
+  let r2Origin = ""
+  if (r2PublicUrl) {
+    try {
+      r2Origin = new URL(r2PublicUrl).origin
+    } catch {}
+  }
+
   res.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://avatar.iran.liara.run; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
+    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://avatar.iran.liara.run https://*.r2.dev ${r2Origin}`.trim() + "; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
   )
 
   return res

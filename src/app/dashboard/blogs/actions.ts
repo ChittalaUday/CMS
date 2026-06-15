@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getSession } from "@/lib/session"
-import { writeFile, mkdir, unlink } from "fs/promises"
-import { join } from "path"
+import { uploadToR2, deleteFromR2 } from "@/lib/s3"
 
 // --- Auth Helpers ---
 async function requireAuth() {
@@ -84,24 +83,62 @@ export async function getPosts() {
   return await prisma.post.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      author: {
-        select: { id: true, name: true, email: true },
-      },
+      author: { select: { id: true, name: true, email: true } },
       featuredImage: true,
-      categories: {
-        include: {
-          category: true,
-        },
-      },
-      _count: {
-        select: {
-          comments: true,
-          likes: true,
-          views: true,
-        },
-      },
+      categories: { include: { category: true } },
+      _count: { select: { comments: true, likes: true, views: true } },
     },
   })
+}
+
+export async function getPostsPaginated(params: {
+  search?: string
+  categoryId?: string
+  page?: number
+  pageSize?: number
+}) {
+  await requireAuth()
+
+  const page = Math.max(1, params.page ?? 1)
+  const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
+  const skip = (page - 1) * pageSize
+
+  const where: any = {}
+
+  if (params.search?.trim()) {
+    where.OR = [
+      { title: { contains: params.search.trim(), mode: "insensitive" } },
+      { slug: { contains: params.search.trim(), mode: "insensitive" } },
+    ]
+  }
+
+  if (params.categoryId) {
+    where.categories = { some: { categoryId: params.categoryId } }
+  }
+
+  const [posts, totalCount] = await Promise.all([
+    prisma.post.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      include: {
+        author: { select: { id: true, name: true, email: true } },
+        featuredImage: true,
+        categories: { include: { category: true } },
+        _count: { select: { comments: true, likes: true, views: true } },
+      },
+    }),
+    prisma.post.count({ where }),
+  ])
+
+  return {
+    posts,
+    totalCount,
+    page,
+    pageSize,
+    totalPages: Math.ceil(totalCount / pageSize),
+  }
 }
 
 export async function getPostById(id: string) {
@@ -110,22 +147,24 @@ export async function getPostById(id: string) {
     where: { id },
     include: {
       featuredImage: true,
-      categories: {
-        include: {
-          category: true,
-        },
-      },
+      categories: { include: { category: true } },
       comments: {
         orderBy: { createdAt: "desc" },
-        include: {
-          author: { select: { name: true, email: true } },
-        },
+        include: { author: { select: { name: true, email: true } } },
       },
-      media: {
-        include: {
-          media: true,
-        },
-      },
+      media: { include: { media: true } },
+    },
+  })
+}
+
+export async function getPostBySlug(slug: string) {
+  await requireAuth()
+  return await prisma.post.findUnique({
+    where: { slug },
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      featuredImage: true,
+      categories: { include: { category: true } },
     },
   })
 }
@@ -224,7 +263,43 @@ export async function updatePost(
     revalidatePath(`/dashboard/blogs/${id}/edit`)
     return post
   } catch (err) {
+    // P2002 on slug: if the conflicting slug belongs to THIS post, it's a no-op
+    // (happens during auto-save when the slug hasn't changed)
+    if (
+      isPrismaKnownError(err) &&
+      err.code === "P2002" &&
+      (err.meta?.target as string[] | undefined)?.includes("slug")
+    ) {
+      const owner = await prisma.post.findUnique({ where: { slug: data.slug } })
+      if (owner && owner.id === id) {
+        // Slug belongs to this post — safe to ignore; re-fetch and return
+        return await prisma.post.findUnique({ where: { id } }) as any
+      }
+    }
     handlePrismaError(err, "updatePost")
+  }
+}
+
+export async function togglePublished(id: string) {
+  const user = await requireAuth()
+
+  if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN") {
+    throw new Error("Unauthorized: only admins can publish posts")
+  }
+
+  try {
+    const post = await prisma.post.findUnique({ where: { id }, select: { published: true } })
+    if (!post) throw new Error("Post not found")
+
+    const updated = await prisma.post.update({
+      where: { id },
+      data: { published: !post.published },
+    })
+
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "togglePublished")
   }
 }
 
@@ -299,19 +374,14 @@ export async function uploadMediaItem(formData: FormData) {
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  // Ensure upload directory exists
-  const uploadDir = join(process.cwd(), "public", "uploads")
-  await mkdir(uploadDir, { recursive: true })
-
   // Clean filename to avoid directory traversal or weird symbols
   const cleanFilename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-  const filePath = join(uploadDir, cleanFilename)
-
-  // Save to public directory
-  await writeFile(filePath, buffer)
-  const fileUrl = `/uploads/${cleanFilename}`
+  const key = `uploads/${cleanFilename}`
 
   try {
+    // Upload to R2 and get public URL
+    const fileUrl = await uploadToR2(key, buffer, file.type)
+
     // Save record to DB
     const media = await prisma.media.create({
       data: {
@@ -335,10 +405,13 @@ export async function deleteMediaItem(id: string) {
   const media = await prisma.media.findUnique({ where: { id } })
   if (!media) throw new Error("Media item not found")
 
-  // Delete from public folder
-  const filePath = join(process.cwd(), "public", media.url)
-  await unlink(filePath).catch(() => {
-    console.warn(`Could not delete local file at ${filePath}`)
+  // Extract S3/R2 key from the URL
+  const match = media.url.match(/uploads\/.*$/)
+  const key = match ? match[0] : media.url.split("/").pop()!
+
+  // Delete from R2
+  await deleteFromR2(key).catch((err) => {
+    console.warn(`Could not delete R2 object at key ${key}:`, err)
   })
 
   try {

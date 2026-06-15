@@ -18,6 +18,7 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.207",
     "@ariakit/react": "^0.4.29",
+    "@aws-sdk/client-s3": "^3.1068.0",
     "@emoji-mart/data": "^1.2.1",
     "@faker-js/faker": "^10.4.0",
     "@hookform/resolvers": "^5.4.0",
