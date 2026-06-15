@@ -10,6 +10,8 @@ import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 
+import { DashboardBreadcrumbs } from "@/components/DashboardBreadcrumbs"
+
 function HeaderSkeleton() {
   return <div className="h-6 w-32 bg-muted rounded animate-pulse" />
 }
@@ -33,11 +35,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
               className="mr-2 data-vertical:h-4 data-vertical:self-auto"
             />
             <Suspense fallback={<HeaderSkeleton />}>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Dashboard</span>
-                <span className="text-muted-foreground/50">/</span>
-                <span className="font-medium text-foreground">Overview</span>
-              </div>
+              <DashboardBreadcrumbs />
             </Suspense>
           </div>
         </header>

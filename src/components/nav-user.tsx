@@ -19,10 +19,11 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, LogOutIcon, SunIcon, MoonIcon } from "lucide-react"
 import { logoutAction } from "@/app/_actions/auth"
 import { useTransition } from "react"
 import { toast } from "sonner"
+import { useTheme } from "next-themes"
 
 export function NavUser({
   user,
@@ -35,6 +36,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const [isPending, startTransition] = useTransition()
+  const { theme, setTheme } = useTheme()
 
   const handleLogout = () => {
     startTransition(async () => {
@@ -89,8 +91,13 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+              {theme === "dark" ? <SunIcon className="mr-2 size-4" /> : <MoonIcon className="mr-2 size-4" />}
+              <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} disabled={isPending}>
-              <LogOutIcon />
+              <LogOutIcon className="mr-2 size-4" />
               {isPending ? "Logging out..." : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>

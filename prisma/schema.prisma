@@ -23,6 +23,11 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   sessions  Session[]
+  posts     Post[]
+  comments  Comment[]
+  likes     Like[]
+  views     View[]
+  media     Media[]
 }
 
 model Session {
@@ -32,5 +37,116 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  @@index([userId])
+}
+
+model Post {
+  id              String         @id @default(cuid())
+  title           String
+  slug            String         @unique
+  content         String
+  contentJson     Json?
+  published       Boolean        @default(false)
+  authorId        String
+  author          User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  featuredImageId String?
+  featuredImage   Media?         @relation("FeaturedImage", fields: [featuredImageId], references: [id], onDelete: SetNull)
+  metadata        Json?          @default("{}")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  comments        Comment[]
+  likes           Like[]
+  views           View[]
+  categories      PostCategory[]
+  media           PostMedia[]
+
+  @@index([authorId])
+  @@index([featuredImageId])
+}
+
+model Category {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  slug      String         @unique
+  createdAt DateTime       @default(now())
+  posts     PostCategory[]
+}
+
+model PostCategory {
+  postId     String
+  categoryId String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([postId, categoryId])
+}
+
+model Media {
+  id            String      @id @default(cuid())
+  filename      String
+  url           String
+  mimeType      String
+  size          Int
+  width         Int?
+  height        Int?
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  
+  featuredPosts Post[]      @relation("FeaturedImage")
+  posts         PostMedia[]
+
+  @@index([userId])
+}
+
+model PostMedia {
+  postId  String
+  mediaId String
+  post    Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media   Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([postId, mediaId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  content    String
+  postId     String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([postId])
+  @@index([authorId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([userId])
+}
+
+model View {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([postId])
   @@index([userId])
 }

@@ -12,7 +12,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
-import { TerminalIcon, LayoutDashboardIcon, UsersIcon, BookOpenIcon } from "lucide-react"
+import { TerminalIcon, LayoutDashboardIcon, UsersIcon, BookOpenIcon, ImageIcon } from "lucide-react"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: {
@@ -45,6 +45,11 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       title: "Blogs",
       url: "/dashboard/blogs",
       icon: <BookOpenIcon className="size-4" />,
+    },
+    {
+      title: "Media Library",
+      url: "/dashboard/media",
+      icon: <ImageIcon className="size-4" />,
     },
   ]
 
