@@ -1,160 +1,187 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { RichTextEditor } from "@/components/RichTextEditor"
-import { MediaSelectorModal } from "@/components/MediaSelectorModal"
-import { Switch } from "@/components/ui/switch"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { MediaSelectorModal } from "@/components/MediaSelectorModal";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetDescription,
-} from "@/components/ui/sheet"
-import { getCategories, createCategory, deleteCategory } from "./actions"
-import { toast } from "sonner"
-import { Loader2, Plus, Image as ImageIcon, Trash2, Globe, FileText, Settings, Sparkles } from "lucide-react"
+} from "@/components/ui/sheet";
+import { getCategories, createCategory, deleteCategory } from "./actions";
+import { toast } from "sonner";
+import {
+  Loader2,
+  Plus,
+  Image as ImageIcon,
+  Trash2,
+  Globe,
+  FileText,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 
 interface BlogFormProps {
   initialData?: {
-    id: string
-    title: string
-    slug: string
-    content: string
-    contentJson?: any
-    published: boolean
-    featuredImageId?: string | null
-    featuredImage?: { url: string; filename: string } | null
-    categories: Array<{ categoryId: string }>
-    metadata?: any
-  }
-  onSubmit: (data: any) => Promise<any>
+    id: string;
+    title: string;
+    slug: string;
+    content: string;
+    contentJson?: any;
+    published: boolean;
+    featuredImageId?: string | null;
+    featuredImage?: { url: string; filename: string } | null;
+    categories: Array<{ categoryId: string }>;
+    metadata?: any;
+  };
+  onSubmit: (data: any) => Promise<any>;
 }
 
 interface Category {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
-  const router = useRouter()
-  const [title, setTitle] = useState(initialData?.title || "")
-  const [slug, setSlug] = useState(initialData?.slug || "")
-  const [content, setContent] = useState(initialData?.content || "")
-  const [contentJson, setContentJson] = useState(initialData?.contentJson || null)
-  const [published, setPublished] = useState(initialData?.published ?? false)
-  
+  const router = useRouter();
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [slug, setSlug] = useState(initialData?.slug || "");
+  const [content, setContent] = useState(initialData?.content || "");
+  const [contentJson, setContentJson] = useState(
+    initialData?.contentJson || null,
+  );
+  const [published, setPublished] = useState(initialData?.published ?? false);
+
   // Featured Image state
-  const [featuredImageId, setFeaturedImageId] = useState<string | null>(initialData?.featuredImageId || null)
-  const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(initialData?.featuredImage?.url || null)
+  const [featuredImageId, setFeaturedImageId] = useState<string | null>(
+    initialData?.featuredImageId || null,
+  );
+  const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(
+    initialData?.featuredImage?.url || null,
+  );
 
   // Categories state
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([])
+  const [availableCategories, setAvailableCategories] = useState<Category[]>(
+    [],
+  );
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(
-    initialData?.categories.map((c) => c.categoryId) || []
-  )
-  const [newCategoryName, setNewCategoryName] = useState("")
-  const [sidebarSheetOpen, setSidebarSheetOpen] = useState(false)
-  const isMobile = useIsMobile()
+    initialData?.categories.map((c) => c.categoryId) || [],
+  );
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [sidebarSheetOpen, setSidebarSheetOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Metadata state
-  const [seoDescription, setSeoDescription] = useState(initialData?.metadata?.seoDescription || "")
-  const [tagsInput, setTagsInput] = useState(initialData?.metadata?.tags?.join(", ") || "")
+  const [seoDescription, setSeoDescription] = useState(
+    initialData?.metadata?.seoDescription || "",
+  );
+  const [tagsInput, setTagsInput] = useState(
+    initialData?.metadata?.tags?.join(", ") || "",
+  );
 
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false)
-  const [deletingCatId, setDeletingCatId] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadCategories()
-  }, [])
+    loadCategories();
+  }, []);
 
   const loadCategories = async () => {
     try {
-      const cats = await getCategories()
-      setAvailableCategories(cats)
+      const cats = await getCategories();
+      setAvailableCategories(cats);
     } catch (err) {
-      toast.error("Failed to load categories")
+      toast.error("Failed to load categories");
     }
-  }
+  };
 
   // Auto-slug generator
   const handleTitleChange = (val: string) => {
-    setTitle(val)
+    setTitle(val);
     if (!initialData) {
       const generatedSlug = val
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)+/g, "")
-      setSlug(generatedSlug)
+        .replace(/(^-|-$)+/g, "");
+      setSlug(generatedSlug);
     }
-  }
+  };
 
   const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newCategoryName.trim()) return
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
 
     try {
-      setIsCreatingCategory(true)
-      const newCat = await createCategory(newCategoryName.trim())
-      setAvailableCategories((prev) => [...prev, newCat])
-      setSelectedCategoryIds((prev) => [...prev, newCat.id])
-      setNewCategoryName("")
-      toast.success("Category added successfully")
+      setIsCreatingCategory(true);
+      const newCat = await createCategory(newCategoryName.trim());
+      setAvailableCategories((prev) => [...prev, newCat]);
+      setSelectedCategoryIds((prev) => [...prev, newCat.id]);
+      setNewCategoryName("");
+      toast.success("Category added successfully");
     } catch (err: any) {
-      toast.error(err.message || "Failed to create category")
+      toast.error(err.message || "Failed to create category");
     } finally {
-      setIsCreatingCategory(false)
+      setIsCreatingCategory(false);
     }
-  }
+  };
 
   const handleDeleteCategory = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
+    e.preventDefault();
+    e.stopPropagation();
+
     try {
-      setDeletingCatId(id)
-      await deleteCategory(id)
-      setAvailableCategories((prev) => prev.filter((cat) => cat.id !== id))
-      setSelectedCategoryIds((prev) => prev.filter((catId) => catId !== id))
-      toast.success("Category deleted successfully")
+      setDeletingCatId(id);
+      await deleteCategory(id);
+      setAvailableCategories((prev) => prev.filter((cat) => cat.id !== id));
+      setSelectedCategoryIds((prev) => prev.filter((catId) => catId !== id));
+      toast.success("Category deleted successfully");
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete category")
+      toast.error(err.message || "Failed to delete category");
     } finally {
-      setDeletingCatId(null)
+      setDeletingCatId(null);
     }
-  }
+  };
 
   const toggleCategory = (id: string) => {
     setSelectedCategoryIds((prev) =>
-      prev.includes(id) ? prev.filter((catId) => catId !== id) : [...prev, id]
-    )
-  }
+      prev.includes(id) ? prev.filter((catId) => catId !== id) : [...prev, id],
+    );
+  };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!title.trim()) {
-      toast.error("Title is required")
-      return
+      toast.error("Title is required");
+      return;
     }
     if (!slug.trim()) {
-      toast.error("Slug is required")
-      return
+      toast.error("Slug is required");
+      return;
     }
 
     try {
-      setIsSubmitting(true)
-      
+      setIsSubmitting(true);
+
       const parsedTags = tagsInput
         .split(",")
         .map((t: string) => t.trim())
-        .filter((t: string) => t.length > 0)
+        .filter((t: string) => t.length > 0);
 
       await onSubmit({
         title,
@@ -168,16 +195,18 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
           seoDescription,
           tags: parsedTags,
         },
-      })
+      });
 
-      toast.success(initialData ? "Post updated successfully" : "Post created successfully")
-      router.push("/dashboard/blogs")
+      toast.success(
+        initialData ? "Post updated successfully" : "Post created successfully",
+      );
+      router.push("/dashboard/blogs");
     } catch (err: any) {
-      toast.error(err.message || "Something went wrong")
+      toast.error(err.message || "Something went wrong");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const SidebarContent = () => (
     <div className="space-y-6">
@@ -186,21 +215,32 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
         <CardHeader className="pb-3 border-b border-border/45 bg-muted/10">
           <div className="flex items-center gap-2">
             <Settings className="size-4 text-primary" />
-            <CardTitle className="text-base font-semibold">Publication</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Publication
+            </CardTitle>
           </div>
         </CardHeader>
         <CardContent className="pt-5 space-y-4">
           <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/20 border border-border/40">
-            <span className="text-xs font-semibold text-muted-foreground">Status</span>
-            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-              published ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-            }`}>
+            <span className="text-xs font-semibold text-muted-foreground">
+              Status
+            </span>
+            <span
+              className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                published
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+              }`}
+            >
               {published ? "Published" : "Draft"}
             </span>
           </div>
 
           <div className="flex items-center justify-between py-1 px-1">
-            <Label htmlFor="published-switch" className="cursor-pointer text-xs font-medium text-muted-foreground">
+            <Label
+              htmlFor="published-switch"
+              className="cursor-pointer text-xs font-medium text-muted-foreground"
+            >
               Publish immediately
             </Label>
             <Switch
@@ -211,7 +251,11 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
           </div>
 
           <div className="pt-2 flex flex-col gap-2">
-            <Button type="submit" className="w-full gap-2 font-semibold shadow-sm h-9" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full gap-2 font-semibold shadow-sm h-9"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -237,7 +281,9 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
         <CardHeader className="pb-3 border-b border-border/45 bg-muted/10">
           <div className="flex items-center gap-2">
             <ImageIcon className="size-4 text-primary" />
-            <CardTitle className="text-base font-semibold">Featured Image</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Featured Image
+            </CardTitle>
           </div>
         </CardHeader>
         <CardContent className="pt-5 space-y-4">
@@ -255,8 +301,8 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
                   size="icon"
                   className="size-8 shadow-sm"
                   onClick={() => {
-                    setFeaturedImageId(null)
-                    setFeaturedImageUrl(null)
+                    setFeaturedImageId(null);
+                    setFeaturedImageUrl(null);
                   }}
                 >
                   <Trash2 className="size-4" />
@@ -266,7 +312,9 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
           ) : (
             <div className="border border-dashed border-border/80 rounded-lg p-5 flex flex-col items-center justify-center text-center gap-2 bg-muted/5">
               <ImageIcon className="size-7 text-muted-foreground/45" />
-              <span className="text-[10px] text-muted-foreground">Pick a high-resolution banner image.</span>
+              <span className="text-[10px] text-muted-foreground">
+                Pick a high-resolution banner image.
+              </span>
             </div>
           )}
 
@@ -274,8 +322,8 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
             <MediaSelectorModal
               selectedMediaId={featuredImageId}
               onSelect={(media) => {
-                setFeaturedImageId(media.id)
-                setFeaturedImageUrl(media.url)
+                setFeaturedImageId(media.id);
+                setFeaturedImageUrl(media.url);
               }}
               triggerText={featuredImageUrl ? "Replace Banner" : "Choose Image"}
             />
@@ -352,17 +400,28 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 
   return (
-    <form onSubmit={handleFormSubmit} className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+    <form
+      onSubmit={handleFormSubmit}
+      className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start"
+    >
       {isMobile && (
         <div className="flex flex-col gap-3 lg:hidden">
           <div className="flex items-center justify-between gap-2">
-            <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={() => setSidebarSheetOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-3 text-xs"
+              onClick={() => setSidebarSheetOpen(true)}
+            >
               Open post settings
             </Button>
-            <Button type="submit" className="h-9 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/95">
+            <Button
+              type="submit"
+              className="h-9 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/95"
+            >
               Publish
             </Button>
           </div>
@@ -370,7 +429,10 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
             <SheetContent side="bottom" className="sm:max-w-lg w-full">
               <SheetHeader>
                 <SheetTitle>Post Settings</SheetTitle>
-                <SheetDescription>Open this panel to edit metadata, featured image, tags, and publish options.</SheetDescription>
+                <SheetDescription>
+                  Open this panel to edit metadata, featured image, tags, and
+                  publish options.
+                </SheetDescription>
               </SheetHeader>
               <div className="p-4">
                 <SidebarContent />
@@ -385,7 +447,12 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
         <Card className="border border-border/40 bg-zinc-950/20 backdrop-blur-xs shadow-md">
           <CardContent className="pt-6 space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="title" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Post Title</Label>
+              <Label
+                htmlFor="title"
+                className="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80"
+              >
+                Post Title
+              </Label>
               <Input
                 id="title"
                 value={title}
@@ -397,7 +464,12 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="slug" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Slug / URL</Label>
+              <Label
+                htmlFor="slug"
+                className="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80"
+              >
+                Slug / URL
+              </Label>
               <div className="relative flex items-center">
                 <span className="absolute left-3 text-muted-foreground/60 text-xs select-none">
                   /blogs/
@@ -422,8 +494,8 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
                 content={content}
                 contentJson={contentJson}
                 onChange={(html, json) => {
-                  setContent(html)
-                  setContentJson(json)
+                  setContent(html);
+                  setContentJson(json);
                 }}
               />
             </div>
@@ -435,15 +507,23 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
           <CardHeader className="pb-3 border-b border-border/45 bg-muted/10">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-primary" />
-              <CardTitle className="text-base font-semibold">Metadata & SEO (Dynamic Fields)</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                Metadata & SEO (Dynamic Fields)
+              </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Extensible custom fields stored directly as a JSON payload on the Post record.
+              Extensible custom fields stored directly as a JSON payload on the
+              Post record.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-5 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="seoDesc" className="text-xs font-semibold text-muted-foreground/95">SEO Meta Description</Label>
+              <Label
+                htmlFor="seoDesc"
+                className="text-xs font-semibold text-muted-foreground/95"
+              >
+                SEO Meta Description
+              </Label>
               <Input
                 id="seoDesc"
                 value={seoDescription}
@@ -454,7 +534,12 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tags" className="text-xs font-semibold text-muted-foreground/95">Tags (Comma-separated)</Label>
+              <Label
+                htmlFor="tags"
+                className="text-xs font-semibold text-muted-foreground/95"
+              >
+                Tags (Comma-separated)
+              </Label>
               <Input
                 id="tags"
                 value={tagsInput}
@@ -474,21 +559,32 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
           <CardHeader className="pb-3 border-b border-border/45 bg-muted/10">
             <div className="flex items-center gap-2">
               <Settings className="size-4 text-primary" />
-              <CardTitle className="text-base font-semibold">Publication</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                Publication
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent className="pt-5 space-y-4">
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/20 border border-border/40">
-              <span className="text-xs font-semibold text-muted-foreground">Status</span>
-              <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                published ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-              }`}>
+              <span className="text-xs font-semibold text-muted-foreground">
+                Status
+              </span>
+              <span
+                className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                  published
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+                }`}
+              >
                 {published ? "Published" : "Draft"}
               </span>
             </div>
 
             <div className="flex items-center justify-between py-1 px-1">
-              <Label htmlFor="published-switch" className="cursor-pointer text-xs font-medium text-muted-foreground">
+              <Label
+                htmlFor="published-switch"
+                className="cursor-pointer text-xs font-medium text-muted-foreground"
+              >
                 Publish immediately
               </Label>
               <Switch
@@ -499,7 +595,11 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
             </div>
 
             <div className="pt-2 flex flex-col gap-2">
-              <Button type="submit" className="w-full gap-2 font-semibold shadow-sm h-9" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                className="w-full gap-2 font-semibold shadow-sm h-9"
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
@@ -525,7 +625,9 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
           <CardHeader className="pb-3 border-b border-border/45 bg-muted/10">
             <div className="flex items-center gap-2">
               <ImageIcon className="size-4 text-primary" />
-              <CardTitle className="text-base font-semibold">Featured Image</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                Featured Image
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent className="pt-5 space-y-4">
@@ -543,8 +645,8 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
                     size="icon"
                     className="shadow-sm size-8"
                     onClick={() => {
-                      setFeaturedImageId(null)
-                      setFeaturedImageUrl(null)
+                      setFeaturedImageId(null);
+                      setFeaturedImageUrl(null);
                     }}
                   >
                     <Trash2 className="size-4" />
@@ -564,10 +666,12 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
               <MediaSelectorModal
                 selectedMediaId={featuredImageId}
                 onSelect={(media) => {
-                  setFeaturedImageId(media.id)
-                  setFeaturedImageUrl(media.url)
+                  setFeaturedImageId(media.id);
+                  setFeaturedImageUrl(media.url);
                 }}
-                triggerText={featuredImageUrl ? "Replace Banner" : "Choose Image"}
+                triggerText={
+                  featuredImageUrl ? "Replace Banner" : "Choose Image"
+                }
               />
             </div>
           </CardContent>
@@ -576,7 +680,9 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
         {/* Categories Card */}
         <Card className="border border-border/40 bg-zinc-950/20 backdrop-blur-xs shadow-md">
           <CardHeader className="pb-3 border-b border-border/45 bg-muted/10">
-            <CardTitle className="text-base font-semibold">Categories</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Categories
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-5 space-y-4">
             {/* List current categories */}
@@ -600,7 +706,7 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
                       />
                       <span className="font-medium">{cat.name}</span>
                     </label>
-                    
+
                     <button
                       type="button"
                       disabled={deletingCatId === cat.id}
@@ -646,5 +752,5 @@ export default function BlogForm({ initialData, onSubmit }: BlogFormProps) {
         </Card>
       </div>
     </form>
-  )
+  );
 }
