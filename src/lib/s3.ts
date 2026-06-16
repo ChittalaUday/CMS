@@ -14,16 +14,15 @@ function getClient(): S3Client {
     const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY
 
     if (!endpoint || !accessKeyId || !secretAccessKey) {
-      console.warn("Cloudflare R2 environment variables are not fully configured. File uploads will fail.")
+      throw new Error(
+        "Cloudflare R2 is not configured. Set CLOUDFLARE_R2_ENDPOINT, CLOUDFLARE_R2_ACCESS_KEY_ID, and CLOUDFLARE_R2_SECRET_ACCESS_KEY."
+      )
     }
 
     client = new S3Client({
       region: "auto",
-      endpoint: endpoint || undefined,
-      credentials: {
-        accessKeyId: accessKeyId || "",
-        secretAccessKey: secretAccessKey || "",
-      },
+      endpoint,
+      credentials: { accessKeyId, secretAccessKey },
     })
   }
   return client

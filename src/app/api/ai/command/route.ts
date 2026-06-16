@@ -21,6 +21,7 @@ import { z } from 'zod';
 
 import { BaseEditorKit } from '@/components/editor/editor-base-kit';
 import { markdownJoinerTransform } from '@/lib/markdown-joiner-transform';
+import { getSession } from '@/lib/session';
 
 import {
   buildEditTableMultiCellPrompt,
@@ -31,6 +32,11 @@ import {
 } from './prompt';
 
 export async function POST(req: NextRequest) {
+  const user = await getSession();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { apiKey: key, ctx, messages: messagesRaw, model } = await req.json();
 
   const { children, selection, toolName: toolNameParam } = ctx;

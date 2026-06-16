@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/session"
 import { uploadToR2, deleteFromR2 } from "@/lib/s3"
 
@@ -18,21 +19,23 @@ type PrismaKnownError = { code: string; meta?: Record<string, unknown>; message:
 type PrismaValidationError = { name: string; message: string }
 
 function isPrismaKnownError(err: unknown): err is PrismaKnownError {
+  const e = err as Record<string, unknown>
   return (
     typeof err === "object" &&
     err !== null &&
     "code" in err &&
-    typeof (err as any).code === "string" &&
-    (err as any).code.startsWith("P")
+    typeof e.code === "string" &&
+    e.code.startsWith("P")
   )
 }
 
 function isPrismaValidationError(err: unknown): err is PrismaValidationError {
+  const e = err as Record<string, unknown>
   return (
     typeof err === "object" &&
     err !== null &&
     "name" in err &&
-    (err as any).name === "PrismaClientValidationError"
+    e.name === "PrismaClientValidationError"
   )
 }
 
@@ -69,7 +72,7 @@ function handlePrismaError(err: unknown, context?: string): never {
   }
 
   if (isPrismaValidationError(err)) {
-    console.error(`[DB Validation]${context ? ` ${context}` : ""}`, (err as any).message)
+    console.error(`[DB Validation]${context ? ` ${context}` : ""}`, err.message)
     throw new Error("Invalid data submitted. Please check your input and try again.")
   }
 
@@ -103,7 +106,7 @@ export async function getPostsPaginated(params: {
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
   const skip = (page - 1) * pageSize
 
-  const where: any = {}
+  const where: Prisma.PostWhereInput = {}
 
   if (params.search?.trim()) {
     where.OR = [
@@ -169,16 +172,18 @@ export async function getPostBySlug(slug: string) {
   })
 }
 
-export async function createPost(data: {
+export type PostInput = {
   title: string
   slug: string
   content: string
-  contentJson?: any
+  contentJson?: Prisma.InputJsonValue
   published?: boolean
   featuredImageId?: string | null
   categoryIds?: string[]
-  metadata?: any
-}) {
+  metadata?: Prisma.InputJsonValue
+}
+
+export async function createPost(data: PostInput) {
   const user = await requireAuth()
 
   try {
@@ -218,19 +223,7 @@ export async function createPost(data: {
   }
 }
 
-export async function updatePost(
-  id: string,
-  data: {
-    title: string
-    slug: string
-    content: string
-    contentJson?: any
-    published?: boolean
-    featuredImageId?: string | null
-    categoryIds?: string[]
-    metadata?: any
-  }
-) {
+export async function updatePost(id: string, data: PostInput) {
   await requireAuth()
 
   try {
@@ -273,7 +266,7 @@ export async function updatePost(
       const owner = await prisma.post.findUnique({ where: { slug: data.slug } })
       if (owner && owner.id === id) {
         // Slug belongs to this post — safe to ignore; re-fetch and return
-        return await prisma.post.findUnique({ where: { id } }) as any
+        return await prisma.post.findUnique({ where: { id } })
       }
     }
     handlePrismaError(err, "updatePost")

@@ -103,7 +103,8 @@ export default async function BlogsPage({ searchParams }: PageProps) {
       ) : (
         <>
           {/* Table */}
-          <div className="rounded-xl border border-border/60 bg-card/40 overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-border/60 overflow-hidden shadow-sm">
+            <div className="bg-card/40 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">
@@ -239,34 +240,35 @@ export default async function BlogsPage({ searchParams }: PageProps) {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-4">
+                      <td className="px-3 sm:px-4 py-4">
                         <div className="flex items-center justify-end gap-1">
 
-                          {/* Preview */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 rounded-lg hover:bg-muted"
-                            title="Preview post"
-                            asChild
-                          >
-                            <a
-                              href={`/posts/${post.slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                          {/* Preview + Publish — hidden on mobile, shown sm+ */}
+                          <div className="hidden sm:contents">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 rounded-lg hover:bg-muted"
+                              title="Preview post"
+                              asChild
                             >
-                              <Eye className="size-3.5 text-muted-foreground" />
-                            </a>
-                          </Button>
+                              <a
+                                href={`/posts/${post.slug}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Eye className="size-3.5 text-muted-foreground" />
+                              </a>
+                            </Button>
 
-                          {/* Publish / Unpublish — admins only */}
-                          {canPublish && (
-                            <PublishButton
-                              postId={post.id}
-                              postTitle={post.title}
-                              isPublished={post.published}
-                            />
-                          )}
+                            {canPublish && (
+                              <PublishButton
+                                postId={post.id}
+                                postTitle={post.title}
+                                isPublished={post.published}
+                              />
+                            )}
+                          </div>
 
                           {/* ⋯ dropdown — Edit + Delete */}
                           <DropdownMenu>
@@ -312,6 +314,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Pagination */}

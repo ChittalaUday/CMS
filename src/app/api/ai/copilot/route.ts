@@ -2,8 +2,14 @@ import type { NextRequest } from 'next/server';
 
 import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
+import { getSession } from '@/lib/session';
 
 export async function POST(req: NextRequest) {
+  const user = await getSession();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const {
     apiKey: key,
     model = 'gpt-4o-mini',

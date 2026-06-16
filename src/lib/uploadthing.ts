@@ -1,12 +1,17 @@
 import type { FileRouter } from 'uploadthing/next';
 
 import { createUploadthing } from 'uploadthing/next';
+import { getSession } from '@/lib/session';
 
 const f = createUploadthing();
 
 export const ourFileRouter = {
   editorUploader: f(['image', 'text', 'blob', 'pdf', 'video', 'audio'])
-    .middleware(() => ({}))
+    .middleware(async () => {
+      const user = await getSession();
+      if (!user) throw new Error('Unauthorized');
+      return { userId: user.id };
+    })
     .onUploadComplete(({ file }) => ({
       key: file.key,
       name: file.name,

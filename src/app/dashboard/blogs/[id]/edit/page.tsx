@@ -1,4 +1,4 @@
-import { getPostById, updatePost } from "../../actions"
+import { getPostById, updatePost, type PostInput } from "../../actions"
 import { EditorialEditor } from "@/components/EditorialEditor"
 import { getSession } from "@/lib/session"
 import { redirect, notFound } from "next/navigation"
@@ -17,7 +17,7 @@ export default async function EditBlogPage({ params }: EditBlogPageProps) {
   const post = await getPostById(id)
   if (!post) notFound()
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: PostInput) => {
     "use server"
     await updatePost(id, data)
   }

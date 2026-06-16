@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/session"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
@@ -152,7 +153,7 @@ export const updateEditor = actionClient
       throw new Error("Username already taken")
     }
 
-    const updateData: any = {
+    const updateData: Prisma.UserUpdateInput = {
       email: data.email,
       username: data.username,
       name: data.name,

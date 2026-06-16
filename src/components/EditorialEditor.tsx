@@ -13,6 +13,15 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useIsMobile } from "@/hooks/use-mobile"
+import {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
 import {
   Cloud, Eye, Send, ArrowLeft, Image as ImageIcon,
   Trash2, Plus, Loader2, X, ChevronDown, ChevronUp
@@ -184,6 +193,10 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
   const [slug, setSlug] = useState(initialData?.slug || "")
   const [published, setPublished] = useState(initialData?.published ?? false)
   const [isSavingStatus, setIsSavingStatus] = useState("Saved to Drafts")
+
+  // Mobile layout helpers
+  const isMobile = useIsMobile()
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
 
   // Sidebars & layout
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
@@ -432,14 +445,14 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
             </button>
 
             <span className="text-lg font-semibold ">Editorial</span>
-            <div className="w-[1px] h-4 bg-indigo-500/20" />
+            <div className="w-px h-4 bg-indigo-500/20" />
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
               <Cloud className="size-3.5 text-indigo-400/80" />
               <span>{isSavingStatus}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
 
             {/* Preview — admin/super-admin only */}
             {canPublish && initialData?.slug && (
@@ -474,13 +487,145 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
         </header>
 
         {/* 2. Main Area */}
-        <div className="flex flex-1 min-h-0 bg-background/50">
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 bg-background/50">
+          {/* Mobile top controls */}
+          {isMobile ? (
+            <div className="flex w-full items-center justify-between gap-2 p-4 border-b border-border/40 bg-card/80">
+              <Sheet open={settingsSheetOpen} onOpenChange={setSettingsSheetOpen}>
+                <SheetTrigger asChild>
+                  <Button type="button" variant="outline" className="h-9 px-3 text-xs">
+                    Settings
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto">
+                  <SheetHeader>
+                    <SheetTitle>Post Settings</SheetTitle>
+                    <SheetDescription>Manage categories, tags, and publication state.</SheetDescription>
+                  </SheetHeader>
+                  <div className="space-y-6 p-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="slug-input" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">URL Slug</Label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-xs text-muted-foreground/60 font-medium">/posts/</span>
+                        <Input
+                          id="slug-input"
+                          value={slug}
+                          onChange={(e) => { hasUserInteracted.current = true; setSlug(e.target.value) }}
+                          className="pl-16 h-9 bg-muted/30 border-border/80 text-xs font-mono text-foreground"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</Label>
+                      <div className="space-y-2">
+                        <select
+                          value={selectedCategoryIds[0] || ""}
+                          onChange={(e) => { hasUserInteracted.current = true; setSelectedCategoryIds(e.target.value ? [e.target.value] : []) }}
+                          className="w-full h-9 rounded-md border border-border/80 bg-muted/30 text-xs px-3 focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground"
+                        >
+                          <option value="">Select category...</option>
+                          {availableCategories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))}
+                        </select>
+                        <div className="flex gap-1.5">
+                          <Input
+                            placeholder="New category name..."
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            className="h-8 text-[11px] bg-muted/30 border-border/80"
+                          />
+                          <Button
+                            onClick={handleAddCategory}
+                            disabled={isCreatingCategory || !newCategoryName.trim()}
+                            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/95 font-semibold"
+                          >
+                            {isCreatingCategory ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tags</Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map((tag, idx) => (
+                          <span key={`${tag}-${idx}`} className="inline-flex items-center gap-1 bg-muted text-foreground text-[10px] px-2 py-0.5 rounded font-semibold border border-border/60">
+                            {tag}
+                            <button type="button" onClick={() => handleRemoveTag(idx)} className="text-muted-foreground hover:text-foreground">
+                              <X className="size-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <Input
+                        placeholder="Add tag..."
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleAddTag}
+                        className="h-9 bg-muted/30 border-border/80 text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Featured Image</Label>
+                      <div className="flex justify-center">
+                        <MediaSelectorModal
+                          selectedMediaId={featuredImageId}
+                          onSelect={(media) => {
+                            setFeaturedImageId(media.id)
+                            setFeaturedImageUrl(media.url)
+                          }}
+                          triggerText={featuredImageUrl ? "Change Image" : "Choose Image"}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <div className="flex items-center justify-between py-1 px-1">
+                        <Label htmlFor="published-toggle" className="cursor-pointer text-xs font-semibold text-muted-foreground uppercase">Publish Post Immediately</Label>
+                        <Switch
+                          id="published-toggle"
+                          checked={published}
+                          onCheckedChange={(v) => { hasUserInteracted.current = true; setPublished(v) }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="seo-description" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SEO Meta Description</Label>
+                        <Input
+                          id="seo-description"
+                          value={seoDescription}
+                          onChange={(e) => setSeoDescription(e.target.value)}
+                          placeholder="Provide a summary meta description..."
+                          className="bg-muted/30 border-border/80 text-xs h-9"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleFormSubmit}
+                  disabled={isSubmitting}
+                  className="h-9 text-xs font-semibold px-4 bg-primary text-primary-foreground hover:bg-primary/95 rounded-md shadow-sm"
+                >
+                  {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  {canPublish
+                    ? published ? "Update & Publish" : "Publish"
+                    : "Save Draft"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {/* Editor Writing Workspace */}
           <main className="flex-1 bg-card/10 flex flex-row min-h-0 relative">
 
             {/* Toolbar outside canvas (Left side toolbar) */}
-            <div className="flex flex-col items-center py-16 px-4 bg-background/30 shrink-0 z-20">
+            <div className="flex flex-col items-center py-4 md:py-16 px-3 md:px-4 bg-background/30 shrink-0 z-20">
               <Toolbar className="flex-col gap-2 w-fit bg-muted rounded-xl px-2 py-3">
                 <BasicToolbarButtons orientation="vertical" />
               </Toolbar>
@@ -488,7 +633,7 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
 
 
             {/* Scrollable canvas */}
-            <div className="flex-1 overflow-y-auto px-12 py-16 flex justify-center">
+            <div className="flex-1 overflow-y-auto px-4 md:px-12 py-6 md:py-16 flex justify-center">
 
               <div className="max-w-2xl w-full space-y-6 flex flex-col relative" id="editor-workspace-canvas">
 
@@ -498,7 +643,7 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
                   value={title}
                   onChange={(e) => handleTitleChange(e.target.value)}
                   placeholder="Enter post title..."
-                  className="w-full text-4xl font-extrabold tracking-tight text-foreground placeholder:text-muted-foreground/35 focus:outline-none border-none p-0 bg-transparent"
+                  className="w-full text-2xl md:text-4xl font-extrabold tracking-tight text-foreground placeholder:text-muted-foreground/35 focus:outline-none border-none p-0 bg-transparent"
                 />
 
                 <EditorContainer className="pt-0 mt-0 mb-0 border-0 shadow-none">
@@ -515,27 +660,28 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
           </main>
 
           {/* Right Sidebar - Post Settings */}
-          <aside className="w-80 border-l border-border bg-card flex flex-col p-6 overflow-y-auto shrink-0 select-none space-y-6 rounded-xl my-8 mr-4">
-            <div>
-              <h2 className="font-bold text-base text-foreground">Post Settings</h2>
-              <p className="text-xs text-muted-foreground">Configure metadata and categorization.</p>
-            </div>
-
-            {/* URL Slug */}
-            <div className="space-y-2">
-              <Label htmlFor="slug-input" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">URL Slug</Label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3 text-xs text-muted-foreground/60 font-medium">/posts/</span>
-                <Input
-                  id="slug-input"
-                  value={slug}
-                  onChange={(e) => { hasUserInteracted.current = true; setSlug(e.target.value) }}
-                  className="pl-16 h-9 bg-muted/30 border-border/80 text-xs font-mono text-foreground"
-                />
+          {!isMobile ? (
+            <aside className="w-80 border-l border-border bg-card flex flex-col p-6 overflow-y-auto shrink-0 select-none space-y-6 rounded-xl my-8 mr-4">
+              <div>
+                <h2 className="font-bold text-base text-foreground">Post Settings</h2>
+                <p className="text-xs text-muted-foreground">Configure metadata and categorization.</p>
               </div>
-            </div>
 
-            {/* Category Dropdown */}
+              {/* URL Slug */}
+              <div className="space-y-2">
+                <Label htmlFor="slug-input" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">URL Slug</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-xs text-muted-foreground/60 font-medium">/posts/</span>
+                  <Input
+                    id="slug-input"
+                    value={slug}
+                    onChange={(e) => { hasUserInteracted.current = true; setSlug(e.target.value) }}
+                    className="pl-16 h-9 bg-muted/30 border-border/80 text-xs font-mono text-foreground"
+                  />
+                </div>
+              </div>
+
+              {/* Category Dropdown */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</Label>
 
@@ -689,16 +835,16 @@ export function EditorialEditor({ initialData, user, onSubmit }: EditorialEditor
               )}
             </div>
           </aside>
-        </div>
-
-        {/* 3. Footer */}
-        <footer className="h-8 rounded-md mx-2 mb-2 bg-card flex items-center justify-between px-6 shrink-0 text-[10px] text-muted-foreground font-medium font-mono select-none">
-          <div className="flex items-center gap-4">
-            <span>Words: {wordCount}</span>
-            <span>Characters: {charCount}</span>
+            ) : null}
           </div>
-        </footer>
 
+          {/* 3. Footer */}
+          <footer className="h-8 rounded-md mx-2 mb-2 bg-card flex items-center justify-between px-6 shrink-0 text-[10px] text-muted-foreground font-medium font-mono select-none">
+            <div className="flex items-center gap-4">
+              <span>Words: {wordCount}</span>
+              <span>Characters: {charCount}</span>
+            </div>
+          </footer>
       </div>
     </Plate>
   )
