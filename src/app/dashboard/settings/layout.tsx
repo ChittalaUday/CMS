@@ -28,12 +28,7 @@ export default async function SettingsLayout({
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar nav */}
         <aside className="w-full md:w-48 shrink-0">
-          <SettingsNav
-            avatarUrl={user.avatarUrl ?? ""}
-            displayName={displayName}
-            initials={initials}
-            email={user.email}
-          />
+          <SettingsNav />
         </aside>
 
         {/* Page content */}

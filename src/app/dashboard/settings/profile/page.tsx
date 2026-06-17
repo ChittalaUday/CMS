@@ -12,6 +12,8 @@ export default async function ProfileSettingsPage() {
       initialName={user.name ?? ""}
       initialBio={user.bio ?? ""}
       initialAvatarUrl={user.avatarUrl ?? ""}
+      email={user.email}
+      role={user.role}
     />
   )
 }

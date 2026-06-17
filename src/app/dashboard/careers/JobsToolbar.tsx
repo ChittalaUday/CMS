@@ -1,9 +1,10 @@
 "use client"
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { useCallback, useTransition } from "react"
+import { useCallback, useTransition, useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useDebounce } from "@/hooks/use-debounce"
 import {
   Select,
   SelectContent,
@@ -24,6 +25,13 @@ export function JobsToolbar({ totalCount, search, statusFilter }: JobsToolbarPro
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+  const [searchInput, setSearchInput] = useState(search)
+  const debouncedSearch = useDebounce(searchInput, 400)
+
+  // Sync state from prop (e.g. on external/back action or clear filters)
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -40,6 +48,12 @@ export function JobsToolbar({ totalCount, search, statusFilter }: JobsToolbarPro
     [router, pathname, searchParams]
   )
 
+  useEffect(() => {
+    if (debouncedSearch !== search) {
+      updateParams({ search: debouncedSearch || undefined })
+    }
+  }, [debouncedSearch, search, updateParams])
+
   const hasFilters = !!search || !!statusFilter
 
   return (
@@ -52,8 +66,8 @@ export function JobsToolbar({ totalCount, search, statusFilter }: JobsToolbarPro
             <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground animate-spin" />
           ) : null}
           <Input
-            defaultValue={search}
-            onChange={(e) => updateParams({ search: e.target.value || undefined })}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search jobs…"
             className="h-8 pl-8 pr-8 text-xs bg-muted/30 border-border/60"
           />

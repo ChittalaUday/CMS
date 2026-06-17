@@ -1,10 +1,11 @@
 "use client"
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { useCallback, useTransition } from "react"
+import { useCallback, useTransition, useState, useEffect } from "react"
 import { Search, X, Filter } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface Category {
   id: string
@@ -23,6 +24,13 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId }: Blo
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+  const [searchInput, setSearchInput] = useState(search)
+  const debouncedSearch = useDebounce(searchInput, 400)
+
+  // Sync state from prop (e.g. on external/back action or clear filters)
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -48,6 +56,12 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId }: Blo
     [router, pathname, searchParams]
   )
 
+  useEffect(() => {
+    if (debouncedSearch !== search) {
+      updateParams({ search: debouncedSearch || undefined })
+    }
+  }, [debouncedSearch, search, updateParams])
+
   const hasFilters = !!search || !!categoryId
 
   return (
@@ -57,17 +71,10 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId }: Blo
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60" />
         <Input
           id="blogs-search"
-          defaultValue={search}
+          value={searchInput}
           placeholder="Search by title or slug…"
           className="pl-9 pr-8 h-9 bg-muted/30 border-border/60 text-sm focus-visible:ring-1"
-          onChange={(e) => {
-            const val = e.target.value
-            // Debounce by 350 ms so we don't push on every keystroke
-            const timeout = setTimeout(() => {
-              updateParams({ search: val || undefined })
-            }, 350)
-            return () => clearTimeout(timeout)
-          }}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
         {search && (
           <button

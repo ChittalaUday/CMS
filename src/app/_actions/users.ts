@@ -72,7 +72,7 @@ export async function getEditorsPaginated(params: {
   }
 
   if (params.role && params.role !== "all") {
-    if ((manageableRoles as string[]).includes(params.role)) {
+    if ((manageableRoles as readonly string[]).includes(params.role)) {
       where.role = params.role as Role
     }
   }
@@ -198,7 +198,7 @@ export const updateEditor = actionClient
         ? MANAGEABLE_BY_SUPER_ADMIN
         : MANAGEABLE_BY_ADMIN
 
-    if (!(manageableRoles as Role[]).includes(existing.role)) {
+    if (!(manageableRoles as readonly Role[]).includes(existing.role)) {
       throw new Error("You are not authorized to manage this account.")
     }
 
@@ -218,7 +218,7 @@ export const updateEditor = actionClient
       name: data.name,
     }
 
-    if (data.role && (manageableRoles as string[]).includes(data.role)) {
+    if (data.role && (manageableRoles as readonly string[]).includes(data.role)) {
       updateData.role = data.role as Role
     }
 
@@ -245,7 +245,7 @@ export const deleteEditor = actionClient
         ? MANAGEABLE_BY_SUPER_ADMIN
         : MANAGEABLE_BY_ADMIN
 
-    if (!(manageableRoles as Role[]).includes(existing.role)) {
+    if (!(manageableRoles as readonly Role[]).includes(existing.role)) {
       throw new Error("You are not authorized to delete this account.")
     }
 

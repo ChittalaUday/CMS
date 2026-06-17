@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider"
+import { AccentColorScript } from "@/components/accent-color-script"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
@@ -35,6 +36,9 @@ export default function RootLayout({
       suppressContentEditableWarning
       suppressHydrationWarning
     >
+      <head>
+        <AccentColorScript />
+      </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider
           attribute="class"

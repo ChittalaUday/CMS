@@ -11,13 +11,30 @@ import { toast } from "sonner"
 import { useAction } from "next-safe-action/hooks"
 import { updateProfile } from "@/app/_actions/settings"
 import { useUploadThing } from "@/lib/uploadthing-react"
-import { Loader2, LinkIcon, UploadIcon, AtSignIcon, UserIcon, FileTextIcon } from "lucide-react"
+import type { Role } from "@/generated/prisma/enums"
+import { Loader2, LinkIcon, UploadIcon, AtSignIcon, UserIcon, FileTextIcon, ShieldIcon } from "lucide-react"
+
+const ROLE_LABEL: Record<string, string> = {
+  SUPER_ADMIN: "Super Admin",
+  ADMIN: "Admin",
+  HR: "HR",
+  EDITOR: "Editor",
+}
+
+const ROLE_CLASS: Record<string, string> = {
+  SUPER_ADMIN: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  ADMIN: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  HR: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
+  EDITOR: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+}
 
 interface ProfileFormProps {
   initialUsername: string
   initialName: string
   initialBio: string
   initialAvatarUrl: string
+  email: string
+  role: Role
 }
 
 export function ProfileForm({
@@ -25,7 +42,10 @@ export function ProfileForm({
   initialName,
   initialBio,
   initialAvatarUrl,
+  email,
+  role,
 }: ProfileFormProps) {
+  const [isEditing, setIsEditing] = useState(false)
   const [username, setUsername] = useState(initialUsername)
   const [name, setName] = useState(initialName)
   const [bio, setBio] = useState(initialBio)
@@ -57,7 +77,10 @@ export function ProfileForm({
   }
 
   const { execute } = useAction(updateProfile, {
-    onSuccess: () => toast.success("Profile saved"),
+    onSuccess: () => {
+      toast.success("Profile saved")
+      setIsEditing(false)
+    },
     onError: ({ error }) => toast.error(error.serverError ?? "Failed to save profile"),
   })
 
@@ -72,15 +95,94 @@ export function ProfileForm({
     })
   }
 
+  function handleCancel() {
+    setUsername(initialUsername)
+    setName(initialName)
+    setBio(initialBio)
+    setAvatarUrl(initialAvatarUrl)
+    setAvatarMode("url")
+    setIsEditing(false)
+  }
+
   const displayName = name || username
   const initials = displayName.slice(0, 2).toUpperCase()
+  const roleLabel = ROLE_LABEL[role] ?? role
+  const roleClass = ROLE_CLASS[role] ?? ROLE_CLASS.EDITOR
+
+  if (!isEditing) {
+    return (
+      <div className="space-y-6 max-w-xl">
+        <div className="flex items-center justify-between border-b border-border/40 pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Personal Info</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Your name, username, and bio visible to team members.
+            </p>
+          </div>
+          <Button
+            onClick={() => setIsEditing(true)}
+            variant="outline"
+            className="h-9 gap-2 text-sm font-semibold border-border/60 shrink-0"
+          >
+            Edit Profile
+          </Button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Header row with Avatar & Name/Username/Role */}
+          <div className="flex items-center gap-5">
+            <div className="shrink-0">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="size-16 rounded-full object-cover border-2 border-border/60 shadow"
+                  onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+              ) : (
+                <div className="size-16 rounded-full bg-primary/10 border-2 border-border/60 flex items-center justify-center text-primary font-bold text-lg">
+                  {initials}
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground text-base leading-snug truncate">
+                {displayName}
+              </p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">@{username}</p>
+              <p className="text-xs text-muted-foreground truncate">{email}</p>
+            </div>
+
+            <span
+              className={`shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${roleClass}`}
+            >
+              <ShieldIcon className="size-2.5" />
+              {roleLabel}
+            </span>
+          </div>
+
+          <Separator className="border-border/40" />
+
+          {/* Bio section */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bio</p>
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+              {bio || <span className="text-muted-foreground italic">No bio written yet.</span>}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-xl">
       <div>
-        <h2 className="text-lg font-bold text-foreground">Personal Info</h2>
+        <h2 className="text-lg font-bold text-foreground">Edit Profile</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Your name, username, and bio visible to team members.
+          Update your name, username, bio, and profile picture.
         </p>
       </div>
       <Separator className="border-border/40" />
@@ -230,15 +332,26 @@ export function ProfileForm({
         <p className="text-[10px] text-muted-foreground text-right">{bio.length}/200</p>
       </div>
 
-      <Button
-        type="button"
-        className="h-9 font-semibold gap-1.5 shadow-sm"
-        onClick={handleSave}
-        disabled={isPending || isUploading || !!usernameError || username.length < 3}
-      >
-        {isPending && <Loader2 className="size-4 animate-spin" />}
-        Save Profile
-      </Button>
+      <div className="flex items-center gap-2 pt-2">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 font-semibold"
+          onClick={handleCancel}
+          disabled={isPending}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          className="h-9 font-semibold gap-1.5 shadow-sm"
+          onClick={handleSave}
+          disabled={isPending || isUploading || !!usernameError || username.length < 3}
+        >
+          {isPending && <Loader2 className="size-4 animate-spin" />}
+          Save Profile
+        </Button>
+      </div>
     </div>
   )
 }

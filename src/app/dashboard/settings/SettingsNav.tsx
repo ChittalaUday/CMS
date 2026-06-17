@@ -10,39 +10,11 @@ const NAV_ITEMS = [
   { href: "/dashboard/settings/account",    label: "Account",                icon: KeyRoundIcon },
 ]
 
-interface SettingsNavProps {
-  avatarUrl: string
-  displayName: string
-  initials: string
-  email: string
-}
-
-export function SettingsNav({ avatarUrl, displayName, initials, email }: SettingsNavProps) {
+export function SettingsNav() {
   const pathname = usePathname()
 
   return (
     <div className="space-y-4">
-      {/* Mini profile card */}
-      <div className="flex flex-row md:flex-col items-center md:items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/40">
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt={displayName}
-            className="size-10 md:size-14 rounded-full object-cover border-2 border-border/60 shadow shrink-0"
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
-        ) : (
-          <div className="size-10 md:size-14 rounded-full bg-primary/10 border-2 border-border/60 flex items-center justify-center text-primary font-bold text-sm md:text-base shrink-0">
-            {initials}
-          </div>
-        )}
-        <div className="min-w-0">
-          <p className="font-semibold text-sm text-foreground truncate">{displayName}</p>
-          <p className="text-[11px] text-muted-foreground truncate">{email}</p>
-        </div>
-      </div>
-
       {/* Nav links */}
       <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

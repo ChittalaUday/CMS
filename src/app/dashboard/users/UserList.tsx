@@ -25,9 +25,9 @@ import { BlogsPagination } from "@/app/dashboard/blogs/BlogsPagination"
 
 const ROLE_BADGE: Record<Role, { label: string; className: string }> = {
   [Role.SUPER_ADMIN]: { label: "Super Admin", className: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
-  [Role.ADMIN]:       { label: "Admin",       className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
-  [Role.HR]:          { label: "HR",          className: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" },
-  [Role.EDITOR]:      { label: "Editor",      className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+  [Role.ADMIN]: { label: "Admin", className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+  [Role.HR]: { label: "HR", className: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" },
+  [Role.EDITOR]: { label: "Editor", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
 }
 
 type InviteInfo = { token: string; code: string; expiresAt: Date }
@@ -54,10 +54,10 @@ function getUserStatus(user: EditorUser): UserStatus {
 }
 
 const STATUS_CONFIG: Record<UserStatus, { label: string; className: string; Icon: typeof ClockIcon }> = {
-  "active":          { label: "Active",         className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20", Icon: CheckIcon },
-  "invite-pending":  { label: "Invite Pending", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",    Icon: MailIcon },
-  "invite-expired":  { label: "Invite Expired", className: "bg-destructive/10 text-destructive border-destructive/20",                       Icon: ClockIcon },
-  "setup-pending":   { label: "Setup Pending",  className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",             Icon: Loader2Icon },
+  "active": { label: "Active", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20", Icon: CheckIcon },
+  "invite-pending": { label: "Invite Pending", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20", Icon: MailIcon },
+  "invite-expired": { label: "Invite Expired", className: "bg-destructive/10 text-destructive border-destructive/20", Icon: ClockIcon },
+  "setup-pending": { label: "Setup Pending", className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20", Icon: Loader2Icon },
 }
 
 // ── Form schemas ─────────────────────────────────────────────────────────────
@@ -72,18 +72,18 @@ const usernameSchema = z
   )
 
 const createSchema = z.object({
-  name:     z.string().min(1, "Full Name is required"),
+  name: z.string().min(1, "Full Name is required"),
   username: usernameSchema,
-  email:    z.string().email("Invalid email address"),
-  role:     z.enum(["ADMIN", "HR", "EDITOR"]),
+  email: z.string().email("Invalid email address"),
+  role: z.enum(["ADMIN", "HR", "EDITOR"]),
 })
 
 const editSchema = z.object({
-  name:            z.string().min(1, "Full Name is required"),
-  username:        usernameSchema,
-  email:           z.string().email("Invalid email address"),
-  role:            z.enum(["ADMIN", "HR", "EDITOR"]),
-  password:        z.string().min(8).optional().or(z.literal("")),
+  name: z.string().min(1, "Full Name is required"),
+  username: usernameSchema,
+  email: z.string().email("Invalid email address"),
+  role: z.enum(["ADMIN", "HR", "EDITOR"]),
+  password: z.string().min(8).optional().or(z.literal("")),
   confirmPassword: z.string().optional().or(z.literal("")),
 })
 
@@ -231,7 +231,21 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
 
   const filteredEditors = initialEditors
 
+  // Sync state when URL params change (e.g. back navigation)
   useEffect(() => {
+    setSearch(currentSearch)
+  }, [currentSearch])
+
+  useEffect(() => {
+    setRole(currentRole)
+  }, [currentRole])
+
+  // Update URL search params when filter/search state changes
+  useEffect(() => {
+    if (debouncedSearch === currentSearch && role === currentRole) {
+      return
+    }
+
     const params = new URLSearchParams(searchParams?.toString() ?? "")
     if (debouncedSearch) {
       params.set("search", debouncedSearch)
@@ -245,18 +259,16 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
       params.delete("role")
     }
 
-    if (params.has("page") && Number(params.get("page")) !== 1) {
-      params.set("page", "1")
-    }
+    // Reset page to 1 when filters change
+    params.delete("page")
 
     const query = params.toString()
     const targetUrl = query ? `${pathname}?${query}` : pathname
-    if (targetUrl !== `${pathname}?${searchParams?.toString() ?? ""}`) {
-      startTransition(() => {
-        router.push(targetUrl)
-      })
-    }
-  }, [debouncedSearch, role, pathname, searchParams, router, startTransition])
+
+    startTransition(() => {
+      router.push(targetUrl)
+    })
+  }, [debouncedSearch, role, pathname, searchParams, router, currentSearch, currentRole])
 
   function openCreateModal() {
     createForm.reset({ name: "", username: "", email: "", role: "EDITOR" })
@@ -552,7 +564,7 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
         )}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 bg-muted/70 border border-border-t-0 border-border/80 text-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 text-sm">
         <p className="text-muted-foreground">
           Showing {filteredEditors.length} of {totalCount} users
         </p>

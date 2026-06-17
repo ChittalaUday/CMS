@@ -272,6 +272,9 @@ export default function MediaLibraryPage() {
                 </div>
               )}
             </>
+          )}
+        </div>
+
         {/* Detailed Inspector Panel */}
         <div className="lg:col-span-1">
           {selectedItem ? (

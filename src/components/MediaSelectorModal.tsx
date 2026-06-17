@@ -38,8 +38,8 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
   const loadMedia = async () => {
     try {
       setIsLoading(true)
-      const items = await getMediaItems()
-      setMediaItems(items)
+      const result = await getMediaItems()
+      setMediaItems(result.media)
     } catch (err: any) {
       toast.error(err.message || "Failed to load media library")
     } finally {
@@ -57,7 +57,7 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
       formData.append("file", file)
       
       const newMedia = await uploadMediaItem(formData)
-      setMediaItems((prev) => [newMedia, ...prev])
+      setMediaItems((prev) => [newMedia as any, ...prev])
       toast.success("File uploaded successfully")
     } catch (err: any) {
       toast.error(err.message || "File upload failed")
