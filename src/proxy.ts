@@ -21,14 +21,20 @@ export default async function proxy(req: NextRequest) {
   }
 
   const path = req.nextUrl.pathname
-  const isPublicRoute = PUBLIC_ROUTES.some((r) => path === r)
   const token = req.cookies.get(SESSION_COOKIE)?.value
+
+  // Paths publicly accessible without a session
+  const PUBLIC_PREFIXES = ["/invite", "/careers/"]
+  const isLoginPage = path === "/"
+  const isPublicPrefix = PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix))
 
   let res: NextResponse
 
-  if (!isPublicRoute && !token) {
+  if (!isLoginPage && !isPublicPrefix && !token) {
+    // Protected route — no session → send to login
     res = NextResponse.redirect(new URL("/", req.nextUrl))
-  } else if (isPublicRoute && token) {
+  } else if (isLoginPage && token) {
+    // Already logged in — skip login page
     res = NextResponse.redirect(new URL("/dashboard", req.nextUrl))
   } else {
     res = NextResponse.next()

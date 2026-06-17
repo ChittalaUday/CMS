@@ -2,6 +2,7 @@ import { getPostById, updatePost, type PostInput } from "../../actions"
 import { EditorialEditor } from "@/components/EditorialEditor"
 import { getSession } from "@/lib/session"
 import { redirect, notFound } from "next/navigation"
+import { Role } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +14,7 @@ export default async function EditBlogPage({ params }: EditBlogPageProps) {
   const { id } = await params
   const user = await getSession()
   if (!user) redirect("/")
+  if (user.role === Role.HR) redirect("/dashboard/careers")
 
   const post = await getPostById(id)
   if (!post) notFound()

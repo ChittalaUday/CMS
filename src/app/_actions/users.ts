@@ -2,17 +2,25 @@
 
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
+import { Role } from "@/generated/prisma/enums"
 import { getSession } from "@/lib/session"
 import bcrypt from "bcryptjs"
+import { randomBytes } from "crypto"
 import { revalidatePath } from "next/cache"
 import { actionClient } from "@/lib/safe-action"
 import { z } from "zod"
+import {
+  ADMIN_ROLES,
+  MANAGEABLE_BY_SUPER_ADMIN,
+  MANAGEABLE_BY_ADMIN,
+} from "@/lib/roles"
+import { INVITE_EXPIRY_MS } from "@/lib/invite-utils"
 
 const SALT_ROUNDS = 12
 
 async function ensureAdmin() {
   const sessionUser = await getSession()
-  if (!sessionUser || (sessionUser.role !== "SUPER_ADMIN" && sessionUser.role !== "ADMIN")) {
+  if (!sessionUser || !(ADMIN_ROLES as readonly Role[]).includes(sessionUser.role)) {
     throw new Error("Unauthorized: Access denied")
   }
   return sessionUser
@@ -20,91 +28,152 @@ async function ensureAdmin() {
 
 export async function getEditors() {
   const sessionUser = await ensureAdmin()
-  
-  if (sessionUser.role === "SUPER_ADMIN") {
-    // Super Admin can view both ADMIN and EDITOR roles
-    return await prisma.user.findMany({
-      where: {
-        role: {
-          in: ["ADMIN", "EDITOR"],
-        },
-      },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        name: true,
-        role: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-    })
-  }
 
-  // Regular Admin can only view EDITOR role
+  const manageableRoles = sessionUser.role === Role.SUPER_ADMIN
+    ? MANAGEABLE_BY_SUPER_ADMIN
+    : MANAGEABLE_BY_ADMIN
+
   return await prisma.user.findMany({
-    where: { role: "EDITOR" },
+    where: { role: { in: [...manageableRoles] } },
     select: {
       id: true,
       email: true,
       username: true,
       name: true,
       role: true,
+      onboardingCompleted: true,
       createdAt: true,
+      invite: {
+        select: { token: true, code: true, expiresAt: true, usedAt: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   })
+}
+
+export async function getEditorsPaginated(params: {
+  search?: string
+  role?: string
+  page?: number
+  pageSize?: number
+}) {
+  const sessionUser = await ensureAdmin()
+
+  const manageableRoles = sessionUser.role === Role.SUPER_ADMIN
+    ? MANAGEABLE_BY_SUPER_ADMIN
+    : MANAGEABLE_BY_ADMIN
+
+  const page = Math.max(1, params.page ?? 1)
+  const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
+  const skip = (page - 1) * pageSize
+
+  const where: Prisma.UserWhereInput = {
+    role: { in: [...manageableRoles] },
+  }
+
+  if (params.role && params.role !== "all") {
+    if ((manageableRoles as string[]).includes(params.role)) {
+      where.role = params.role as Role
+    }
+  }
+
+  if (params.search?.trim()) {
+    const query = params.search.trim()
+    where.OR = [
+      { email: { contains: query, mode: "insensitive" } },
+      { username: { contains: query, mode: "insensitive" } },
+      { name: { contains: query, mode: "insensitive" } },
+    ]
+  }
+
+  const [editors, totalCount] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        name: true,
+        role: true,
+        onboardingCompleted: true,
+        createdAt: true,
+        invite: {
+          select: { token: true, code: true, expiresAt: true, usedAt: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+    }),
+    prisma.user.count({ where }),
+  ])
+
+  return {
+    editors,
+    totalCount,
+    page,
+    pageSize,
+    totalPages: Math.ceil(totalCount / pageSize),
+  }
 }
 
 export const createEditor = actionClient
   .schema(
     z.object({
       email: z.string().email("Invalid email format"),
-      username: z.string().min(3, "Username must be at least 3 characters"),
+      username: z.string().min(3, "Username must be at least 3 characters").max(30).regex(/^[a-zA-Z0-9_-]+$/, "Username cannot contain spaces or special characters"),
       name: z.string().min(1, "Name is required"),
-      password: z.string().min(6, "Password must be at least 6 characters"),
-      role: z.enum(["ADMIN", "EDITOR"]).optional(),
+      role: z.enum(["ADMIN", "HR", "EDITOR"]).optional(),
     })
   )
   .action(async ({ parsedInput: data }) => {
     const sessionUser = await ensureAdmin()
 
-    // Determine role based on creator's permission
-    let targetRole: "ADMIN" | "EDITOR" = "EDITOR"
-    if (sessionUser.role === "SUPER_ADMIN" && data.role) {
-      if (data.role === "ADMIN" || data.role === "EDITOR") {
-        targetRole = data.role
-      }
-    }
+    const allowedRoles: Role[] =
+      sessionUser.role === Role.SUPER_ADMIN
+        ? [...MANAGEABLE_BY_SUPER_ADMIN]
+        : [...MANAGEABLE_BY_ADMIN]
 
-    const existingEmail = await prisma.user.findUnique({
-      where: { email: data.email },
-    })
-    if (existingEmail) {
-      throw new Error("Email already registered")
-    }
+    const targetRole: Role =
+      data.role && (allowedRoles as string[]).includes(data.role)
+        ? (data.role as Role)
+        : Role.EDITOR
 
-    const existingUsername = await prisma.user.findUnique({
-      where: { username: data.username },
-    })
-    if (existingUsername) {
-      throw new Error("Username already taken")
-    }
+    const existingEmail = await prisma.user.findUnique({ where: { email: data.email } })
+    if (existingEmail) throw new Error("Email already registered")
 
-    const hashedPassword = await bcrypt.hash(data.password, SALT_ROUNDS)
+    const existingUsername = await prisma.user.findUnique({ where: { username: data.username } })
+    if (existingUsername) throw new Error("Username already taken")
+
+    // Random inaccessible temp password — real password set during invite acceptance
+    const tempPassword = await bcrypt.hash(randomBytes(32).toString("hex"), SALT_ROUNDS)
+
+    const token = randomBytes(32).toString("hex")
+    const code = randomBytes(4).toString("hex").toUpperCase()
+    const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS)
 
     const user = await prisma.user.create({
       data: {
         email: data.email,
         username: data.username,
         name: data.name,
-        password: hashedPassword,
+        password: tempPassword,
         role: targetRole,
+        onboardingCompleted: false,
+        invite: {
+          create: {
+            token,
+            code,
+            email: data.email,
+            invitedById: sessionUser.id,
+            expiresAt,
+          },
+        },
       },
     })
 
     revalidatePath("/dashboard/users")
-    return { id: user.id, email: user.email }
+    return { id: user.id, email: user.email, invite: { token, code, expiresAt } }
   })
 
 export const updateEditor = actionClient
@@ -112,46 +181,36 @@ export const updateEditor = actionClient
     z.object({
       id: z.string(),
       email: z.string().email("Invalid email format"),
-      username: z.string().min(3, "Username must be at least 3 characters"),
+      username: z.string().min(3, "Username must be at least 3 characters").max(30).regex(/^[a-zA-Z0-9_-]+$/, "Username cannot contain spaces or special characters"),
       name: z.string().min(1, "Name is required"),
-      password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
-      role: z.enum(["ADMIN", "EDITOR"]).optional(),
+      password: z.string().min(8, "Password must be at least 8 characters").optional().or(z.literal("")),
+      role: z.enum(["ADMIN", "HR", "EDITOR"]).optional(),
     })
   )
   .action(async ({ parsedInput: { id, ...data } }) => {
     const sessionUser = await ensureAdmin()
 
-    const existing = await prisma.user.findUnique({
-      where: { id },
-    })
-    if (!existing) {
-      throw new Error("User not found")
-    }
+    const existing = await prisma.user.findUnique({ where: { id } })
+    if (!existing) throw new Error("User not found")
 
-    // Permission checks:
-    // Admin can only manage EDITOR.
-    if (sessionUser.role === "ADMIN" && existing.role !== "EDITOR") {
-      throw new Error("Only editor accounts can be managed here")
-    }
+    const manageableRoles: readonly Role[] =
+      sessionUser.role === Role.SUPER_ADMIN
+        ? MANAGEABLE_BY_SUPER_ADMIN
+        : MANAGEABLE_BY_ADMIN
 
-    // Super Admin can manage ADMIN and EDITOR (but not other Super Admins here)
-    if (sessionUser.role === "SUPER_ADMIN" && existing.role !== "ADMIN" && existing.role !== "EDITOR") {
-      throw new Error("Unauthorized to manage this user")
+    if (!(manageableRoles as Role[]).includes(existing.role)) {
+      throw new Error("You are not authorized to manage this account.")
     }
 
     const existingEmail = await prisma.user.findFirst({
       where: { email: data.email, NOT: { id } },
     })
-    if (existingEmail) {
-      throw new Error("Email already registered")
-    }
+    if (existingEmail) throw new Error("Email already registered")
 
     const existingUsername = await prisma.user.findFirst({
       where: { username: data.username, NOT: { id } },
     })
-    if (existingUsername) {
-      throw new Error("Username already taken")
-    }
+    if (existingUsername) throw new Error("Username already taken")
 
     const updateData: Prisma.UserUpdateInput = {
       email: data.email,
@@ -159,55 +218,39 @@ export const updateEditor = actionClient
       name: data.name,
     }
 
-    if (sessionUser.role === "SUPER_ADMIN" && data.role) {
-      if (data.role === "ADMIN" || data.role === "EDITOR") {
-        updateData.role = data.role
-      }
+    if (data.role && (manageableRoles as string[]).includes(data.role)) {
+      updateData.role = data.role as Role
     }
 
     if (data.password && data.password.trim() !== "") {
       updateData.password = await bcrypt.hash(data.password, SALT_ROUNDS)
     }
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: updateData,
-    })
+    const user = await prisma.user.update({ where: { id }, data: updateData })
 
     revalidatePath("/dashboard/users")
     return { id: user.id, email: user.email }
   })
 
 export const deleteEditor = actionClient
-  .schema(
-    z.object({
-      id: z.string(),
-    })
-  )
+  .schema(z.object({ id: z.string() }))
   .action(async ({ parsedInput: { id } }) => {
     const sessionUser = await ensureAdmin()
 
-    const existing = await prisma.user.findUnique({
-      where: { id },
-    })
-    if (!existing) {
-      throw new Error("User not found")
+    const existing = await prisma.user.findUnique({ where: { id } })
+    if (!existing) throw new Error("User not found")
+
+    const manageableRoles: readonly Role[] =
+      sessionUser.role === Role.SUPER_ADMIN
+        ? MANAGEABLE_BY_SUPER_ADMIN
+        : MANAGEABLE_BY_ADMIN
+
+    if (!(manageableRoles as Role[]).includes(existing.role)) {
+      throw new Error("You are not authorized to delete this account.")
     }
 
-    // Permission checks:
-    if (sessionUser.role === "ADMIN" && existing.role !== "EDITOR") {
-      throw new Error("Only editor accounts can be deleted here")
-    }
-
-    if (sessionUser.role === "SUPER_ADMIN" && existing.role !== "ADMIN" && existing.role !== "EDITOR") {
-      throw new Error("Unauthorized to delete this user")
-    }
-
-    await prisma.user.delete({
-      where: { id },
-    })
+    await prisma.user.delete({ where: { id } })
 
     revalidatePath("/dashboard/users")
     return { success: true }
   })
-

@@ -18,9 +18,13 @@ function HeaderSkeleton() {
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const user = await getSession()
-  
+
   if (!user) {
     redirect("/")
+  }
+
+  if (!user.onboardingCompleted) {
+    redirect("/onboarding")
   }
 
   return (

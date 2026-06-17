@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Role, ADMIN_ROLES } from "@/lib/roles";
 import {
   Sheet,
   SheetTrigger,
@@ -232,7 +233,7 @@ export function EditorialEditor({
   const router = useRouter();
 
   // Role-based permissions
-  const canPublish = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
+  const canPublish = (ADMIN_ROLES as readonly Role[]).includes(user.role as Role);
   // Editor core state
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");

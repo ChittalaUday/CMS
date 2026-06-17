@@ -1,6 +1,7 @@
 import { getPostBySlug } from "@/app/dashboard/blogs/actions"
 import { getSession } from "@/lib/session"
 import { redirect, notFound } from "next/navigation"
+import { Role, ADMIN_ROLES } from "@/lib/roles"
 import Link from "next/link"
 import { ArrowLeft, Edit, Calendar, User, Tag, Globe, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -20,7 +21,7 @@ export default async function PostPreviewPage({ params }: PageProps) {
 
   if (!post) notFound()
 
-  const canEdit = user.role === "SUPER_ADMIN" || user.role === "ADMIN" || user.id === post.author.id
+  const canEdit = (ADMIN_ROLES as readonly Role[]).includes(user.role as Role) || user.id === post.author.id
   const categories = post.categories ?? []
 
   return (

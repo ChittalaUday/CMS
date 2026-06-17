@@ -1,6 +1,5 @@
 import { create } from "zustand"
-
-type Role = "SUPER_ADMIN" | "ADMIN" | "EDITOR"
+import type { Role } from "@/generated/prisma/enums"
 
 export type SessionUser = {
   id: string

@@ -1,6 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { useTransition } from "react"
+import type { Role } from "@/generated/prisma/enums"
+import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES } from "@/lib/roles"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -12,19 +15,45 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
-import { TerminalIcon, LayoutDashboardIcon, UsersIcon, BookOpenIcon, ImageIcon } from "lucide-react"
+import {
+  TerminalIcon,
+  LayoutDashboardIcon,
+  UsersIcon,
+  BookOpenIcon,
+  ImageIcon,
+  BriefcaseIcon,
+  SettingsIcon,
+  LogOutIcon,
+} from "lucide-react"
+import { logoutAction } from "@/app/_actions/auth"
+import { toast } from "sonner"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: {
     id: string
     name: string | null
     email: string
-    role: "SUPER_ADMIN" | "ADMIN" | "EDITOR"
+    role: Role
+    avatarUrl?: string | null
   }
 }
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-  const isAuthorized = user.role === "SUPER_ADMIN" || user.role === "ADMIN"
+  const isAdmin = (ADMIN_ROLES as readonly Role[]).includes(user.role)
+  const canAccessBlogs = (BLOG_ACCESS_ROLES as readonly Role[]).includes(user.role)
+  const canAccessCareers = (CAREERS_ACCESS_ROLES as readonly Role[]).includes(user.role)
+  const [isPending, startTransition] = useTransition()
+
+  const handleLogout = () => {
+    startTransition(async () => {
+      try {
+        await logoutAction()
+        window.location.href = "/"
+      } catch {
+        toast.error("Failed to log out")
+      }
+    })
+  }
 
   const navItems = [
     {
@@ -32,7 +61,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       url: "/dashboard",
       icon: <LayoutDashboardIcon className="size-4" />,
     },
-    ...(isAuthorized
+    ...(isAdmin
       ? [
           {
             title: "User Management",
@@ -41,15 +70,33 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
           },
         ]
       : []),
+    ...(canAccessBlogs
+      ? [
+          {
+            title: "Blogs",
+            url: "/dashboard/blogs",
+            icon: <BookOpenIcon className="size-4" />,
+          },
+          {
+            title: "Media Library",
+            url: "/dashboard/media",
+            icon: <ImageIcon className="size-4" />,
+          },
+        ]
+      : []),
+    ...(canAccessCareers
+      ? [
+          {
+            title: "Careers",
+            url: "/dashboard/careers",
+            icon: <BriefcaseIcon className="size-4" />,
+          },
+        ]
+      : []),
     {
-      title: "Blogs",
-      url: "/dashboard/blogs",
-      icon: <BookOpenIcon className="size-4" />,
-    },
-    {
-      title: "Media Library",
-      url: "/dashboard/media",
-      icon: <ImageIcon className="size-4" />,
+      title: "Settings",
+      url: "/dashboard/settings",
+      icon: <SettingsIcon className="size-4" />,
     },
   ]
 
@@ -72,10 +119,27 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
+
       <SidebarContent>
         <NavMain items={navItems} />
       </SidebarContent>
+
       <SidebarFooter>
+        {/* Logout nav item */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              disabled={isPending}
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <LogOutIcon className="size-4" />
+              <span>{isPending ? "Logging out…" : "Log out"}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        {/* Profile card → clicks to settings */}
         <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>

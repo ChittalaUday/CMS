@@ -10,24 +10,80 @@ datasource db {
 enum Role {
   SUPER_ADMIN
   ADMIN
+  HR
   EDITOR
 }
 
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum QuestionType {
+  SHORT_TEXT
+  LONG_TEXT
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  YES_NO
+  FILE
+}
+
+enum ApplicationStatus {
+  NEW
+  REVIEWING
+  SHORTLISTED
+  REJECTED
+  HIRED
+}
+
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  username  String    @unique
-  password  String
-  name      String?
-  role      Role      @default(EDITOR)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  sessions  Session[]
-  posts     Post[]
-  comments  Comment[]
-  likes     Like[]
-  views     View[]
-  media     Media[]
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  username            String    @unique
+  password            String
+  name                String?
+  avatarUrl           String?
+  bio                 String?
+  onboardingCompleted Boolean   @default(true)
+  role                Role      @default(EDITOR)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  sessions            Session[]
+  posts               Post[]
+  comments            Comment[]
+  likes               Like[]
+  views               View[]
+  media               Media[]
+  jobPostings         JobPosting[]
+  invitesSent         UserInvite[] @relation("InvitesSent")
+  invite              UserInvite?  @relation("UserInvite")
+}
+
+model UserInvite {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  code        String    @unique
+  email       String
+  userId      String    @unique
+  user        User      @relation("UserInvite", fields: [userId], references: [id], onDelete: Cascade)
+  invitedById String
+  invitedBy   User      @relation("InvitesSent", fields: [invitedById], references: [id])
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([token])
+  @@index([code])
+  @@index([userId])
 }
 
 model Session {
@@ -47,8 +103,8 @@ model Post {
   content         String
   contentJson     Json?
   published       Boolean        @default(false)
-  authorId        String
-  author          User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId        String?
+  author          User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
   featuredImageId String?
   featuredImage   Media?         @relation("FeaturedImage", fields: [featuredImageId], references: [id], onDelete: SetNull)
   metadata        Json?          @default("{}")
@@ -90,10 +146,10 @@ model Media {
   size          Int
   width         Int?
   height        Int?
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt     DateTime    @default(now())
-  
+
   featuredPosts Post[]      @relation("FeaturedImage")
   posts         PostMedia[]
 
@@ -115,7 +171,7 @@ model Comment {
   postId     String
   post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId   String?
-  author     User?    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   authorName String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -149,4 +205,86 @@ model View {
 
   @@index([postId])
   @@index([userId])
+}
+
+// --- Careers ---
+
+model JobPosting {
+  id                   String           @id @default(cuid())
+  title                String
+  slug                 String           @unique
+  department           String
+  location             String
+  jobType              JobType          @default(FULL_TIME)
+  description          String
+  descriptionJson      Json?
+  responsibilities     String?
+  responsibilitiesJson Json?
+  requirements         String?
+  requirementsJson     Json?
+  salaryMin            Int?
+  salaryMax            Int?
+  currency             String           @default("INR")
+  status               JobStatus        @default(DRAFT)
+  closingDate          DateTime?
+  draftParentId        String?
+  draftParent          JobPosting?      @relation("DraftVersion", fields: [draftParentId], references: [id], onDelete: Cascade)
+  drafts               JobPosting[]     @relation("DraftVersion")
+  createdById          String?
+  createdBy            User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  questions            JobQuestion[]
+  applications         JobApplication[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([createdById])
+  @@index([status])
+  @@index([draftParentId])
+}
+
+model JobQuestion {
+  id        String       @id @default(cuid())
+  jobId     String
+  job       JobPosting   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  question  String
+  type      QuestionType @default(SHORT_TEXT)
+  required  Boolean      @default(false)
+  order     Int          @default(0)
+  options   Json?
+  answers   JobAnswer[]
+  createdAt DateTime     @default(now())
+
+  @@index([jobId])
+}
+
+model JobApplication {
+  id             String            @id @default(cuid())
+  jobId          String
+  job            JobPosting        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicantName  String
+  applicantEmail String
+  applicantPhone String?
+  resumeUrl      String?
+  coverLetter    String?
+  status         ApplicationStatus @default(NEW)
+  notes          String?
+  answers        JobAnswer[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([jobId])
+  @@index([status])
+  @@index([applicantEmail])
+}
+
+model JobAnswer {
+  id            String         @id @default(cuid())
+  applicationId String
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      JobQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer        String
+
+  @@index([applicationId])
+  @@index([questionId])
 }

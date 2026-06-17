@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/session"
 import { uploadToR2, deleteFromR2 } from "@/lib/s3"
+import { Role } from "@/generated/prisma/enums"
+import {
+  ADMIN_ROLES,
+  BLOG_ACCESS_ROLES,
+} from "@/lib/roles"
 
 // --- Auth Helpers ---
 async function requireAuth() {
@@ -12,6 +17,17 @@ async function requireAuth() {
   if (!user) throw new Error("Unauthorized")
   return user
 }
+
+// HR users are careers-only; block them from all blog operations.
+async function requireBlogAccess() {
+  const user = await requireAuth()
+  if (!(BLOG_ACCESS_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: you do not have access to blog management.")
+  }
+  return user
+}
+
+const isDev = process.env.NODE_ENV === "development"
 
 // --- Duck-type helpers for Prisma errors ---
 // Avoids instanceof across module boundaries (broken in Prisma 7 with Turbopack).
@@ -44,7 +60,7 @@ function isPrismaValidationError(err: unknown): err is PrismaValidationError {
 // The raw error is logged server-side only — never sent to the client.
 function handlePrismaError(err: unknown, context?: string): never {
   if (isPrismaKnownError(err)) {
-    console.error(`[DB Error]${context ? ` ${context}` : ""}`, err.code, err.message)
+    if (isDev) console.error(`[DB Error]${context ? ` ${context}` : ""}`, err.code, err.message)
 
     switch (err.code) {
       case "P2002": {
@@ -72,18 +88,21 @@ function handlePrismaError(err: unknown, context?: string): never {
   }
 
   if (isPrismaValidationError(err)) {
-    console.error(`[DB Validation]${context ? ` ${context}` : ""}`, err.message)
+    if (isDev) console.error(`[DB Validation]${context ? ` ${context}` : ""}`, err.message)
     throw new Error("Invalid data submitted. Please check your input and try again.")
   }
 
-  // Re-throw non-Prisma errors (e.g. our own "Unauthorized") as-is
-  throw err
+  // Unknown (non-Prisma) errors — full details in dev, generic message in prod
+  if (isDev) { console.error(`[Unexpected Error]${context ? ` ${context}` : ""}`, err); throw err as Error }
+  throw new Error("An unexpected error occurred. Please try again.")
 }
 
 // --- Posts Actions ---
 export async function getPosts() {
-  await requireAuth()
+  const user = await requireBlogAccess()
+  const where: Prisma.PostWhereInput = user.role === Role.EDITOR ? { authorId: user.id } : {}
   return await prisma.post.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     include: {
       author: { select: { id: true, name: true, email: true } },
@@ -100,13 +119,18 @@ export async function getPostsPaginated(params: {
   page?: number
   pageSize?: number
 }) {
-  await requireAuth()
+  const user = await requireBlogAccess()
 
   const page = Math.max(1, params.page ?? 1)
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
   const skip = (page - 1) * pageSize
 
   const where: Prisma.PostWhereInput = {}
+
+  // Editors can only see their own posts
+  if (user.role === Role.EDITOR) {
+    where.authorId = user.id
+  }
 
   if (params.search?.trim()) {
     where.OR = [
@@ -145,8 +169,8 @@ export async function getPostsPaginated(params: {
 }
 
 export async function getPostById(id: string) {
-  await requireAuth()
-  return await prisma.post.findUnique({
+  const user = await requireBlogAccess()
+  const post = await prisma.post.findUnique({
     where: { id },
     include: {
       featuredImage: true,
@@ -158,10 +182,14 @@ export async function getPostById(id: string) {
       media: { include: { media: true } },
     },
   })
+  if (post && user.role === Role.EDITOR && post.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only view your own posts.")
+  }
+  return post
 }
 
 export async function getPostBySlug(slug: string) {
-  await requireAuth()
+  await requireBlogAccess()
   return await prisma.post.findUnique({
     where: { slug },
     include: {
@@ -184,7 +212,7 @@ export type PostInput = {
 }
 
 export async function createPost(data: PostInput) {
-  const user = await requireAuth()
+  const user = await requireBlogAccess()
 
   try {
     const post = await prisma.post.create({
@@ -224,7 +252,13 @@ export async function createPost(data: PostInput) {
 }
 
 export async function updatePost(id: string, data: PostInput) {
-  await requireAuth()
+  const user = await requireBlogAccess()
+
+  if (user.role === Role.EDITOR) {
+    const existing = await prisma.post.findUnique({ where: { id }, select: { authorId: true } })
+    if (!existing) throw new Error("Post not found.")
+    if (existing.authorId !== user.id) throw new Error("Unauthorized: you can only edit your own posts.")
+  }
 
   try {
     // Clear existing category joins
@@ -274,10 +308,10 @@ export async function updatePost(id: string, data: PostInput) {
 }
 
 export async function togglePublished(id: string) {
-  const user = await requireAuth()
+  const user = await requireBlogAccess()
 
-  if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN") {
-    throw new Error("Unauthorized: only admins can publish posts")
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can publish posts.")
   }
 
   try {
@@ -297,7 +331,14 @@ export async function togglePublished(id: string) {
 }
 
 export async function deletePost(id: string) {
-  await requireAuth()
+  const user = await requireBlogAccess()
+
+  if (user.role === Role.EDITOR) {
+    const existing = await prisma.post.findUnique({ where: { id }, select: { authorId: true } })
+    if (!existing) throw new Error("Post not found.")
+    if (existing.authorId !== user.id) throw new Error("Unauthorized: you can only delete your own posts.")
+  }
+
   try {
     await prisma.post.delete({ where: { id } })
     revalidatePath("/dashboard/blogs")
@@ -308,14 +349,14 @@ export async function deletePost(id: string) {
 
 // --- Categories Actions ---
 export async function getCategories() {
-  await requireAuth()
+  await requireBlogAccess()
   return await prisma.category.findMany({
     orderBy: { name: "asc" },
   })
 }
 
 export async function createCategory(name: string) {
-  await requireAuth()
+  await requireBlogAccess()
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "")
   try {
     const category = await prisma.category.create({
@@ -329,7 +370,7 @@ export async function createCategory(name: string) {
 }
 
 export async function deleteCategory(id: string) {
-  await requireAuth()
+  await requireBlogAccess()
 
   // Verify that the category is not used by any posts
   const usageCount = await prisma.postCategory.count({
@@ -349,18 +390,68 @@ export async function deleteCategory(id: string) {
 }
 
 // --- Media Actions ---
-export async function getMediaItems() {
-  await requireAuth()
-  return await prisma.media.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      user: { select: { name: true, email: true } },
-    },
-  })
+export async function getMediaItems(params?: {
+  search?: string
+  type?: string
+  page?: number
+  pageSize?: number
+}) {
+  await requireBlogAccess()
+
+  const page = Math.max(1, params?.page ?? 1)
+  const pageSize = Math.min(50, Math.max(1, params?.pageSize ?? 24))
+  const skip = (page - 1) * pageSize
+
+  const where: Prisma.MediaWhereInput = {}
+
+  if (params?.search?.trim()) {
+    const query = params.search.trim()
+    where.OR = [
+      { filename: { contains: query, mode: "insensitive" } },
+      { mimeType: { contains: query, mode: "insensitive" } },
+    ]
+  }
+
+  if (params?.type && params.type !== "all") {
+    if (params.type === "image") {
+      where.mimeType = { startsWith: "image/" }
+    } else if (params.type === "video") {
+      where.mimeType = { startsWith: "video/" }
+    } else if (params.type === "audio") {
+      where.mimeType = { startsWith: "audio/" }
+    } else if (params.type === "document") {
+      where.AND = [
+        { NOT: { mimeType: { startsWith: "image/" } } },
+        { NOT: { mimeType: { startsWith: "video/" } } },
+        { NOT: { mimeType: { startsWith: "audio/" } } },
+      ]
+    }
+  }
+
+  const [media, totalCount] = await Promise.all([
+    prisma.media.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      include: {
+        user: { select: { name: true, email: true } },
+      },
+    }),
+    prisma.media.count({ where }),
+  ])
+
+  return {
+    media,
+    totalCount,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+  }
 }
 
 export async function uploadMediaItem(formData: FormData) {
-  const user = await requireAuth()
+  const user = await requireBlogAccess()
   const file = formData.get("file") as File | null
   if (!file) throw new Error("No file provided")
 
@@ -394,7 +485,7 @@ export async function uploadMediaItem(formData: FormData) {
 }
 
 export async function deleteMediaItem(id: string) {
-  await requireAuth()
+  await requireBlogAccess()
   const media = await prisma.media.findUnique({ where: { id } })
   if (!media) throw new Error("Media item not found")
 

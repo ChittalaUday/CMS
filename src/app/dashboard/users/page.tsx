@@ -1,24 +1,38 @@
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
-import { getEditors } from "@/app/_actions/users"
+import { Role, ADMIN_ROLES } from "@/lib/roles"
+import { getEditorsPaginated } from "@/app/_actions/users"
 import { UserList } from "./UserList"
+
+type PageProps = {
+  searchParams: Promise<{ search?: string; role?: string; page?: string }>
+}
 
 export const dynamic = "force-dynamic"
 
-export default async function UsersPage() {
+export default async function UsersPage({ searchParams }: PageProps) {
   const user = await getSession()
-  
+
   if (!user) {
     redirect("/")
   }
 
-  // Double check authorization
-  if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN") {
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
     redirect("/dashboard")
   }
 
-  // Fetch editor list
-  const editors = await getEditors()
+  const params = await searchParams
+  const search = params.search ?? ""
+  const role = params.role ?? "all"
+  const page = Number(params.page ?? "1") || 1
+  const pageSize = 15
+
+  const { editors, totalCount, totalPages } = await getEditorsPaginated({
+    search,
+    role,
+    page,
+    pageSize,
+  })
 
   return (
     <div className="space-y-6">
@@ -29,7 +43,15 @@ export default async function UsersPage() {
         </p>
       </div>
       
-      <UserList initialEditors={editors} currentUserRole={user.role} />
+      <UserList
+        initialEditors={editors}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        currentPage={page}
+        currentSearch={search}
+        currentRole={role}
+        currentUserRole={user.role}
+      />
     </div>
   )
 }

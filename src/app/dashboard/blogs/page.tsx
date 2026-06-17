@@ -1,6 +1,7 @@
 import { getPostsPaginated, deletePost, getCategories } from "./actions"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
+import { Role, ADMIN_ROLES } from "@/lib/roles"
 import Link from "next/link"
 import { Suspense } from "react"
 import { Button } from "@/components/ui/button"
@@ -30,8 +31,9 @@ interface PageProps {
 export default async function BlogsPage({ searchParams }: PageProps) {
   const user = await getSession()
   if (!user) redirect("/")
+  if (user.role === Role.HR) redirect("/dashboard/careers")
 
-  const canPublish = user.role === "SUPER_ADMIN" || user.role === "ADMIN"
+  const canPublish = (ADMIN_ROLES as readonly Role[]).includes(user.role)
 
   const params = await searchParams
   const search = params.search ?? ""
@@ -205,7 +207,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
                       <td className="px-4 py-4 hidden md:table-cell">
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium max-w-[130px] truncate">
                           <User className="size-3 shrink-0 text-muted-foreground/60" />
-                          {post.author.name || post.author.email}
+                          {post.author?.name || post.author?.email || "Deleted user"}
                         </span>
                       </td>
 

@@ -41,7 +41,7 @@ export const getSession = cache(async () => {
   const session = await prisma.session.findUnique({
     where: { id: token },
     include: {
-      user: { select: { id: true, email: true, name: true, role: true } },
+      user: { select: { id: true, email: true, username: true, name: true, bio: true, role: true, avatarUrl: true, onboardingCompleted: true } },
     },
   })
 

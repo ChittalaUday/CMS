@@ -5,8 +5,8 @@ import { getMediaItems, uploadMediaItem, deleteMediaItem } from "../blogs/action
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
-  Upload, Copy, Trash2, Check, Loader2, ImageIcon, FileText, ExternalLink 
+import {
+  Upload, Copy, Trash2, Check, Loader2, ImageIcon, FileText, ExternalLink
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -29,16 +29,28 @@ export default function MediaLibraryPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null)
+  const [search, setSearch] = useState("")
+  const [type, setType] = useState("all")
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const pageSize = 24
 
   useEffect(() => {
     loadMedia()
-  }, [])
+  }, [search, type, page])
 
   const loadMedia = async () => {
     try {
       setIsLoading(true)
-      const items = await getMediaItems()
-      setMediaItems(items as any)
+      const result = await getMediaItems({ search, type, page, pageSize })
+      setMediaItems(result.media)
+      setTotalCount(result.totalCount)
+      setTotalPages(result.totalPages)
+      setPage(result.page)
+      if (result.media.length === 0 && selectedItem) {
+        setSelectedItem(null)
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to load media library")
     } finally {
@@ -59,6 +71,7 @@ export default function MediaLibraryPage() {
         setMediaItems((prev) => [newMedia as any, ...prev])
       }
       toast.success("Uploaded successfully")
+      setPage(1)
     } catch (err: any) {
       toast.error(err.message || "Upload failed")
     } finally {
@@ -132,6 +145,39 @@ export default function MediaLibraryPage() {
         </div>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] items-center">
+        <div className="relative w-full max-w-xl">
+          <Input
+            placeholder="Search media by filename or MIME type…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="pl-3 bg-muted/40 border-border"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <label htmlFor="media-type-filter" className="sr-only">File type</label>
+          <select
+            id="media-type-filter"
+            value={type}
+            onChange={(e) => {
+              setType(e.target.value)
+              setPage(1)
+            }}
+            className="h-10 rounded-lg border border-border/80 bg-muted/30 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <option value="all">All file types</option>
+            <option value="image">Images</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
+            <option value="document">Documents</option>
+          </select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Gallery Grid */}
         <div className="lg:col-span-3 space-y-4">
@@ -150,8 +196,9 @@ export default function MediaLibraryPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {mediaItems.map((item) => {
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {mediaItems.map((item) => {
                 const isSelected = selectedItem?.id === item.id
                 return (
                   <div
@@ -198,10 +245,33 @@ export default function MediaLibraryPage() {
                   </div>
                 )
               })}
-            </div>
-          )}
-        </div>
-
+              </div>
+              {totalPages > 1 && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-2 py-3 bg-muted/70 border border-border/80 rounded-xl">
+                  <p className="text-xs text-muted-foreground">
+                    Page {page} of {totalPages} · {totalCount} items
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1 || isLoading}
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages || isLoading}
+                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
         {/* Detailed Inspector Panel */}
         <div className="lg:col-span-1">
           {selectedItem ? (
