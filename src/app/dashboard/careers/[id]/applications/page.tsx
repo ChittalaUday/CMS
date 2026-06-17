@@ -152,7 +152,7 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
           </p>
         </div>
       ) : (
-        <ApplicationsView applications={applications} jobTitle={job.title} />
+        <ApplicationsView applications={applications} job={job} />
       )}
     </div>
   )

@@ -46,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { AlertDialogCustom } from '@/components/ui/confirm-dialog';
 import { BasicMarksKit } from '@/components/editor/plugins/basic-marks-kit';
 import {
   type TDiscussion,
@@ -313,12 +314,17 @@ function CommentMoreDropdown(props: {
   } = props;
 
   const editor = useEditorRef();
+  const [alertOpen, setAlertOpen] = React.useState(false);
+  const [alertMessage, setAlertMessage] = React.useState('');
 
   const selectedEditCommentRef = React.useRef<boolean>(false);
 
   const onDeleteComment = React.useCallback(() => {
-    if (!comment.id)
-      return alert('You are operating too quickly, please try again later.');
+    if (!comment.id) {
+      setAlertMessage('You are operating too quickly, please try again later.');
+      setAlertOpen(true);
+      return;
+    }
 
     // Find and update the discussion
     const updatedDiscussions = editor
@@ -352,46 +358,58 @@ function CommentMoreDropdown(props: {
   const onEditComment = React.useCallback(() => {
     selectedEditCommentRef.current = true;
 
-    if (!comment.id)
-      return alert('You are operating too quickly, please try again later.');
+    if (!comment.id) {
+      setAlertMessage('You are operating too quickly, please try again later.');
+      setAlertOpen(true);
+      return;
+    }
 
     setEditingId(comment.id);
   }, [comment.id, setEditingId]);
 
   return (
-    <DropdownMenu
-      open={dropdownOpen}
-      onOpenChange={setDropdownOpen}
-      modal={false}
-    >
-      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-        <Button variant="ghost" className={cn('h-6 p-1 text-muted-foreground')}>
-          <MoreHorizontalIcon className="size-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="w-48"
-        onCloseAutoFocus={(e) => {
-          if (selectedEditCommentRef.current) {
-            onCloseAutoFocus?.();
-            selectedEditCommentRef.current = false;
-          }
-
-          return e.preventDefault();
-        }}
+    <>
+      <DropdownMenu
+        open={dropdownOpen}
+        onOpenChange={setDropdownOpen}
+        modal={false}
       >
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={onEditComment}>
-            <PencilIcon className="size-4" />
-            Edit comment
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onDeleteComment}>
-            <TrashIcon className="size-4" />
-            Delete comment
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" className={cn('h-6 p-1 text-muted-foreground')}>
+            <MoreHorizontalIcon className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="w-48"
+          onCloseAutoFocus={(e) => {
+            if (selectedEditCommentRef.current) {
+              onCloseAutoFocus?.();
+              selectedEditCommentRef.current = false;
+            }
+
+            return e.preventDefault();
+          }}
+        >
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={onEditComment}>
+              <PencilIcon className="size-4" />
+              Edit comment
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDeleteComment}>
+              <TrashIcon className="size-4" />
+              Delete comment
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialogCustom
+        isOpen={alertOpen}
+        onClose={() => setAlertOpen(false)}
+        title="Operation Throttled"
+        description={alertMessage}
+      />
+    </>
   );
 }
 

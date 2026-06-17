@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/session"
-import { Role } from "@/generated/prisma/enums"
+import { Role, QueueStatus } from "@/generated/prisma/enums"
+import { processQueue, calculateAtsScoreInternal, generateJobKeywords } from "@/lib/queues/ats-queue"
+import { generateText } from "@/lib/ai"
 import {
   ADMIN_ROLES,
   CAREERS_ACCESS_ROLES,
@@ -129,6 +131,8 @@ export type JobPostingInput = {
   currency?: string
   closingDate?: string | null
   questions?: QuestionInput[]
+  keywords?: string[]
+
 }
 
 // --- Draft limit helper ---
@@ -269,8 +273,14 @@ export async function createJobPosting(data: JobPostingInput) {
         questions: data.questions?.length
           ? { create: buildQuestionsCreate(data.questions) }
           : undefined,
+        keywords: data.keywords ?? [],
+        keywordStatus: data.keywords && data.keywords.length > 0 ? QueueStatus.COMPLETED : QueueStatus.IDLE,
+
       },
     })
+    if (!data.keywords || data.keywords.length === 0) {
+      generateJobKeywords(job.id)
+    }
     revalidatePath("/dashboard/careers")
     return job
   } catch (err) {
@@ -283,7 +293,7 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
 
   const existing = await prisma.jobPosting.findUnique({
     where: { id },
-    select: { status: true, draftParentId: true },
+    select: { status: true, draftParentId: true, keywords: true },
   })
   if (existing?.status === "DRAFT" && !existing.draftParentId) {
     await assertDraftLimit(user.id, id)
@@ -315,8 +325,14 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
         questions: data.questions?.length
           ? { create: buildQuestionsCreate(data.questions) }
           : undefined,
+        keywords: data.keywords ?? undefined,
+        ...(data.keywords ? { keywordStatus: QueueStatus.COMPLETED } : {}),
+
       },
     })
+    if (!data.keywords && (!existing?.keywords || existing.keywords.length === 0)) {
+      generateJobKeywords(job.id)
+    }
     revalidatePath("/dashboard/careers")
     revalidatePath(`/dashboard/careers/${id}/edit`)
     return job
@@ -395,6 +411,9 @@ export async function createDraftOf(publishedJobId: string) {
       status: "DRAFT",
       draftParentId: publishedJobId,
       createdById: user.id,
+      keywords: source.keywords,
+      keywordStatus: source.keywordStatus,
+
       questions: source.questions.length
         ? {
             create: source.questions.map((q) => ({
@@ -464,6 +483,9 @@ export async function publishDraft(draftId: string) {
         currency: draft.currency,
         closingDate: draft.closingDate,
         status: "PUBLISHED",
+        keywords: draft.keywords,
+        keywordStatus: draft.keywordStatus,
+
         questions: draft.questions.length
           ? {
               create: draft.questions.map((q) => ({
@@ -482,7 +504,14 @@ export async function publishDraft(draftId: string) {
     revalidatePath("/dashboard/careers")
     return { id: draft.draftParentId }
   } else {
-    await prisma.jobPosting.update({ where: { id: draftId }, data: { status: "PUBLISHED" } })
+    await prisma.jobPosting.update({ 
+      where: { id: draftId }, 
+      data: { 
+        status: "PUBLISHED",
+        keywords: draft.keywords,
+        keywordStatus: draft.keywordStatus
+      } 
+    })
     revalidatePath("/dashboard/careers")
     return { id: draftId }
   }
@@ -523,7 +552,19 @@ export async function getApplications(
   }
 
   const [applications, totalCount] = await Promise.all([
-    prisma.jobApplication.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: pageSize }),
+    prisma.jobApplication.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      include: {
+        answers: {
+          include: {
+            question: true,
+          },
+        },
+      },
+    }),
     prisma.jobApplication.count({ where }),
   ])
 
@@ -601,7 +642,7 @@ export async function submitApplication(data: ApplicationSubmitInput) {
 
   const job = await prisma.jobPosting.findUnique({
     where: { id: data.jobId },
-    select: { status: true, closingDate: true },
+    include: { questions: true },
   })
   if (!job) throw new Error("This job posting no longer exists.")
   if (job.status !== "PUBLISHED") throw new Error("This job posting is no longer accepting applications.")
@@ -609,8 +650,17 @@ export async function submitApplication(data: ApplicationSubmitInput) {
     throw new Error("The application deadline for this position has passed.")
   }
 
+  // Validate required questions
+  const requiredQuestions = job.questions.filter((q) => q.required)
+  for (const reqQ of requiredQuestions) {
+    const submittedAnswer = data.answers.find((a) => a.questionId === reqQ.id)
+    if (!submittedAnswer || !submittedAnswer.answer.trim()) {
+      throw new Error(`The question "${reqQ.question}" is required and must be filled.`)
+    }
+  }
+
   try {
-    return await prisma.jobApplication.create({
+    const app = await prisma.jobApplication.create({
       data: {
         jobId: data.jobId,
         applicantName: data.applicantName.trim(),
@@ -623,6 +673,11 @@ export async function submitApplication(data: ApplicationSubmitInput) {
           : undefined,
       },
     })
+    
+    // Asynchronously trigger Ollama ATS queue processing without blocking submission response
+    processQueue().catch((err) => console.error("Error in background ATS queue worker:", err))
+
+    return app
   } catch (err) {
     handlePrismaError(err, "submitApplication")
   }
@@ -645,4 +700,198 @@ export async function getCareersDashboardStats() {
   ])
 
   return { totalJobs, publishedJobs, totalApplications, newApplications }
+}
+
+export async function getAtsScore(applicationId: string, model?: string) {
+  await requireCareersAccess()
+
+  // Reset to PENDING so the queue worker picks it up
+  await prisma.jobApplication.update({
+    where: { id: applicationId },
+    data: {
+      atsStatus: QueueStatus.PENDING,
+      atsScore: null,
+      atsConfidence: null,
+      atsJustification: null,
+    },
+  })
+
+  // Enqueue into the background worker (non-blocking — survives browser disconnect)
+  const { enqueueAtsScorer } = await import("@/lib/queues/ats-queue")
+  enqueueAtsScorer(applicationId, model)
+
+  const { queueEvents } = await import("@/lib/queues/queue-events")
+  queueEvents.emit("change")
+}
+
+export async function getQueueStatus() {
+  await requireCareersAccess()
+  const { atsQueue, keywordQueue } = await import("@/lib/queues/queue-manager")
+
+  // 1. ATS Queue Stats
+  const [atsPending, atsProcessing, atsCompleted, atsFailed, atsItems] = await Promise.all([
+    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.PENDING } }),
+    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.PROCESSING } }),
+    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.COMPLETED } }),
+    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.FAILED } }),
+    prisma.jobApplication.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        applicantName: true,
+        applicantEmail: true,
+        atsStatus: true,
+        atsScore: true,
+        atsJustification: true,
+        updatedAt: true,
+        job: {
+          select: {
+            title: true,
+          },
+        },
+      },
+    })
+  ])
+
+  // 2. Keyword Gen Queue Stats
+  const [kwPending, kwProcessing, kwCompleted, kwFailed, kwItems] = await Promise.all([
+    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.PENDING } }),
+    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.PROCESSING } }),
+    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.COMPLETED } }),
+    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.FAILED } }),
+    prisma.jobPosting.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        keywordStatus: true,
+        keywords: true,
+        updatedAt: true
+      }
+    })
+  ])
+
+  return {
+    ats: {
+      pending: atsPending,
+      processing: atsProcessing,
+      completed: atsCompleted,
+      failed: atsFailed,
+      items: atsItems,
+      memorySize: atsQueue.size,
+      memoryPending: atsQueue.pending
+    },
+    keyword: {
+      pending: kwPending,
+      processing: kwProcessing,
+      completed: kwCompleted,
+      failed: kwFailed,
+      items: kwItems,
+      memorySize: keywordQueue.size,
+      memoryPending: keywordQueue.pending
+    }
+  }
+}
+
+export async function triggerQueueWorker() {
+  await requireCareersAccess()
+  const { initializeQueues } = await import("@/lib/queues/ats-queue")
+  await initializeQueues()
+  const { queueEvents } = await import("@/lib/queues/queue-events")
+  queueEvents.emit("change")
+  return { success: true }
+}
+
+export async function resetFailedQueueItems() {
+  await requireCareersAccess()
+  
+  // 1. Reset failed application scans
+  const failedApps = await prisma.jobApplication.findMany({
+    where: { atsStatus: QueueStatus.FAILED },
+    select: { id: true }
+  })
+  
+  await prisma.jobApplication.updateMany({
+    where: { atsStatus: QueueStatus.FAILED },
+    data: { atsStatus: QueueStatus.PENDING, atsScore: null, atsJustification: null },
+  })
+
+  // 2. Reset failed keyword gens
+  const failedJobs = await prisma.jobPosting.findMany({
+    where: { keywordStatus: QueueStatus.FAILED },
+    select: { id: true }
+  })
+
+  await prisma.jobPosting.updateMany({
+    where: { keywordStatus: QueueStatus.FAILED },
+    data: { keywordStatus: QueueStatus.PENDING },
+  })
+
+  // Re-enqueue to active queues
+  const { enqueueAtsScorer, enqueueKeywordGeneration } = await import("@/lib/queues/ats-queue")
+  
+  for (const app of failedApps) {
+    enqueueAtsScorer(app.id)
+  }
+
+  for (const job of failedJobs) {
+    enqueueKeywordGeneration(job.id)
+  }
+
+  const { queueEvents } = await import("@/lib/queues/queue-events")
+  queueEvents.emit("change")
+
+  return { success: true }
+}
+
+export async function extractKeywordsFromText(data: {
+  title: string
+  department: string
+  description: string
+  requirements?: string
+  responsibilities?: string
+  questions: string[]
+}) {
+  await requireCareersAccess()
+
+  const prompt = `You are an expert recruiter and technical analyst.
+Extract a list of 10 to 15 key technical skills, tools, frameworks, programming languages, and competencies required for this job posting.
+Combine details from the job title, description, requirements, responsibilities, and screening questions.
+
+Job Title: ${data.title}
+Department: ${data.department}
+Description: ${data.description.replace(/<[^>]*>/g, "")}
+Requirements: ${(data.requirements || "").replace(/<[^>]*>/g, "")}
+Responsibilities: ${(data.responsibilities || "").replace(/<[^>]*>/g, "")}
+Questions: ${data.questions.join(", ")}
+
+Respond with ONLY a comma-separated list of the extracted keywords (e.g. "React, Node.js, TypeScript, PostgreSQL, Docker, AWS"). Do not include any introductory or concluding text. Keep keywords simple.
+`.trim()
+
+  const text = await generateText({ prompt })
+  const keywords = text
+    .split(",")
+    .map((k: string) => k.trim())
+    .filter((k: string) => k.length > 0 && k.length < 30) // Sanity check
+
+  return keywords
+}
+
+export async function updateJobKeywords(jobId: string, keywords: string[]) {
+  await assertJobOwnership(jobId)
+  
+  const updated = await prisma.jobPosting.update({
+    where: { id: jobId },
+    data: {
+      keywords,
+      keywordStatus: QueueStatus.COMPLETED
+    }
+  })
+  
+  revalidatePath("/dashboard/careers")
+  revalidatePath("/dashboard/careers/queue")
+  
+  return updated
 }

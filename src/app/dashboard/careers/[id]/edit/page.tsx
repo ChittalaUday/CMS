@@ -49,6 +49,7 @@ export default async function EditCareerPage({ params }: EditCareerPageProps) {
       order: q.order,
       options: q.options,
     })),
+    keywords: job.keywords,
   }
 
   const isDraft = job.status === "DRAFT"

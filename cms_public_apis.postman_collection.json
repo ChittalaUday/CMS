@@ -1,0 +1,202 @@
+{
+	"info": {
+		"_postman_id": "c1f72782-dc90-482a-8d76-9c4c1a4db4a8",
+		"name": "CMS Public APIs",
+		"description": "Postman Collection for the CMS Public API endpoints including Blogs, Careers Application, and Health Check.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/health",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"health"
+					]
+				},
+				"description": "Verifies database connectivity and service availability. Returns 200 OK if the database is accessible, or 503 Service Unavailable if the database connection fails."
+			},
+			"response": []
+		},
+		{
+			"name": "Blogs",
+			"item": [
+				{
+					"name": "Get All Published Blogs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/public/blogs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"public",
+								"blogs"
+							]
+						},
+						"description": "Fetches all published blog posts ordered by creation date (newest first). Included in the response are the post's author, featured image, and simplified category list."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Blog Post by Slug",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/public/blogs/:slug",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"public",
+								"blogs",
+								":slug"
+							],
+							"variable": [
+								{
+									"key": "slug",
+									"value": "my-first-blog-post",
+									"description": "The unique URL slug of the blog post to fetch."
+								}
+							]
+						},
+						"description": "Fetches details of a single published blog post using its unique URL slug."
+					},
+					"response": []
+				},
+				{
+					"name": "Record Blog Post View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"slug\": \"my-first-blog-post\",\n  \"postId\": \"\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/public/blogs/view",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"public",
+								"blogs",
+								"view"
+							]
+						},
+						"description": "Increments the view count for a blog post. You must provide either the 'slug' or the 'postId' in the JSON body."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Careers",
+			"item": [
+				{
+					"name": "Submit Job Application",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "jobId",
+									"value": "cmqi4nh380000topd2b752c1w",
+									"type": "text"
+								},
+								{
+									"key": "applicantName",
+									"value": "John Doe",
+									"type": "text"
+								},
+								{
+									"key": "applicantEmail",
+									"value": "john.doe@example.com",
+									"type": "text"
+								},
+								{
+									"key": "applicantPhone",
+									"value": "+1234567890",
+									"type": "text"
+								},
+								{
+									"key": "coverLetter",
+									"value": "I am excited to apply for the Senior Software Engineer position...",
+									"type": "text"
+								},
+								{
+									"key": "resume",
+									"description": "Select local PDF file to upload as resume",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "answer_cmqi4nh390001topdidi0pnvm",
+									"value": "5 years of Full Stack JS experience",
+									"type": "text"
+								},
+								{
+									"key": "answer_cmqi4nh390002topdomsw5cs1",
+									"value": "React and Node.js with TypeScript",
+									"type": "text"
+								},
+								{
+									"key": "answer_cmqi4nh390003topdqtczfstz",
+									"value": "Resume Uploaded from Postman",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/public/careers/apply",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"public",
+								"careers",
+								"apply"
+							]
+						},
+						"description": "Submits a new job application for a career listing. 'jobId', 'applicantName', and 'applicantEmail' are required. Additionally, the backend validates that all required questionnaire questions defined for this job posting are provided with a non-empty answer."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3010",
+			"type": "string"
+		}
+	]
+}

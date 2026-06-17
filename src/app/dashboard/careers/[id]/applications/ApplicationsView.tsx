@@ -1,6 +1,9 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect, useRef } from "react"
+import dynamic from "next/dynamic"
+
+const PdfViewer = dynamic(() => import("@/components/PdfViewer"), { ssr: false })
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,8 +46,12 @@ import {
   MessageSquare,
   FileText,
   ChevronDown,
+  Briefcase,
+  Sparkles,
+  AlertTriangle,
 } from "lucide-react"
-import { updateApplicationStatus } from "../../actions"
+import { updateApplicationStatus, getAtsScore, getApplicationById } from "../../actions"
+import { evaluateSearchQuery } from "@/lib/ats/search-parser"
 
 type ApplicationStatus = "NEW" | "REVIEWING" | "SHORTLISTED" | "REJECTED" | "HIRED"
 
@@ -68,13 +75,21 @@ interface Application {
   coverLetter: string | null
   status: ApplicationStatus
   notes: string | null
+  atsScore: number | null
+  atsConfidence: number | null
+  atsJustification: string | null
+  extractedSkills: string[]
+  extractedExperience: number | null
+  extractedLocation: string | null
+  extractedEducation: string | null
+  atsStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "IDLE"
   createdAt: Date
   answers?: Answer[]
 }
 
 interface ApplicationsViewProps {
   applications: Application[]
-  jobTitle: string
+  job: any
 }
 
 const STATUS_CONFIG: Record<
@@ -108,13 +123,6 @@ const STATUS_CONFIG: Record<
   },
 }
 
-const NEXT_STATUSES: Record<ApplicationStatus, ApplicationStatus[]> = {
-  NEW: ["REVIEWING", "SHORTLISTED", "REJECTED"],
-  REVIEWING: ["SHORTLISTED", "REJECTED"],
-  SHORTLISTED: ["HIRED", "REJECTED"],
-  REJECTED: ["REVIEWING"],
-  HIRED: [],
-}
 
 // Full pipeline order for the dropdown
 const ALL_STATUSES: ApplicationStatus[] = [
@@ -125,7 +133,7 @@ const ALL_STATUSES: ApplicationStatus[] = [
   "HIRED",
 ]
 
-export function ApplicationsView({ applications: initial, jobTitle }: ApplicationsViewProps) {
+export function ApplicationsView({ applications: initial, job }: ApplicationsViewProps) {
   const [applications, setApplications] = useState(initial)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "ALL">("ALL")
@@ -133,12 +141,21 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
   const [notes, setNotes] = useState("")
   const [isPending, startTransition] = useTransition()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false)
+  const [tempNotes, setTempNotes] = useState("")
 
   const filtered = applications.filter((a) => {
     const matchesSearch =
       !search ||
-      a.applicantName.toLowerCase().includes(search.toLowerCase()) ||
-      a.applicantEmail.toLowerCase().includes(search.toLowerCase())
+      evaluateSearchQuery(search, {
+        applicantName: a.applicantName,
+        applicantEmail: a.applicantEmail,
+        coverLetter: a.coverLetter,
+        extractedSkills: a.extractedSkills || [],
+        extractedExperience: a.extractedExperience || 0,
+        extractedLocation: a.extractedLocation || null,
+        extractedEducation: a.extractedEducation || null,
+      })
     const matchesStatus = statusFilter === "ALL" || a.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -181,15 +198,123 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
     })
   }
 
+  const [atsScore, setAtsScore] = useState<number | null>(null)
+  const [atsConfidence, setAtsConfidence] = useState<number | null>(null)
+  const [atsJustification, setAtsJustification] = useState<string | null>(null)
+  const [isAtsLoading, setIsAtsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"ai" | "pdf">("ai")
+  const [ollamaModels, setOllamaModels] = useState<{ name: string; model: string }[]>([])
+  const [selectedModel, setSelectedModel] = useState<string>("")
+
+  // Fetch available Ollama models once on mount
+  useEffect(() => {
+    fetch("/api/ai/models")
+      .then((r) => r.json())
+      .then((data) => {
+        const models: { name: string; model: string }[] = data.models || []
+        setOllamaModels(models)
+        // Default to the first available model if none selected
+        if (models.length > 0 && !selectedModel) {
+          setSelectedModel(models[0].name)
+        }
+      })
+      .catch(() => {
+        // Ollama offline — no models to show
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function openDrawer(app: Application) {
     setSelected(app)
     setNotes(app.notes ?? "")
+    setAtsScore(app.atsScore)
+    setAtsConfidence(app.atsConfidence)
+    setAtsJustification(app.atsJustification)
+    setIsAtsLoading(app.atsStatus === "PROCESSING")
+    setActiveTab("ai")
+  }
+
+  async function handleRunAtsScorer() {
+    if (!selected) return
+    setIsAtsLoading(true)
+    setAtsScore(null)
+    setAtsConfidence(null)
+    setAtsJustification(null)
+
+    try {
+      // Fire-and-forget: enqueues the job and returns immediately (won't be cancelled on browser disconnect)
+      await getAtsScore(selected.id, selectedModel || undefined)
+      toast.info("Analysis queued — processing in the background...")
+
+      // Poll until the queue worker marks it COMPLETED or FAILED
+      const poll = async () => {
+        try {
+          const app = await getApplicationById(selected.id)
+          if (!app) return
+
+          if (app.atsStatus === "COMPLETED") {
+            setAtsScore(app.atsScore)
+            setAtsConfidence(app.atsConfidence)
+            setAtsJustification(app.atsJustification)
+            setApplications((prev) =>
+              prev.map((a) =>
+                a.id === selected.id
+                  ? {
+                      ...a,
+                      atsStatus: "COMPLETED",
+                      atsScore: app.atsScore,
+                      atsConfidence: app.atsConfidence,
+                      atsJustification: app.atsJustification,
+                      extractedSkills: app.extractedSkills || [],
+                      extractedExperience: app.extractedExperience ?? null,
+                      extractedLocation: app.extractedLocation ?? null,
+                      extractedEducation: app.extractedEducation ?? null,
+                    }
+                  : a
+              )
+            )
+            setIsAtsLoading(false)
+            toast.success("ATS analysis complete!")
+          } else if (app.atsStatus === "FAILED") {
+            setIsAtsLoading(false)
+            toast.error(app.atsJustification || "Analysis failed — please try again.")
+          } else {
+            // Still PENDING or PROCESSING — keep polling
+            setTimeout(poll, 2000)
+          }
+        } catch {
+          setIsAtsLoading(false)
+          toast.error("Failed to fetch analysis result.")
+        }
+      }
+
+      setTimeout(poll, 2000)
+    } catch (err: any) {
+      setIsAtsLoading(false)
+      toast.error(err.message || "Failed to queue ATS analysis.")
+    }
+  }
+
+  function handleSaveAtsToNotes() {
+    if (!selected || atsScore === null || !atsJustification) return
+    const atsText = `[ATS AI Scorer Match: ${atsScore}%]\n${atsJustification}`
+    const updatedNotes = selected.notes ? `${selected.notes}\n\n${atsText}` : atsText
+    handleUpdateStatus(selected.id, selected.status, updatedNotes)
+    setNotes(updatedNotes)
   }
 
   function saveNotes() {
     if (!selected) return
     handleUpdateStatus(selected.id, selected.status, notes)
   }
+
+  function handleSaveNotes() {
+    if (!selected) return
+    handleUpdateStatus(selected.id, selected.status, tempNotes)
+    setIsNotesDialogOpen(false)
+  }
+
+
 
   return (
     <>
@@ -260,6 +385,9 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
                   <th className="text-left px-4 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Status
                   </th>
+                  <th className="text-left px-4 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    ATS Match
+                  </th>
                   <th className="text-left px-4 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">
                     Contact
                   </th>
@@ -279,7 +407,8 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
                   return (
                     <tr
                       key={app.id}
-                      className="group hover:bg-muted/20 transition-colors duration-150"
+                      onClick={() => openDrawer(app)}
+                      className="group hover:bg-muted/20 cursor-pointer transition-colors duration-150"
                     >
                       {/* Applicant */}
                       <td className="px-5 py-4">
@@ -294,6 +423,14 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
                             <p className="text-xs text-muted-foreground truncate max-w-[160px]">
                               {app.applicantEmail}
                             </p>
+                            {app.notes && (
+                              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                <MessageSquare className="size-3 shrink-0" />
+                                <span className="truncate max-w-[160px]" title={app.notes}>
+                                  {app.notes}
+                                </span>
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -308,8 +445,42 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
                         </span>
                       </td>
 
+                      {/* ATS Match */}
+                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                        {app.atsStatus === "PENDING" && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border/40">
+                            Pending
+                          </span>
+                        )}
+                        {app.atsStatus === "PROCESSING" && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20 animate-pulse">
+                            <Loader2 className="size-2.5 animate-spin" />
+                            Analyzing...
+                          </span>
+                        )}
+                        {app.atsStatus === "COMPLETED" && app.atsScore !== null && (
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                              app.atsScore >= 70
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : app.atsScore >= 40
+                                ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                                : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                            }`}
+                            title={app.atsJustification || ""}
+                          >
+                            {app.atsScore}% Match
+                          </span>
+                        )}
+                        {app.atsStatus === "FAILED" && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20" title={app.atsJustification || ""}>
+                            Failed
+                          </span>
+                        )}
+                      </td>
+
                       {/* Contact */}
-                      <td className="px-4 py-4 hidden md:table-cell">
+                      <td className="px-4 py-4 hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
                         <div className="space-y-0.5">
                           <a
                             href={`mailto:${app.applicantEmail}`}
@@ -351,7 +522,7 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
                       </td>
 
                       {/* Actions */}
-                      <td className="px-3 sm:px-4 py-4">
+                      <td className="px-3 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <div className="hidden sm:contents">
                             <Button
@@ -411,146 +582,486 @@ export function ApplicationsView({ applications: initial, jobTitle }: Applicatio
         </div>
       )}
 
-      {/* Application detail dialog */}
       <Dialog open={!!selected} onOpenChange={(open) => { if (!open) setSelected(null) }}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent 
+          aria-describedby={undefined}
+          className="max-w-[96vw] w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-5 gap-4 overflow-hidden bg-background"
+        >
           {selected && (
             <>
-              <DialogHeader>
-                <DialogTitle className="text-lg font-bold">
-                  {selected.applicantName}
-                </DialogTitle>
-                <DialogDescription className="flex items-center gap-3 flex-wrap">
-                  <span className="flex items-center gap-1 text-xs">
-                    <Mail className="size-3" />
-                    {selected.applicantEmail}
-                  </span>
-                  {selected.applicantPhone && (
-                    <span className="flex items-center gap-1 text-xs">
-                      <Phone className="size-3" />
-                      {selected.applicantPhone}
+              {/* TOP TOOLBAR: Move action to top */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-border/60 shrink-0">
+                <div className="space-y-1">
+                  <DialogTitle className="text-xl font-bold text-foreground">
+                    {selected.applicantName}
+                  </DialogTitle>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <Mail className="size-3.5" />
+                      {selected.applicantEmail}
                     </span>
-                  )}
-                  <span className="flex items-center gap-1 text-xs">
-                    <Calendar className="size-3" />
-                    Applied{" "}
-                    {new Date(selected.createdAt).toLocaleDateString("en-GB", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </span>
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-5 pt-2">
-                {/* Status + quick actions */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                      STATUS_CONFIG[selected.status].classes
-                    }`}
-                  >
-                    <span
-                      className={`size-1.5 rounded-full ${STATUS_CONFIG[selected.status].dotColor}`}
-                    />
-                    {STATUS_CONFIG[selected.status].label}
-                  </span>
-
-                  <Select
-                    value={selected.status}
-                    onValueChange={(v) =>
-                      handleUpdateStatus(selected.id, v as ApplicationStatus, notes)
-                    }
-                  >
-                    <SelectTrigger className="h-8 text-xs w-44 bg-muted/30 border-border/60">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ALL_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s} className="text-xs">
-                          {STATUS_CONFIG[s].label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {selected.applicantPhone && (
+                      <span className="flex items-center gap-1">
+                        <Phone className="size-3.5" />
+                        {selected.applicantPhone}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Calendar className="size-3.5" />
+                      Applied {new Date(selected.createdAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Resume link */}
-                {selected.resumeUrl && (
-                  <a
-                    href={selected.resumeUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-primary border border-primary/20 rounded-lg px-3 py-2 hover:bg-primary/5 transition-colors w-fit"
-                  >
-                    <FileText className="size-3.5" />
-                    View Resume
-                    <ExternalLink className="size-3" />
-                  </a>
-                )}
+                <div className="flex items-center gap-3 flex-wrap sm:ml-auto">
+                  {/* Status update control */}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                        STATUS_CONFIG[selected.status].classes
+                      }`}
+                    >
+                      <span
+                        className={`size-1.5 rounded-full ${STATUS_CONFIG[selected.status].dotColor}`}
+                      />
+                      {STATUS_CONFIG[selected.status].label}
+                    </span>
 
-                {/* Cover letter */}
-                {selected.coverLetter && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Cover Letter
-                    </p>
-                    <p className="text-sm text-foreground/80 whitespace-pre-line bg-muted/20 rounded-lg p-3 border border-border/40">
-                      {selected.coverLetter}
-                    </p>
+                    <Select
+                      value={selected.status}
+                      onValueChange={(v) =>
+                        handleUpdateStatus(selected.id, v as ApplicationStatus, notes)
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs w-36 bg-muted/30 border-border/60">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_STATUSES.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">
+                            {STATUS_CONFIG[s].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
 
-                {/* Questionnaire answers */}
-                {selected.answers && selected.answers.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Questionnaire Answers
-                    </p>
-                    {selected.answers
-                      .sort((a, b) => a.question.order - b.question.order)
-                      .map((ans) => (
-                        <div key={ans.id} className="space-y-1">
-                          <p className="text-xs font-semibold text-foreground">
-                            {ans.question.question}
-                          </p>
-                          <p className="text-sm text-foreground/80 bg-muted/20 rounded-lg px-3 py-2 border border-border/40">
-                            {ans.answer || <span className="text-muted-foreground italic">No answer provided</span>}
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                )}
+                  <Separator orientation="vertical" className="h-6 bg-border/60 hidden sm:block" />
 
-                <Separator className="bg-border/40" />
-
-                {/* Internal notes */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <MessageSquare className="size-3" />
-                    Internal Notes
-                  </Label>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Add notes visible only to your team…"
-                    className="min-h-[80px] bg-muted/30 border-border/80 text-sm resize-y"
-                  />
+                  {/* Notes quick save button */}
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs gap-1.5"
-                    onClick={saveNotes}
-                    disabled={isPending}
+                    className="h-8 text-xs gap-1.5 shadow-sm bg-muted/40 border-border/60 hover:bg-muted"
+                    onClick={() => {
+                      setTempNotes(selected.notes ?? "")
+                      setIsNotesDialogOpen(true)
+                    }}
                   >
-                    {isPending ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
-                    Save Notes
+                    <MessageSquare className="size-3.5 text-amber-500" />
+                    {selected.notes ? "Edit Notes" : "Add Notes"}
                   </Button>
+                </div>
+              </div>
+
+              {/* THREE COLUMN GRID: left (job), middle (answers + notes), right (document viewer) */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 flex-1 min-h-0 overflow-hidden">
+                {/* COLUMN 1: JOB POSTING DETAILS */}
+                <div className="flex flex-col h-full overflow-hidden border border-border/60 rounded-xl bg-card/25 p-4 space-y-4">
+                  <div className="shrink-0 pb-2 border-b border-border/40">
+                    <h3 className="font-bold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
+                      <Briefcase className="size-4 text-primary" />
+                      Job Posting Details
+                    </h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-xs">
+                    <div>
+                      <p className="font-bold text-sm text-foreground">{job.title}</p>
+                      <p className="text-muted-foreground mt-0.5">{job.department} • {job.location}</p>
+                    </div>
+                    
+                    {job.description && (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-muted-foreground uppercase tracking-wider">Description</p>
+                        <div 
+                          className="prose prose-sm dark:prose-invert text-foreground/80 max-w-none text-xs line-clamp-10"
+                          dangerouslySetInnerHTML={{ __html: job.description }} 
+                        />
+                      </div>
+                    )}
+
+                    {job.requirements && (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-muted-foreground uppercase tracking-wider">Requirements</p>
+                        <div 
+                          className="prose prose-sm dark:prose-invert text-foreground/80 max-w-none text-xs"
+                          dangerouslySetInnerHTML={{ __html: job.requirements }} 
+                        />
+                      </div>
+                    )}
+
+                    {job.responsibilities && (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-muted-foreground uppercase tracking-wider">Responsibilities</p>
+                        <div 
+                          className="prose prose-sm dark:prose-invert text-foreground/80 max-w-none text-xs"
+                          dangerouslySetInnerHTML={{ __html: job.responsibilities }} 
+                        />
+                      </div>
+                    )}
+
+                    {job.keywords && job.keywords.length > 0 && (
+                      <div className="space-y-1.5 pt-2 border-t border-border/40">
+                        <p className="font-semibold text-muted-foreground uppercase tracking-wider">Keywords</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {job.keywords.map((kw: string, index: number) => (
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="text-[10px] px-2 py-0.5 font-normal rounded-md"
+                            >
+                              {kw}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* COLUMN 2: APPLICANT ANSWERS + COVER LETTER + NOTES */}
+                <div className="flex flex-col h-full overflow-hidden border border-border/60 rounded-xl bg-card/25 p-4 space-y-4">
+                  <div className="shrink-0 pb-2 border-b border-border/40">
+                    <h3 className="font-bold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
+                      <User className="size-4 text-primary" />
+                      Application Responses
+                    </h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+                    {/* Cover Letter */}
+                    {selected.coverLetter && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Cover Letter
+                        </p>
+                        <p className="text-xs text-foreground/80 whitespace-pre-line bg-muted/30 rounded-lg p-3 border border-border/40">
+                          {selected.coverLetter}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Question Answers */}
+                    {selected.answers && selected.answers.length > 0 && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <MessageSquare className="size-3.5 text-primary" />
+                          Screening Questions
+                        </p>
+                        <div className="space-y-3">
+                          {selected.answers
+                            .slice()
+                            .sort((a, b) => a.question.order - b.question.order)
+                            .map((ans) => (
+                              <div
+                                key={ans.id}
+                                className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5"
+                              >
+                                <p className="text-[11px] font-semibold text-muted-foreground leading-snug">
+                                  {ans.question.question}
+                                </p>
+                                <p className="text-xs text-foreground/80 whitespace-pre-line leading-relaxed">
+                                  {ans.answer || <span className="italic text-muted-foreground">No answer provided</span>}
+                                </p>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Internal Notes Display */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <MessageSquare className="size-3.5 text-amber-500" />
+                          Internal Notes
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] gap-1 text-primary hover:bg-primary/5 font-bold uppercase tracking-wider"
+                          onClick={() => {
+                            setTempNotes(selected.notes ?? "")
+                            setIsNotesDialogOpen(true)
+                          }}
+                        >
+                          {selected.notes ? "Edit" : "Add"}
+                        </Button>
+                      </div>
+                      {selected.notes ? (
+                        <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 whitespace-pre-line leading-relaxed">
+                          {selected.notes}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic bg-muted/10 rounded-lg p-3 border border-border/20 text-center">
+                          No internal notes added yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                { }
+                <div className="flex flex-col h-full overflow-hidden border border-border/60 rounded-xl bg-card/25 p-4 space-y-4">
+                  {/* Tabs header */}
+                  <div className="shrink-0 pb-2 border-b border-border/40 flex items-center justify-between">
+                    <div className="flex bg-muted/65 p-1 rounded-lg border border-border/40">
+                      <button
+                        onClick={() => setActiveTab("ai")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                          activeTab === "ai"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Sparkles className="size-3.5" />
+                        AI Analysis
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("pdf")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                          activeTab === "pdf"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <FileText className="size-3.5" />
+                        Document Viewer
+                      </button>
+                    </div>
+
+                    {activeTab === "pdf" && selected.resumeUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="h-7 text-[10px] gap-1 px-2.5 font-bold uppercase tracking-wider border-border/60 shadow-sm"
+                      >
+                        <a
+                          href={selected.resumeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open in New Tab <ExternalLink className="size-3" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                    {activeTab === "ai" ? (
+                      <div className="space-y-4">
+                        {/* ATS AI Match Scorer */}
+                        <div className="space-y-3 bg-primary/5 dark:bg-primary/10 rounded-xl p-4 border border-primary/20">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                              <Sparkles className="size-4 text-primary animate-pulse" />
+                              ATS AI Scorer
+                            </span>
+                            {!isAtsLoading && atsScore === null && (
+                              <Button
+                                size="sm"
+                                className="h-7 text-[10px] gap-1 px-2.5 font-bold uppercase tracking-wider shadow-sm"
+                                onClick={handleRunAtsScorer}
+                              >
+                                Scan Application
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* Model selector */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground font-medium shrink-0">Model:</span>
+                            {ollamaModels.length > 0 ? (
+                              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                                <SelectTrigger className="h-6 text-[10px] bg-background/60 border-border/60 flex-1 px-2">
+                                  <SelectValue placeholder="Select model" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {ollamaModels.map((m) => (
+                                    <SelectItem key={m.name} value={m.name} className="text-xs">
+                                      {m.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/60 italic">Ollama offline — using default</span>
+                            )}
+                          </div>
+
+                          {isAtsLoading && (
+                            <div className="flex flex-col items-center justify-center py-4 gap-2 text-muted-foreground text-xs">
+                              <Loader2 className="size-5 animate-spin text-primary" />
+                              <span>Analyzing with <span className="font-semibold text-primary">{selectedModel || "AI model"}</span>...</span>
+                            </div>
+                          )}
+
+                          {!isAtsLoading && atsScore !== null && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <div className="relative size-12 shrink-0 flex items-center justify-center font-bold text-lg rounded-full bg-background border-2 border-primary/30">
+                                  <span className={atsScore >= 70 ? "text-emerald-500" : atsScore >= 40 ? "text-yellow-500" : "text-red-500"}>
+                                    {atsScore}%
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-xs text-foreground">Match Rating & Confidence</p>
+                                  <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                    <span>{atsScore >= 70 ? "Strong Fit" : atsScore >= 40 ? "Potential Fit" : "Low Match"}</span>
+                                    {atsConfidence !== null && (
+                                      <>
+                                        <span>·</span>
+                                        <span className="font-semibold text-primary">Confidence: {atsConfidence}%</span>
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-[10px] gap-1 ml-auto border-border/60 shadow-sm"
+                                  onClick={handleSaveAtsToNotes}
+                                >
+                                  Save to Notes
+                                </Button>
+                              </div>
+                              {atsJustification && (
+                                <p className="text-xs text-foreground/80 leading-relaxed bg-background/50 rounded-lg p-2.5 border border-border/20">
+                                  {atsJustification}
+                                </p>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[9px] w-full text-muted-foreground hover:text-foreground font-bold uppercase tracking-wider"
+                                onClick={handleRunAtsScorer}
+                              >
+                                Recalculate
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Extracted Profile Metadata */}
+                        {!isAtsLoading && selected && (selected.extractedSkills?.length > 0 || selected.extractedExperience !== null || selected.extractedLocation || selected.extractedEducation) && (
+                          <div className="space-y-3 bg-muted/40 rounded-xl p-4 border border-border/60">
+                            <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <Briefcase className="size-4 text-muted-foreground" />
+                              Extracted Candidate Profile (AI)
+                            </span>
+                            <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+                              {selected.extractedExperience !== null && (
+                                <div>
+                                  <span className="text-muted-foreground block font-medium">Experience:</span>
+                                  <span className="font-semibold text-foreground">{selected.extractedExperience} years</span>
+                                </div>
+                              )}
+                              {selected.extractedLocation && (
+                                <div>
+                                  <span className="text-muted-foreground block font-medium">Location:</span>
+                                  <span className="font-semibold text-foreground">{selected.extractedLocation}</span>
+                                </div>
+                              )}
+                              {selected.extractedEducation && (
+                                <div className="col-span-2">
+                                  <span className="text-muted-foreground block font-medium">Highest Education:</span>
+                                  <span className="font-semibold text-foreground">{selected.extractedEducation}</span>
+                                </div>
+                              )}
+                              {selected.extractedSkills && selected.extractedSkills.length > 0 && (
+                                <div className="col-span-2">
+                                  <span className="text-muted-foreground block font-medium mb-1">Detected Skills:</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {selected.extractedSkills.map((s, idx) => (
+                                      <Badge key={idx} variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+                                        {s}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-full h-full bg-muted/20 rounded-lg overflow-hidden relative border border-border/40 flex flex-col min-h-[400px]">
+                        {selected.resumeUrl ? (
+                          <div className="w-full h-full flex flex-col">
+                            <PdfViewer url={selected.resumeUrl} useProxy={true} />
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground gap-2">
+                            <FileText className="size-8 opacity-40" />
+                            <p className="text-xs font-semibold">No resume uploaded</p>
+                            <p className="text-[11px] opacity-75">The candidate did not attach a resume file.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Internal Notes Dialog */}
+      <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
+        <DialogContent className="max-w-md p-5 bg-background border border-border rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <MessageSquare className="size-4 text-primary" />
+              {selected?.notes ? "Edit Internal Notes" : "Add Internal Notes"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Enter internal candidate evaluation notes visible only to recruiters.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-3">
+            <Textarea
+              value={tempNotes}
+              onChange={(e) => setTempNotes(e.target.value)}
+              placeholder="Candidate background details, interview evaluation, feedback..."
+              className="min-h-[120px] text-xs bg-muted/20 border-border/85 resize-y focus:ring-1 focus:ring-primary"
+            />
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setIsNotesDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={handleSaveNotes}
+                disabled={isPending}
+              >
+                {isPending ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
+                Save Notes
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

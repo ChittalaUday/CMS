@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -38,6 +39,7 @@ import {
   AlertTriangleIcon,
   PencilIcon,
   Paperclip,
+  Sparkles,
 } from "lucide-react"
 import { RichTextEditor } from "@/components/RichTextEditor"
 import {
@@ -46,6 +48,7 @@ import {
   updateJobStatus,
   discardDraft,
   publishDraft,
+  extractKeywordsFromText,
   type JobPostingInput,
   type QuestionInput,
 } from "./actions"
@@ -69,6 +72,7 @@ interface BasicDetails {
   salaryMin: string
   salaryMax: string
   closingDate: string
+
 }
 
 interface DescriptionDetails {
@@ -118,6 +122,8 @@ export interface ExistingJob {
     order: number
     options: unknown
   }[]
+  keywords: string[]
+
 }
 
 interface JobFormProps {
@@ -227,6 +233,7 @@ export function JobForm({ job }: JobFormProps) {
     salaryMin: initialSalaryMode === "range" ? (job?.salaryMin?.toString() ?? "") : "",
     salaryMax: initialSalaryMode === "range" ? (job?.salaryMax?.toString() ?? "") : "",
     closingDate: job?.closingDate ? new Date(job.closingDate).toISOString().split("T")[0] : "",
+
   })
 
   // --- Step 2 state ---
@@ -252,6 +259,25 @@ export function JobForm({ job }: JobFormProps) {
       newOption: "",
     }))
   })
+
+  // --- Keywords state ---
+  const [keywords, setKeywords] = useState<string[]>(job?.keywords ?? [])
+  const [newKeyword, setNewKeyword] = useState("")
+  const [isRegeneratingKeywords, setIsRegeneratingKeywords] = useState(false)
+  const [deleteKwConfirmOpen, setDeleteKwConfirmOpen] = useState(false)
+  const [kwToDelete, setKwToDelete] = useState<string | null>(null)
+
+  const handleKeywordDeleteClick = (kw: string) => {
+    setKwToDelete(kw)
+    setDeleteKwConfirmOpen(true)
+  }
+
+  const handleKeywordDeleteConfirm = () => {
+    if (kwToDelete) {
+      setKeywords(prev => prev.filter(k => k !== kwToDelete))
+      setKwToDelete(null)
+    }
+  }
 
   // --- Salary helpers ---
   function getSalaryPayload(): { salaryMin: number | null; salaryMax: number | null } {
@@ -292,6 +318,8 @@ export function JobForm({ job }: JobFormProps) {
         order: i,
         options: (q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") ? q.options : undefined,
       })) as QuestionInput[],
+      keywords,
+
     }
   }
 
@@ -1011,6 +1039,102 @@ export function JobForm({ job }: JobFormProps) {
                 </ul>
               )}
             </div>
+
+            {/* Keywords editor */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Keywords ({keywords.length})
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[10px] gap-1 px-2.5 font-bold uppercase tracking-wider border-border/60 shadow-sm"
+                  onClick={async () => {
+                    setIsRegeneratingKeywords(true)
+                    try {
+                      const extracted = await extractKeywordsFromText({
+                        title: basic.title,
+                        department: basic.department,
+                        description: desc.description,
+                        requirements: desc.requirements || undefined,
+                        responsibilities: desc.responsibilities || undefined,
+                        questions: questions.map(q => q.question)
+                      })
+                      setKeywords(extracted)
+                      toast.success("Keywords regenerated successfully!")
+                    } catch (e: any) {
+                      toast.error(e.message || "Failed to regenerate keywords")
+                    } finally {
+                      setIsRegeneratingKeywords(false)
+                    }
+                  }}
+                  disabled={isRegeneratingKeywords}
+                >
+                  {isRegeneratingKeywords ? (
+                    <Loader2 className="size-3 animate-spin mr-1" />
+                  ) : (
+                    <Sparkles className="size-3 mr-1 text-primary" />
+                  )}
+                  Regenerate
+                </Button>
+              </div>
+              
+              <div className="flex flex-wrap gap-1.5 min-h-7">
+                {keywords.length === 0 ? (
+                  <span className="text-xs text-muted-foreground/60 italic">No keywords extracted yet — add below or click Regenerate</span>
+                ) : (
+                  keywords.map((kw) => (
+                    <span key={kw} className="inline-flex items-center gap-1 text-xs bg-muted/60 border border-border/60 px-2 py-0.5 rounded-lg text-foreground">
+                      {kw}
+                      <button
+                        type="button"
+                        onClick={() => handleKeywordDeleteClick(kw)}
+                        className="text-muted-foreground/60 hover:text-destructive ml-0.5 leading-none font-bold"
+                        aria-label={`Remove keyword "${kw}"`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <Input
+                  value={newKeyword}
+                  onChange={(e) => setNewKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      const val = newKeyword.trim()
+                      if (val && !keywords.includes(val)) {
+                        setKeywords(prev => [...prev, val])
+                        setNewKeyword("")
+                      }
+                    }
+                  }}
+                  placeholder="Type custom keyword and press Enter"
+                  className="h-8 bg-muted/30 border-border/80 text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs shrink-0 border-border/60"
+                  onClick={() => {
+                    const val = newKeyword.trim()
+                    if (val && !keywords.includes(val)) {
+                      setKeywords(prev => [...prev, val])
+                      setNewKeyword("")
+                    }
+                  }}
+                  disabled={!newKeyword.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Publish toggle */}
@@ -1079,6 +1203,15 @@ export function JobForm({ job }: JobFormProps) {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={deleteKwConfirmOpen}
+        onClose={() => setDeleteKwConfirmOpen(false)}
+        onConfirm={handleKeywordDeleteConfirm}
+        title="Delete Keyword"
+        description={`Are you sure you want to delete the keyword "${kwToDelete || ""}"?`}
+        confirmText="Delete"
+        variant="destructive"
+      />
     </div>
   )
 }

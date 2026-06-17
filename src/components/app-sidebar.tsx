@@ -24,6 +24,7 @@ import {
   BriefcaseIcon,
   SettingsIcon,
   LogOutIcon,
+  Activity,
 } from "lucide-react"
 import { logoutAction } from "@/app/_actions/auth"
 import { toast } from "sonner"
@@ -90,6 +91,21 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
             title: "Careers",
             url: "/dashboard/careers",
             icon: <BriefcaseIcon className="size-4" />,
+          },
+        ]
+      : []),
+    ...(user.role === "SUPER_ADMIN"
+      ? [
+          {
+            title: "DevTools",
+            url: "#",
+            icon: <TerminalIcon className="size-4" />,
+            items: [
+              {
+                title: "Queue",
+                url: "/dashboard/careers/queue",
+              },
+            ],
           },
         ]
       : []),

@@ -9,6 +9,7 @@ import {
   Upload, Copy, Trash2, Check, Loader2, ImageIcon, FileText, ExternalLink
 } from "lucide-react"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface MediaItem {
   id: string
@@ -20,7 +21,7 @@ interface MediaItem {
   user: {
     name: string | null
     email: string
-  }
+  } | null
 }
 
 export default function MediaLibraryPage() {
@@ -29,6 +30,8 @@ export default function MediaLibraryPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [type, setType] = useState("all")
   const [page, setPage] = useState(1)
@@ -79,13 +82,17 @@ export default function MediaLibraryPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this file permanently?")) return
+  const handleDeleteClick = (id: string) => {
+    setItemToDelete(id)
+    setDeleteConfirmOpen(true)
+  }
 
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return
     try {
-      await deleteMediaItem(id)
-      setMediaItems((prev) => prev.filter((item) => item.id !== id))
-      if (selectedItem?.id === id) {
+      await deleteMediaItem(itemToDelete)
+      setMediaItems((prev) => prev.filter((item) => item.id !== itemToDelete))
+      if (selectedItem?.id === itemToDelete) {
         setSelectedItem(null)
       }
       toast.success("File deleted successfully")
@@ -114,6 +121,15 @@ export default function MediaLibraryPage() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-1 py-3">
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Asset"
+        description="Are you sure you want to delete this file permanently? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+      />
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 border-b border-border/60">
         <div className="space-y-1">
@@ -358,7 +374,7 @@ export default function MediaLibraryPage() {
                       variant="destructive"
                       size="sm"
                       className="w-full gap-2 text-xs font-semibold h-8.5"
-                      onClick={() => handleDelete(selectedItem.id)}
+                      onClick={() => handleDeleteClick(selectedItem.id)}
                     >
                       <Trash2 className="size-3.5" />
                       Delete Asset

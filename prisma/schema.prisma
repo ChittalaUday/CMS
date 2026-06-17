@@ -14,6 +14,7 @@ enum Role {
   EDITOR
 }
 
+
 enum JobType {
   FULL_TIME
   PART_TIME
@@ -43,6 +44,14 @@ enum ApplicationStatus {
   SHORTLISTED
   REJECTED
   HIRED
+}
+
+enum QueueStatus {
+  IDLE
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model User {
@@ -234,6 +243,9 @@ model JobPosting {
   createdBy            User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
   questions            JobQuestion[]
   applications         JobApplication[]
+  keywords             String[]         @default([])
+  keywordStatus        QueueStatus      @default(IDLE)
+
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -258,19 +270,27 @@ model JobQuestion {
 }
 
 model JobApplication {
-  id             String            @id @default(cuid())
-  jobId          String
-  job            JobPosting        @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  applicantName  String
-  applicantEmail String
-  applicantPhone String?
-  resumeUrl      String?
-  coverLetter    String?
-  status         ApplicationStatus @default(NEW)
-  notes          String?
-  answers        JobAnswer[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id               String            @id @default(cuid())
+  jobId            String
+  job              JobPosting        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicantName    String
+  applicantEmail   String
+  applicantPhone   String?
+  resumeUrl        String?
+  coverLetter      String?
+  status           ApplicationStatus @default(NEW)
+  notes            String?
+  answers          JobAnswer[]
+  atsScore         Int?
+  atsConfidence    Int?
+  atsJustification String?
+  extractedSkills  String[]          @default([])
+  extractedExperience Int?
+  extractedLocation String?
+  extractedEducation String?
+  atsStatus        QueueStatus       @default(PENDING)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@index([jobId])
   @@index([status])
