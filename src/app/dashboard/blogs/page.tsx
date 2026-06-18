@@ -14,7 +14,7 @@ import { BlogsTableClient } from "./BlogsTableClient"
 export const dynamic = "force-dynamic"
 
 interface PageProps {
-  searchParams: Promise<{ search?: string; categoryId?: string; page?: string }>
+  searchParams: Promise<{ search?: string; categoryId?: string; status?: string; page?: string }>
 }
 
 export default async function BlogsPage({ searchParams }: PageProps) {
@@ -27,10 +27,11 @@ export default async function BlogsPage({ searchParams }: PageProps) {
   const params = await searchParams
   const search = params.search ?? ""
   const categoryId = params.categoryId ?? ""
+  const status = params.status ?? ""
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
 
   const [{ posts, totalCount, totalPages }, categories] = await Promise.all([
-    getPostsPaginated({ search, categoryId, page, pageSize: 15 }),
+    getPostsPaginated({ search, categoryId, status, page, pageSize: 15 }),
     getCategories(),
   ])
 
@@ -68,6 +69,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
           totalCount={totalCount}
           search={search}
           categoryId={categoryId}
+          status={status}
         />
       </Suspense>
 

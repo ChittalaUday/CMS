@@ -3,14 +3,7 @@ import { redirect, notFound } from "next/navigation"
 import { Role, CAREERS_ACCESS_ROLES } from "@/lib/roles"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import {
-  ArrowLeft,
-  Users,
-  CheckCircle2,
-  Briefcase,
-  MapPin,
-  Clock,
-} from "lucide-react"
+import { ArrowLeft, Users, Briefcase, MapPin } from "lucide-react"
 import { getApplications, getJobPostingById } from "../../actions"
 import { ApplicationsView } from "./ApplicationsView"
 
@@ -38,10 +31,6 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
     page: sp.page ? parseInt(sp.page, 10) : 1,
     pageSize: 50,
   })
-
-  const newCount = applications.filter((a) => a.status === "NEW").length
-  const shortlistedCount = applications.filter((a) => a.status === "SHORTLISTED").length
-  const hiredCount = applications.filter((a) => a.status === "HIRED").length
 
   return (
     <div className="space-y-5 w-full px-1 py-3">
@@ -97,48 +86,7 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          {
-            label: "Total",
-            value: applications.length,
-            icon: Users,
-            classes: "text-foreground",
-          },
-          {
-            label: "New",
-            value: newCount,
-            icon: Clock,
-            classes: "text-blue-500",
-          },
-          {
-            label: "Shortlisted",
-            value: shortlistedCount,
-            icon: CheckCircle2,
-            classes: "text-purple-500",
-          },
-          {
-            label: "Hired",
-            value: hiredCount,
-            icon: CheckCircle2,
-            classes: "text-emerald-500",
-          },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-xl border border-border/60 bg-card/40 p-4 flex items-center gap-3"
-          >
-            <stat.icon className={`size-5 shrink-0 ${stat.classes}`} />
-            <div>
-              <p className="text-2xl font-extrabold tracking-tight">{stat.value}</p>
-              <p className="text-xs text-muted-foreground font-semibold">{stat.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Applications table */}
+      {/* Applications table (includes stat cards + search) */}
       {applications.length === 0 ? (
         <div className="min-h-[300px] rounded-2xl border border-dashed border-border/80 bg-muted/10 flex flex-col justify-center items-center text-center p-8">
           <div className="size-16 rounded-full bg-muted flex items-center justify-center mb-5 shadow-inner">

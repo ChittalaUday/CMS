@@ -1,5 +1,6 @@
 "use client"
 
+import { JobStatus } from "@/constants/careers"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
@@ -38,6 +39,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { updateJobKeywords } from "./actions"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -49,7 +56,7 @@ interface Job {
   department: string
   location: string
   jobType: string
-  status: "DRAFT" | "PUBLISHED" | "CLOSED"
+  status: JobStatus
   salaryMin: number | null
   salaryMax: number | null
   currency: string
@@ -68,23 +75,23 @@ interface CareersTableClientProps {
   handleDelete: (formData: FormData) => Promise<void>
 }
 
-const STATUS_CONFIG = {
-  DRAFT: {
+const STATUS_CONFIG: Record<JobStatus, { label: string; classes: string; icon: typeof AlertTriangle }> = {
+  [JobStatus.DRAFT]: {
     label: "Draft",
     classes: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
     icon: AlertTriangle,
   },
-  PUBLISHED: {
+  [JobStatus.PUBLISHED]: {
     label: "Published",
     classes: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
     icon: CheckCircle2,
   },
-  CLOSED: {
+  [JobStatus.CLOSED]: {
     label: "Closed",
     classes: "bg-muted/60 text-muted-foreground border-border/60",
     icon: XCircle,
   },
-} as const
+}
 
 const JOB_TYPE_SHORT: Record<string, string> = {
   FULL_TIME: "Full-time",
@@ -282,136 +289,159 @@ export function CareersTableClient({
 
                   {/* Actions */}
                   <td className="px-3 sm:px-4 py-4" onClick={handleActionClick}>
-                    <div className="flex items-center justify-end gap-1">
-                      {/* Edit + primary status action — sm+ */}
-                      <div className="hidden sm:contents">
-                        {/* Edit */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 rounded-lg hover:bg-muted"
-                          title="Edit posting"
-                          asChild
-                        >
-                          <Link href={`/dashboard/careers/${job.id}/edit`}>
-                            <Edit className="size-3.5 text-muted-foreground" />
-                          </Link>
-                        </Button>
+                    <TooltipProvider>
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Edit + primary status action — sm+ */}
+                        <div className="hidden sm:contents">
+                          {/* Edit */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 rounded-lg hover:bg-muted"
+                                asChild
+                              >
+                                <Link href={`/dashboard/careers/${job.id}/edit`}>
+                                  <Edit className="size-3.5 text-muted-foreground" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">Edit posting</TooltipContent>
+                          </Tooltip>
 
-                        {/* Publish (DRAFT) */}
-                        {job.status === "DRAFT" && (
-                          <form action={handleUpdateStatus}>
-                            <input type="hidden" name="id" value={job.id} />
-                            <input type="hidden" name="newStatus" value="PUBLISHED" />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="submit"
-                              className="size-8 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-500"
-                              title="Publish"
-                            >
-                              <CheckCircle2 className="size-3.5" />
-                            </Button>
-                          </form>
-                        )}
-
-                        {/* Close (PUBLISHED) */}
-                        {job.status === "PUBLISHED" && (
-                          <form action={handleUpdateStatus}>
-                            <input type="hidden" name="id" value={job.id} />
-                            <input type="hidden" name="newStatus" value="CLOSED" />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="submit"
-                              className="size-8 rounded-lg hover:bg-muted"
-                              title="Close posting"
-                            >
-                              <XCircle className="size-3.5 text-muted-foreground" />
-                            </Button>
-                          </form>
-                        )}
-
-                        {/* Revert to Draft (CLOSED) */}
-                        {job.status === "CLOSED" && (
-                          <form action={handleUpdateStatus}>
-                            <input type="hidden" name="id" value={job.id} />
-                            <input type="hidden" name="newStatus" value="DRAFT" />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="submit"
-                              className="size-8 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-500"
-                              title="Revert to draft"
-                            >
-                              <AlertTriangle className="size-3.5" />
-                            </Button>
-                          </form>
-                        )}
-                      </div>
-
-                      {/* ⋯ dropdown — secondary actions */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 rounded-lg hover:bg-muted data-[state=open]:opacity-100"
-                          >
-                            <MoreHorizontal className="size-4 text-muted-foreground" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 text-sm">
-                          {/* Edit — mobile only (sm+ sees the icon button) */}
-                          <DropdownMenuItem asChild className="sm:hidden">
-                            <Link
-                              href={`/dashboard/careers/${job.id}/edit`}
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <Edit className="size-3.5 text-muted-foreground" />
-                              Edit Posting
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link
-                              href={`/dashboard/careers/${job.id}/applications`}
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <Users className="size-3.5 text-muted-foreground" />
-                              View Applications
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <a
-                              href={`/careers/${job.slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <Eye className="size-3.5 text-muted-foreground" />
-                              Preview Public Page
-                            </a>
-                          </DropdownMenuItem>
-                          {canDelete && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem asChild>
-                                <form action={handleDelete} className="w-full">
-                                  <input type="hidden" name="id" value={job.id} />
-                                  <button
+                          {/* Publish (DRAFT) */}
+                          {job.status === JobStatus.DRAFT && (
+                            <form action={handleUpdateStatus}>
+                              <input type="hidden" name="id" value={job.id} />
+                              <input type="hidden" name="newStatus" value={JobStatus.PUBLISHED} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     type="submit"
-                                    className="w-full flex items-center gap-2 text-destructive cursor-pointer"
+                                    className="size-8 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-500"
                                   >
-                                    <Trash2 className="size-3.5" />
-                                    Delete
-                                  </button>
-                                </form>
-                              </DropdownMenuItem>
-                            </>
+                                    <CheckCircle2 className="size-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Publish</TooltipContent>
+                              </Tooltip>
+                            </form>
                           )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+
+                          {/* Close (PUBLISHED) */}
+                          {job.status === JobStatus.PUBLISHED && (
+                            <form action={handleUpdateStatus}>
+                              <input type="hidden" name="id" value={job.id} />
+                              <input type="hidden" name="newStatus" value={JobStatus.CLOSED} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="submit"
+                                    className="size-8 rounded-lg hover:bg-muted"
+                                  >
+                                    <XCircle className="size-3.5 text-muted-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Close posting</TooltipContent>
+                              </Tooltip>
+                            </form>
+                          )}
+
+                          {/* Revert to Draft (CLOSED) */}
+                          {job.status === JobStatus.CLOSED && (
+                            <form action={handleUpdateStatus}>
+                              <input type="hidden" name="id" value={job.id} />
+                              <input type="hidden" name="newStatus" value={JobStatus.DRAFT} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="submit"
+                                    className="size-8 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-500"
+                                  >
+                                    <AlertTriangle className="size-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Revert to draft</TooltipContent>
+                              </Tooltip>
+                            </form>
+                          )}
+                        </div>
+
+                        {/* ⋯ dropdown — secondary actions */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 rounded-lg hover:bg-muted data-[state=open]:opacity-100"
+                                >
+                                  <MoreHorizontal className="size-4 text-muted-foreground" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44 text-sm">
+                                {/* Edit — mobile only (sm+ sees the icon button) */}
+                                <DropdownMenuItem asChild className="sm:hidden">
+                                  <Link
+                                    href={`/dashboard/careers/${job.id}/edit`}
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <Edit className="size-3.5 text-muted-foreground" />
+                                    Edit Posting
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={`/dashboard/careers/${job.id}/applications`}
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <Users className="size-3.5 text-muted-foreground" />
+                                    View Applications
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <a
+                                    href={`/careers/${job.slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <Eye className="size-3.5 text-muted-foreground" />
+                                    Preview Public Page
+                                  </a>
+                                </DropdownMenuItem>
+                                {canDelete && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                      <form action={handleDelete} className="w-full">
+                                        <input type="hidden" name="id" value={job.id} />
+                                        <button
+                                          type="submit"
+                                          className="w-full flex items-center gap-2 text-destructive cursor-pointer"
+                                        >
+                                          <Trash2 className="size-3.5" />
+                                          Delete
+                                        </button>
+                                      </form>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">More actions</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
                   </td>
                 </tr>
               )

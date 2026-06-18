@@ -11,10 +11,11 @@ export default async function Page() {
   if (!user) redirect("/")
   if (user.role === Role.HR) redirect("/dashboard/careers")
   if (!user.onboardingCompleted) redirect("/onboarding")
+  const isAdmin = user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN
 
   return (
     <div className="h-screen w-full overflow-hidden bg-background">
-      <BlogEditor aiConfigured={isAIConfigured()} />
+      <BlogEditor aiConfigured={isAIConfigured()} isAdmin={isAdmin} />
     </div>
   )
 }

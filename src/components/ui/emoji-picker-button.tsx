@@ -100,7 +100,7 @@ export function EmojiPickerButton() {
       // Skip the built-in frequent section — we render our own above
       if (categoryId === 'frequent' || !isVisible) return;
       try {
-        const section = emojiLibrary.getGrid().sections.get(categoryId as any);
+        const section = (emojiLibrary.getGrid().sections as any).get(categoryId as any);
         if (!section) return;
         const emojiIds: string[] = (section as any).elements ?? [];
         const emojis = emojiIds.map((id) => {

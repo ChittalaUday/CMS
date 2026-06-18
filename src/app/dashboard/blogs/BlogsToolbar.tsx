@@ -17,9 +17,10 @@ interface BlogsToolbarProps {
   totalCount: number
   search: string
   categoryId: string
+  status: string
 }
 
-export function BlogsToolbar({ categories, totalCount, search, categoryId }: BlogsToolbarProps) {
+export function BlogsToolbar({ categories, totalCount, search, categoryId, status }: BlogsToolbarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -62,7 +63,7 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId }: Blo
     }
   }, [debouncedSearch, search, updateParams])
 
-  const hasFilters = !!search || !!categoryId
+  const hasFilters = !!search || !!categoryId || !!status
 
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -104,12 +105,28 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId }: Blo
         </select>
       </div>
 
+      {/* Status filter */}
+      <div className="relative">
+        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60 pointer-events-none" />
+        <select
+          id="blogs-status-filter"
+          value={status}
+          onChange={(e) => updateParams({ status: e.target.value || undefined })}
+          className="h-9 pl-9 pr-8 rounded-md border border-border/60 bg-muted/30 text-sm focus:outline-none focus:ring-1 focus:ring-ring font-medium text-foreground appearance-none cursor-pointer min-w-[140px]"
+        >
+          <option value="">All Statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="revision">Revision</option>
+        </select>
+      </div>
+
       {/* Clear filters */}
       {hasFilters && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => updateParams({ search: undefined, categoryId: undefined })}
+          onClick={() => updateParams({ search: undefined, categoryId: undefined, status: undefined })}
           className="h-9 text-xs gap-1.5 text-muted-foreground hover:text-foreground shrink-0"
         >
           <X className="size-3.5" />

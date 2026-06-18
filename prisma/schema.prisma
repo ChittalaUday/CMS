@@ -112,6 +112,7 @@ model Post {
   content         String
   contentJson     Json?
   published       Boolean        @default(false)
+  featured        Boolean        @default(false)
   authorId        String?
   author          User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
   featuredImageId String?

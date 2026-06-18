@@ -20,6 +20,12 @@ import {
   Sparkles
 } from "lucide-react"
 import Link from "next/link"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface AtsQueueItem {
   id: string
@@ -176,11 +182,18 @@ export default function QueueMonitorPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="size-8 rounded-lg" asChild>
-              <Link href="/dashboard/careers">
-                <ArrowLeft className="size-4" />
-              </Link>
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8 rounded-lg" asChild>
+                    <Link href="/dashboard/careers">
+                      <ArrowLeft className="size-4" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Back to Jobs</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <Activity className="size-6 text-primary animate-pulse" />
               Diagnostics Queue Stream

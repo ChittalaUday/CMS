@@ -128,6 +128,7 @@ export async function getPosts() {
 export async function getPostsPaginated(params: {
   search?: string
   categoryId?: string
+  status?: string
   page?: number
   pageSize?: number
 }) {
@@ -143,6 +144,15 @@ export async function getPostsPaginated(params: {
   // Editors can only see their own posts
   if (user.role === Role.EDITOR) {
     where.authorId = user.id
+  }
+
+  if (params.status === "published") {
+    where.published = true
+  } else if (params.status === "draft") {
+    where.published = false
+  } else if (params.status === "revision") {
+    where.published = true
+    where.drafts = { some: {} }
   }
 
   if (params.search?.trim()) {
@@ -184,6 +194,7 @@ export async function getPostById(id: string) {
   const post = await prisma.post.findUnique({
     where: { id },
     include: {
+      author: { select: { id: true, name: true, email: true } },
       featuredImage: true,
       categories: { include: { category: true } },
       comments: {
@@ -226,6 +237,7 @@ export type PostInput = {
   content: string
   contentJson?: Prisma.InputJsonValue
   published?: boolean
+  featured?: boolean
   featuredImageId?: string | null
   categoryIds?: string[]
   metadata?: Prisma.InputJsonValue
@@ -242,6 +254,7 @@ export async function createPost(data: PostInput) {
         content: data.content,
         contentJson: data.contentJson || {},
         published: data.published ?? false,
+        featured: data.featured ?? false,
         authorId: user.id,
         featuredImageId: data.featuredImageId || null,
         metadata: data.metadata || {},
@@ -302,6 +315,7 @@ export async function updatePost(id: string, data: PostInput) {
         content: data.content,
         contentJson: data.contentJson || {},
         published: isRevision ? false : (data.published ?? false),
+        featured: isRevision ? (data.featured ?? false) : (data.featured ?? false),
         featuredImageId: data.featuredImageId || null,
         metadata: metadataToStore,
         categories: data.categoryIds
@@ -351,6 +365,29 @@ export async function togglePublished(id: string) {
   }
 }
 
+export async function toggleFeatured(id: string) {
+  const user = await requireBlogAccess()
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can feature posts.")
+  }
+
+  try {
+    const post = await prisma.post.findUnique({ where: { id }, select: { featured: true } })
+    if (!post) throw new Error("Post not found")
+
+    const updated = await prisma.post.update({
+      where: { id },
+      data: { featured: !post.featured },
+    })
+
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "toggleFeatured")
+  }
+}
+
 // Creates a draft revision for a published post, or updates the existing one.
 // The revision is a shadow copy — the published post is untouched until publishPostDraftRevision is called.
 export async function upsertPostDraftRevision(parentId: string, data: PostInput) {
@@ -381,6 +418,7 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
           content: data.content,
           contentJson: data.contentJson || {},
           published: false,
+          featured: data.featured ?? false,
           featuredImageId: data.featuredImageId || null,
           metadata: { ...(data.metadata as Record<string, unknown>), proposedSlug: data.slug },
           categories: data.categoryIds
@@ -406,6 +444,7 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
         content: data.content,
         contentJson: data.contentJson || {},
         published: false,
+        featured: data.featured ?? false,
         authorId: parent.authorId,
         featuredImageId: data.featuredImageId || null,
         draftParentId: parentId,
@@ -451,6 +490,7 @@ export async function publishPostDraftRevision(draftId: string) {
           content: draft.content,
           contentJson: draft.contentJson || {},
           published: true,
+          featured: draft.featured,
           featuredImageId: draft.featuredImageId || null,
           metadata: (() => {
             const m = { ...(draft.metadata as Record<string, unknown>) }

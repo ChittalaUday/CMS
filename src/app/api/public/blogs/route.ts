@@ -11,6 +11,7 @@ export async function GET() {
         title: true,
         slug: true,
         content: true,
+        featured: true,
         createdAt: true,
         updatedAt: true,
         author: {

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Plate, usePlateEditor, PlateElement } from 'platejs/react';
+import { Plate, usePlateEditor, PlateElement, PlateElementProps } from 'platejs/react';
+import { LinkPlugin } from '@platejs/link/react';
 import { serializeMd } from '@platejs/markdown';
 import { serializeHtml } from '@platejs/core/static';
 import { ListPlugin, useListToolbarButton, useListToolbarButtonState } from '@platejs/list/react';
@@ -21,7 +22,6 @@ import {
   getCellTypes,
   getEmptyTableNode
 } from '@platejs/table';
-import { insertImage } from '@platejs/media';
 
 import { Badge } from '@/components/ui/badge';
 import { useWritingAssist } from '@/components/editor/hooks/useWritingAssist';
@@ -33,6 +33,7 @@ import { Toolbar, ToolbarButton } from '@/components/ui/toolbar';
 import { MarkToolbarButton } from '@/components/ui/mark-toolbar-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -149,6 +150,23 @@ function ColorPicker({
 
 const SIDE_RIGHT = { side: 'right' as const };
 
+function LinkElement({ className, ...props }: PlateElementProps) {
+  const url = (props.element as any)?.url || '';
+  const PlateElementAny = PlateElement as any;
+  return (
+    <PlateElementAny
+      as="a"
+      className={cn(className, 'text-primary underline cursor-pointer hover:opacity-80')}
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    >
+      {props.children}
+    </PlateElementAny>
+  );
+}
+
 
 
 function ListToolbarButton({ nodeType, children, tooltip }: { nodeType: string, children: React.ReactNode, tooltip: string }) {
@@ -161,16 +179,21 @@ function ListToolbarButton({ nodeType, children, tooltip }: { nodeType: string, 
   );
 }
 
-export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) {
+export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigured?: boolean; isAdmin?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialPostId = searchParams.get('id');
 
   // Core Post State
   const [id, setId] = useState<string | null>(initialPostId);
+  const [featured, setFeatured] = useState(false);
   // parentPostId is set when editing a draft revision of a published post
   const [parentPostId, setParentPostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
+  const [linkText, setLinkText] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [content, setContent] = useState("");
@@ -294,6 +317,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
       ImagePlugin,
       FontColorPlugin,
       FontBackgroundColorPlugin,
+      LinkPlugin,
     ],
     override: {
       components: {
@@ -305,6 +329,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
         td: TableCellElement,
         th: TableCellHeaderElement,
         img: ImageElement,
+        a: LinkElement,
       }
     },
     value: contentJson,
@@ -471,6 +496,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                 setSlug(proposedSlug);
                 setContent(existingDraft.content || "");
                 setPublished(false);
+                setFeatured(existingDraft.featured || false);
                 setFeaturedImageId(existingDraft.featuredImageId || null);
                 setFeaturedImageUrl(existingDraft.featuredImage?.url || null);
                 setSelectedCategoryIds(existingDraft.categories.map((c: any) => c.categoryId));
@@ -488,6 +514,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                 setSlug(post.slug || "");
                 setContent(post.content || "");
                 setPublished(false);
+                setFeatured(post.featured || false);
                 setFeaturedImageId(post.featuredImageId || null);
                 setFeaturedImageUrl(post.featuredImage?.url || null);
                 setSelectedCategoryIds(post.categories.map(c => c.categoryId));
@@ -507,6 +534,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               setSlug(proposedSlug);
               setContent(post.content || "");
               setPublished(false);
+              setFeatured(post.featured || false);
               setFeaturedImageId(post.featuredImageId || null);
               setFeaturedImageUrl(post.featuredImage?.url || null);
               setSelectedCategoryIds(post.categories.map(c => c.categoryId));
@@ -523,6 +551,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               setSlug(post.slug || "");
               setContent(post.content || "");
               setPublished(post.published);
+              setFeatured(post.featured || false);
               setFeaturedImageId(post.featuredImageId || null);
               setFeaturedImageUrl(post.featuredImage?.url || null);
               setSelectedCategoryIds(post.categories.map(c => c.categoryId));
@@ -574,6 +603,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
         content: content || '',
         contentJson: defaultContent,
         published: false,
+        featured: false,
         categoryIds: selectedCategoryIds,
         metadata: {
           seoDescription,
@@ -601,10 +631,13 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
   useEffect(() => {
     if (!id) return;
     if (!initialLoadDone.current) return;
-
-    setSaveStatus('saving');
+    if (!title.trim()) {
+      setSaveStatus('idle');
+      return;
+    }
 
     const delayDebounceFn = setTimeout(async () => {
+      setSaveStatus('saving');
       try {
         const parsedTags = tagsInput
           .split(',')
@@ -616,6 +649,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
           content,
           contentJson,
           published: false,
+          featured,
           featuredImageId,
           categoryIds: selectedCategoryIds,
           metadata: { seoDescription, tags: parsedTags },
@@ -632,7 +666,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
           }
         } else {
           const { updatePost } = await import('@/app/dashboard/blogs/actions');
-          await updatePost(id, { ...saveData, published });
+          await updatePost(id, { ...saveData, published, featured });
         }
 
         setSaveStatus('saved');
@@ -643,7 +677,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
     }, 1500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [id, parentPostId, title, slug, content, contentJson, published, featuredImageId, selectedCategoryIds, tagsInput, seoDescription]);
+  }, [id, parentPostId, title, slug, content, contentJson, published, featured, featuredImageId, selectedCategoryIds, tagsInput, seoDescription]);
 
   // Handle publish / publish-revision
   const handlePublishToggle = async () => {
@@ -663,7 +697,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
           const parsedTags = tagsInput.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
           const { upsertPostDraftRevision } = await import('@/app/dashboard/blogs/actions');
           const draft = await upsertPostDraftRevision(parentPostId, {
-            title, slug, content, contentJson, published: false, featuredImageId,
+            title, slug, content, contentJson, published: false, featured, featuredImageId,
             categoryIds: selectedCategoryIds,
             metadata: { seoDescription, tags: parsedTags },
           });
@@ -691,6 +725,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
       const updated = await updatePost(id, {
         title, slug, content, contentJson,
         published: nextPublishedState,
+        featured,
         featuredImageId,
         categoryIds: selectedCategoryIds,
         metadata: { seoDescription, tags: parsedTags },
@@ -728,6 +763,35 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
     ]);
 
     (editor as any).uploadImage(file, uploadId);
+  };
+
+  const handleOpenLinkDialog = () => {
+    const selectedText = editor.selection ? editor.api.string(editor.selection) : "";
+    setLinkText(selectedText);
+    setLinkUrl("");
+    setIsLinkDialogOpen(true);
+  };
+
+  const handleInsertLink = () => {
+    if (!linkUrl.trim() || !linkText.trim()) return;
+
+    let formattedUrl = linkUrl.trim();
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = `https://${formattedUrl}`;
+    }
+
+    editor.tf.insertNodes([
+      {
+        type: 'a',
+        url: formattedUrl,
+        children: [{ text: linkText }]
+      }
+    ]);
+
+    setIsLinkDialogOpen(false);
+    setLinkText("");
+    setLinkUrl("");
+    toast.success("Link inserted!");
   };
 
   // Grid Table Selection helpers
@@ -965,6 +1029,235 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
   };
   const { charCount, wordCount } = getStats();
 
+  const renderSettingsContent = () => {
+    const renderCategoryCheckbox = (cat: Category) => {
+      return (
+        <div
+          key={cat.id}
+          className="flex items-center justify-between group p-1.5 rounded-lg hover:bg-muted/40 transition-colors"
+        >
+          <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none flex-1 font-medium text-foreground/90">
+            <input
+              type="checkbox"
+              checked={selectedCategoryIds.includes(cat.id)}
+              onChange={() => toggleCategory(cat.id)}
+              className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 accent-primary cursor-pointer"
+            />
+            <span>{cat.name}</span>
+          </label>
+
+          <button
+            type="button"
+            disabled={deletingCatId === cat.id}
+            onClick={(e) => handleDeleteCategory(cat.id, e)}
+            className="opacity-0 group-hover:opacity-100 hover:bg-destructive/10 p-1 rounded transition-all disabled:opacity-50 text-muted-foreground/50 hover:text-destructive"
+            title="Delete category"
+          >
+            {deletingCatId === cat.id ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Trash2 className="size-3" />
+            )}
+          </button>
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+          <Settings className="size-4 text-primary" />
+          <h3 className="font-bold text-sm text-foreground">Post Settings</h3>
+        </div>
+
+        {/* Featured Image Selector */}
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Featured Image</Label>
+          {featuredImageUrl ? (
+            <div className="relative aspect-video rounded-xl overflow-hidden border border-border/60 bg-muted/50 shadow-sm group">
+              <img
+                src={featuredImageUrl}
+                alt="Featured image preview"
+                className="object-cover w-full h-full"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="size-8 shadow-md hover:scale-105 transition-all"
+                  onClick={() => {
+                    setFeaturedImageId(null);
+                    setFeaturedImageUrl(null);
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-dashed border-border/80 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 bg-muted/5 select-none">
+              <ImageIcon className="size-6 text-muted-foreground/35" />
+              <span className="text-[10px] text-muted-foreground max-w-[150px] leading-snug">
+                Pick a banner image to showcase on the list.
+              </span>
+            </div>
+          )}
+
+          <div className="flex justify-center pt-1">
+            <MediaSelectorModal
+              selectedMediaId={featuredImageId}
+              onSelect={(media) => {
+                setFeaturedImageId(media.id);
+                setFeaturedImageUrl(media.url);
+              }}
+              triggerText={featuredImageUrl ? "Replace Banner" : "Choose Image"}
+            />
+          </div>
+        </div>
+
+        <Separator className="bg-border/60" />
+
+        {/* Featured Post Toggle */}
+        <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/50 bg-muted/20">
+          <div className="space-y-0.5 pr-2">
+            <Label htmlFor="featured-toggle" className="text-xs font-semibold text-foreground/90 cursor-pointer">
+              Featured Post
+            </Label>
+            <p className="text-[10px] text-muted-foreground leading-snug">
+              Highlight this article in featured sections.
+            </p>
+          </div>
+          <Switch
+            id="featured-toggle"
+            checked={featured}
+            disabled={!isAdmin}
+            onCheckedChange={setFeatured}
+          />
+        </div>
+
+        <Separator className="bg-border/60" />
+
+        {/* Category selection */}
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Categories</Label>
+
+          {/* Selected Categories Chips */}
+          <div className="flex flex-wrap gap-1.5 mb-2 min-h-6">
+            {selectedCategoryIds.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground/55 italic">No categories selected</span>
+            ) : (
+              selectedCategoryIds.map(id => {
+                const cat = availableCategories.find(c => c.id === id);
+                if (!cat) return null;
+                return (
+                  <span key={cat.id} className="inline-flex items-center gap-1.5 text-[11px] bg-primary/8 text-primary border border-primary/15 px-2 py-0.5 rounded-lg font-semibold select-none">
+                    {cat.name}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(cat.id)}
+                      className="text-primary/75 hover:text-primary hover:bg-primary/10 rounded-full p-px transition-colors"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                );
+              })
+            )}
+          </div>
+
+          {/* Categories Popover Selector */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-between text-xs font-semibold h-8.5 border-border/80 rounded-lg">
+                <span>Manage Categories</span>
+                <ChevronDown className="size-3.5 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-60 p-2 border border-border/70 rounded-xl bg-popover shadow-md space-y-2">
+              <div className="max-h-48 overflow-y-auto space-y-1 p-1">
+                {availableCategories.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground/50 text-center py-4 italic">
+                    No categories defined.
+                  </p>
+                ) : (
+                  availableCategories.map(renderCategoryCheckbox)
+                )}
+              </div>
+
+              <Separator className="bg-border/60" />
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full gap-1.5 text-xs font-bold text-primary hover:text-primary hover:bg-primary/5 h-8 justify-center rounded-lg"
+                onClick={() => setIsAddCatDialogOpen(true)}
+              >
+                <Plus className="size-3.5" />
+                Add New Category
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <Separator className="bg-border/60" />
+
+        {/* Tags input */}
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Tags</Label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {tagsInput
+              .split(",")
+              .map(t => t.trim())
+              .filter(Boolean)
+              .map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 text-[11px] bg-muted/60 border border-border/60 px-2 py-0.5 rounded-md text-foreground font-medium select-none">
+                  #{tag}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    className="text-muted-foreground/60 hover:text-foreground hover:bg-muted-foreground/15 rounded-full p-px transition-colors"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))
+            }
+          </div>
+          <Input
+            value={tagInputValue}
+            onChange={(e) => setTagInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddTag(tagInputValue);
+              }
+            }}
+            placeholder="Press Enter to add tag..."
+            className="text-xs bg-background/50 h-8 rounded-lg"
+          />
+        </div>
+
+        <Separator className="bg-border/60" />
+
+        {/* SEO Description input */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="size-3.5 text-primary" />
+            <Label className="text-xs font-semibold text-muted-foreground">SEO Description</Label>
+          </div>
+          <Textarea
+            value={seoDescription}
+            onChange={(e) => setSeoDescription(e.target.value)}
+            placeholder="Enter a brief search snippet..."
+            className="text-xs bg-background/50 min-h-[70px] resize-none rounded-xl"
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Plate
       editor={editor}
@@ -1021,26 +1314,26 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               {saveStatus === 'saving' && (
                 <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
                   <Loader2 className="size-3.5 animate-spin text-primary" />
-                  Saving...
+                  <span className="hidden sm:inline">Saving...</span>
                 </span>
               )}
               {saveStatus === 'saved' && (
                 <span className="flex items-center gap-1.5 text-emerald-500 font-semibold bg-emerald-500/10 dark:bg-emerald-500/5 px-2.5 py-0.5 rounded-full border border-emerald-500/15 transition-all duration-300">
                   <Check className="size-3" />
-                  {parentPostId ? 'Revision saved' : 'Saved to Drafts'}
+                  <span className="hidden sm:inline">{parentPostId ? 'Revision saved' : 'Saved to Drafts'}</span>
                 </span>
               )}
               {saveStatus === 'error' && (
                 <span className="flex items-center gap-1.5 text-destructive font-semibold bg-destructive/10 px-2.5 py-0.5 rounded-full border border-destructive/15">
                   <AlertCircle className="size-3" />
-                  Save Failed
+                  <span className="hidden sm:inline">Save Failed</span>
                 </span>
               )}
               {saveStatus === 'idle' && id && (
                 <span className="text-muted-foreground/60">Ready</span>
               )}
               {!id && (
-                <span className="text-muted-foreground/60 italic">{title.trim() ? 'Press Enter or click away to save draft' : 'Enter a title to begin'}</span>
+                <span className="text-muted-foreground/60 italic hidden md:inline">{title.trim() ? 'Press Enter or click away to save draft' : 'Enter a title to begin'}</span>
               )}
             </div>
           </div>
@@ -1049,7 +1342,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
             {aiConfigured && (
               <>
                 {/* AI Writing Assist toggle */}
-                <div className="flex items-center gap-2 border border-border/60 rounded-lg px-2.5 py-1.5 bg-muted/30 select-none">
+                <div className="hidden sm:flex items-center gap-2 border border-border/60 rounded-lg px-2.5 py-1.5 bg-muted/30 select-none">
                   {aiEnabled ? (
                     <BotOff className="size-3.5 text-muted-foreground/50" />
                   ) : (
@@ -1066,7 +1359,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                   </span>
                 </div>
 
-                <div className="h-4 w-px bg-border/60" />
+                <div className="hidden sm:block h-4 w-px bg-border/60" />
               </>
             )}
 
@@ -1078,7 +1371,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                   disabled={aiEnabled && isRewriting}
                   title={aiEnabled ? 'AI Rewrite — select text first' : 'Enable AI to activate'}
                   className={cn(
-                    'size-8 rounded-lg flex items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60',
+                    'hidden sm:flex size-8 rounded-lg items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60',
                     !aiEnabled && 'opacity-40 cursor-default'
                   )}
                 >
@@ -1091,7 +1384,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                     <PopoverTrigger asChild>
                       <button
                         title="Writing Analysis"
-                        className="size-8 rounded-lg flex items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60 relative"
+                        className="hidden sm:flex size-8 rounded-lg items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60 relative"
                       >
                         <BarChart2 className="size-3.5 text-primary" />
                         {(grammarIssues.length > 0 || readabilityStats.ruleIssues.length > 0) && (
@@ -1152,7 +1445,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                   <button
                     onClick={() => toast.info('Turn on AI to use this feature.')}
                     title="Enable AI to activate"
-                    className="size-8 rounded-lg flex items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60 opacity-40"
+                    className="hidden sm:flex size-8 rounded-lg items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60 opacity-40"
                   >
                     <BarChart2 className="size-3.5" />
                   </button>
@@ -1164,7 +1457,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                     <PopoverTrigger asChild>
                       <button
                         title="AI Title Ideas"
-                        className="size-8 rounded-lg flex items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60"
+                        className="hidden sm:flex size-8 rounded-lg items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60"
                         onClick={() => { setTitlePopoverOpen(true); if (!titleSuggestions.length) handleGetTitles(); }}
                       >
                         <Sparkles className="size-3.5 text-primary" />
@@ -1205,13 +1498,13 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                   <button
                     onClick={() => toast.info('Turn on AI to use this feature.')}
                     title="Enable AI to activate"
-                    className="size-8 rounded-lg flex items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60 opacity-40"
+                    className="hidden sm:flex size-8 rounded-lg items-center justify-center transition-colors border border-transparent hover:border-border/60 hover:bg-muted/60 opacity-40"
                   >
                     <Sparkles className="size-3.5" />
                   </button>
                 )}
 
-                <div className="h-4 w-px bg-border/60" />
+                <div className="hidden sm:block h-4 w-px bg-border/60" />
               </>
             )}
 
@@ -1222,12 +1515,22 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                 className="h-8.5 gap-1.5 text-xs font-semibold border-border/80"
                 asChild
               >
-                <a href={`/posts/${slug || 'preview'}`} target="_blank" rel="noopener noreferrer">
+                <a href={`/posts/preview?id=${id}`} target="_blank" rel="noopener noreferrer">
                   <Eye className="size-3.5 text-muted-foreground" />
                   Preview
                 </a>
               </Button>
             )}
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="xl:hidden size-8.5 border-border/80 shrink-0"
+              onClick={() => setIsSettingsOpen(true)}
+              title="Post Settings"
+            >
+              <Settings className="size-4 text-muted-foreground" />
+            </Button>
 
             {parentPostId && id && id !== parentPostId ? (
               <RevisionCompareDialog
@@ -1236,13 +1539,11 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                 trigger={
                   <Button
                     size="sm"
-                    className="h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-70 disabled:cursor-wait"
+                    className="h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-70 disabled:cursor-not-allowed"
                     disabled={saveStatus === 'saving'}
                   >
-                    {saveStatus === 'saving'
-                      ? <Loader2 className="size-3.5 animate-spin" />
-                      : <Rocket className="size-3.5" />}
-                    {saveStatus === 'saving' ? 'Saving…' : 'Publish Revision'}
+                    <Rocket className="size-3.5" />
+                    Publish Revision
                   </Button>
                 }
                 onPublished={() => router.push('/dashboard/blogs')}
@@ -1282,12 +1583,12 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
         )}
 
         {/* Main Workspace Body */}
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
 
-          {/* Left Side: Vertical Formatting Toolbar */}
+          {/* Left Side: Formatting Toolbar */}
           <Toolbar
-            orientation="vertical"
-            className="w-12 border-r border-border bg-card/30 flex flex-col gap-1 items-center py-4 overflow-y-auto shrink-0 select-none"
+            orientation="horizontal"
+            className="md:w-12 md:h-full md:border-r md:border-b-0 md:flex-col flex-row w-full h-11 border-b border-r-0 overflow-x-auto shrink-0 select-none bg-card/30 flex gap-1.5 items-center py-1 md:py-4 px-3 justify-start scrollbar-hide"
           >
 
             {/* Headers */}
@@ -1298,7 +1599,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               <Heading2Icon className="size-4 text-foreground/80" />
             </ToolbarButton>
 
-            <Separator className="w-6 my-1.5 bg-border/60" />
+            <Separator className="md:w-6 md:h-px h-6 w-px my-1.5 md:my-1.5 bg-border/60 mx-1 md:mx-0" />
 
             {/* Standard Marks */}
             <MarkToolbarButton nodeType={BaseBoldPlugin.key} tooltip="Bold (⌘+B)" size="sm" tooltipContentProps={SIDE_RIGHT}>
@@ -1317,7 +1618,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               <CodeIcon className="size-4" />
             </MarkToolbarButton>
 
-            <Separator className="w-6 my-1.5 bg-border/60" />
+            <Separator className="md:w-6 md:h-px h-6 w-px my-1.5 md:my-1.5 bg-border/60 mx-1 md:mx-0" />
 
             {/* Lists */}
             <ListToolbarButton nodeType="disc" tooltip="Bulleted List">
@@ -1327,7 +1628,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               <ListOrderedIcon className="size-4" />
             </ListToolbarButton>
 
-            <Separator className="w-6 my-1.5 bg-border/60" />
+            <Separator className="md:w-6 md:h-px h-6 w-px my-1.5 md:my-1.5 bg-border/60 mx-1 md:mx-0" />
 
             {/* Colors */}
             <Popover>
@@ -1384,7 +1685,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               </PopoverContent>
             </Popover>
 
-            <Separator className="w-6 my-1.5 bg-border/60" />
+            <Separator className="md:w-6 md:h-px h-6 w-px my-1.5 md:my-1.5 bg-border/60 mx-1 md:mx-0" />
 
             {/* Elements */}
             <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
@@ -1409,14 +1710,18 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
               onChange={handleImageUpload}
             />
 
+            <ToolbarButton tooltip="Insert Link" onClick={handleOpenLinkDialog} size="sm" tooltipContentProps={SIDE_RIGHT}>
+              <Link2 className="size-4 text-foreground/80" />
+            </ToolbarButton>
+
             <EmojiPickerButton />
 
             {/* Table context tools */}
             {isTableActive && (
               <>
-                <Separator className="w-6 my-1.5 bg-border/60" />
-                <div className="flex flex-col gap-1.5 items-center">
-                  <span className="text-[7px] uppercase font-extrabold text-muted-foreground/85 tracking-wider select-none">Grid</span>
+                <Separator className="md:w-6 md:h-px h-6 w-px my-1.5 md:my-1.5 bg-border/60 mx-1 md:mx-0" />
+                <div className="flex md:flex-col flex-row gap-1.5 items-center">
+                  <span className="hidden md:inline text-[7px] uppercase font-extrabold text-muted-foreground/85 tracking-wider select-none">Grid</span>
                   <ToolbarButton size="sm" tooltip="Insert Row Above" tooltipContentProps={SIDE_RIGHT} onClick={() => insertTableRow(editor, { before: true })}>
                     <ChevronUp className="size-3.5" />
                   </ToolbarButton>
@@ -1460,7 +1765,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
           </Toolbar>
 
           {/* Center Column: Writing Canvas */}
-          <div className="flex-1 overflow-y-auto bg-zinc-950/5 p-6 md:p-12">
+          <div className="flex-1 overflow-y-auto bg-zinc-950/5 p-4 sm:p-6 md:p-12">
             <div className="max-w-3xl mx-auto space-y-6">
 
               {/* Title input */}
@@ -1509,7 +1814,7 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
                     <span><strong>{charCount}</strong> characters</span>
                   </div>
                   <div className="hidden sm:block text-[11px] text-muted-foreground/60">
-                    Press <kbd className="px-1 py-0.5 bg-muted border border-border/80 rounded font-mono text-[9px] shadow-2xs">Cmd + Enter</kbd> or <kbd className="px-1 py-0.5 bg-muted border border-border/80 rounded font-mono text-[9px] shadow-2xs">Ctrl + Enter</kbd> to add a new line past a table
+                    Press <kbd className="px-1 py-0.5 bg-muted border border-border/80 rounded font-mono text-[9px] shadow-2xs">Cmd + Enter</kbd> or <kbd className="px-1 py-0.5 bg-muted border border-border/80 rounded font-mono text-[9px] shadow-2xs">Ctrl + Enter</kbd> to add a new line
                   </div>
                 </div>
               </div>
@@ -1517,257 +1822,18 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
           </div>
 
           {/* Right Column: Settings Sidebar */}
-          <aside className="w-[310px] border-l border-border bg-card overflow-y-auto shrink-0 select-none p-6 space-y-6">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-3">
-              <Settings className="size-4 text-primary" />
-              <h3 className="font-bold text-sm text-foreground">Post Settings</h3>
-            </div>
-
-            {/* Featured Image Selector */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground">Featured Image</Label>
-              {featuredImageUrl ? (
-                <div className="relative aspect-video rounded-xl overflow-hidden border border-border/60 bg-muted/50 shadow-sm group">
-                  <img
-                    src={featuredImageUrl}
-                    alt="Featured image preview"
-                    className="object-cover w-full h-full"
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      className="size-8 shadow-md hover:scale-105 transition-all"
-                      onClick={() => {
-                        setFeaturedImageId(null);
-                        setFeaturedImageUrl(null);
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="border border-dashed border-border/80 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-2 bg-muted/5 select-none">
-                  <ImageIcon className="size-6 text-muted-foreground/35" />
-                  <span className="text-[10px] text-muted-foreground max-w-[150px] leading-snug">
-                    Pick a banner image to showcase on the list.
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-center pt-1">
-                <MediaSelectorModal
-                  selectedMediaId={featuredImageId}
-                  onSelect={(media) => {
-                    setFeaturedImageId(media.id);
-                    setFeaturedImageUrl(media.url);
-                  }}
-                  triggerText={featuredImageUrl ? "Replace Banner" : "Choose Image"}
-                />
-              </div>
-            </div>
-
-            <Separator className="bg-border/60" />
-
-            {/* Category selection */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground">Categories</Label>
-
-              {/* Selected Categories Chips */}
-              <div className="flex flex-wrap gap-1.5 mb-2 min-h-6">
-                {selectedCategoryIds.length === 0 ? (
-                  <span className="text-[11px] text-muted-foreground/55 italic">No categories selected</span>
-                ) : (
-                  selectedCategoryIds.map(id => {
-                    const cat = availableCategories.find(c => c.id === id);
-                    if (!cat) return null;
-                    return (
-                      <span key={cat.id} className="inline-flex items-center gap-1.5 text-[11px] bg-primary/8 text-primary border border-primary/15 px-2 py-0.5 rounded-lg font-semibold select-none">
-                        {cat.name}
-                        <button
-                          type="button"
-                          onClick={() => toggleCategory(cat.id)}
-                          className="text-primary/75 hover:text-primary hover:bg-primary/10 rounded-full p-px transition-colors"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </span>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Categories Popover Selector */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-xs font-semibold h-8.5 border-border/80 rounded-lg">
-                    <span>Manage Categories</span>
-                    <ChevronDown className="size-3.5 text-muted-foreground" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-60 p-2 border border-border/70 rounded-xl bg-popover shadow-md space-y-2">
-                  <div className="max-h-48 overflow-y-auto space-y-1 p-1">
-                    {availableCategories.length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground/50 text-center py-4 italic">
-                        No categories defined.
-                      </p>
-                    ) : (
-                      availableCategories.map((cat) => (
-                        <div
-                          key={cat.id}
-                          className="flex items-center justify-between group p-1.5 rounded-lg hover:bg-muted/40 transition-colors"
-                        >
-                          <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none flex-1 font-medium text-foreground/90">
-                            <input
-                              type="checkbox"
-                              checked={selectedCategoryIds.includes(cat.id)}
-                              onChange={() => toggleCategory(cat.id)}
-                              className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 accent-primary cursor-pointer"
-                            />
-                            <span>{cat.name}</span>
-                          </label>
-
-                          <button
-                            type="button"
-                            disabled={deletingCatId === cat.id}
-                            onClick={(e) => handleDeleteCategory(cat.id, e)}
-                            className="opacity-0 group-hover:opacity-100 hover:bg-destructive/10 p-1 rounded transition-all disabled:opacity-50 text-muted-foreground/50 hover:text-destructive"
-                            title="Delete category"
-                          >
-                            {deletingCatId === cat.id ? (
-                              <Loader2 className="size-3 animate-spin" />
-                            ) : (
-                              <Trash2 className="size-3" />
-                            )}
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <Separator className="bg-border/60" />
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="w-full gap-1.5 text-xs font-bold text-primary hover:text-primary hover:bg-primary/5 h-8 justify-center rounded-lg"
-                    onClick={() => setIsAddCatDialogOpen(true)}
-                  >
-                    <Plus className="size-3.5" />
-                    Add New Category
-                  </Button>
-                </PopoverContent>
-              </Popover>
-
-              {/* Add Category Dialog */}
-              <Dialog open={isAddCatDialogOpen} onOpenChange={setIsAddCatDialogOpen}>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Add Category</DialogTitle>
-                    <DialogDescription>
-                      Create a new category to group your blog posts.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleAddCategory} className="space-y-4 pt-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="new-cat-name" className="text-xs">Category Name</Label>
-                      <Input
-                        id="new-cat-name"
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        placeholder="e.g. Technology, Lifestyle"
-                        className="rounded-lg h-9 text-sm"
-                        autoFocus
-                      />
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsAddCatDialogOpen(false)}
-                        className="text-xs"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        size="sm"
-                        disabled={isCreatingCategory || !newCategoryName.trim()}
-                        className="text-xs font-semibold bg-primary text-primary-foreground"
-                      >
-                        {isCreatingCategory ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          "Create Category"
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <Separator className="bg-border/60" />
-
-            {/* Tags input */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground">Tags</Label>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {tagsInput
-                  .split(",")
-                  .map(t => t.trim())
-                  .filter(Boolean)
-                  .map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 text-[11px] bg-muted/60 border border-border/60 px-2 py-0.5 rounded-md text-foreground font-medium select-none">
-                      #{tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="text-muted-foreground/60 hover:text-foreground hover:bg-muted-foreground/15 rounded-full p-px transition-colors"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </span>
-                  ))
-                }
-              </div>
-              <Input
-                value={tagInputValue}
-                onChange={(e) => setTagInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddTag(tagInputValue);
-                  }
-                }}
-                placeholder="Press Enter to add tag..."
-                className="text-xs bg-background/50 h-8 rounded-lg"
-              />
-            </div>
-
-            <Separator className="bg-border/60" />
-
-            {/* SEO Description input */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-primary" />
-                <Label className="text-xs font-semibold text-muted-foreground">SEO Description</Label>
-              </div>
-              <Textarea
-                value={seoDescription}
-                onChange={(e) => setSeoDescription(e.target.value)}
-                placeholder="Enter a brief search snippet..."
-                className="text-xs bg-background/50 min-h-[70px] resize-none rounded-xl"
-              />
-            </div>
-
+          <aside className="hidden xl:block w-[310px] border-l border-border bg-card overflow-y-auto shrink-0 select-none p-6 space-y-6">
+            {renderSettingsContent()}
           </aside>
         </div>
       </div>
+
+      {/* Post Settings Sheet for Mobile/Tablet */}
+      <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <SheetContent side="right" className="w-[320px] sm:w-[400px] p-6 overflow-y-auto bg-card select-none">
+          {renderSettingsContent()}
+        </SheetContent>
+      </Sheet>
 
       {/* AI Rewrite Result Dialog */}
       <Dialog open={rewriteDialogOpen} onOpenChange={setRewriteDialogOpen}>
@@ -1786,6 +1852,61 @@ export function BlogEditor({ aiConfigured = true }: { aiConfigured?: boolean }) 
             <Button type="button" size="sm" onClick={applyRewrite} className="text-xs font-semibold">
               <Wand2 className="size-3.5 mr-1.5" />
               Apply Rewrite
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Insert Link Dialog */}
+      <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-background border border-border">
+          <DialogHeader>
+            <DialogTitle>Insert Link</DialogTitle>
+            <DialogDescription>
+              Add a link with custom display text and destination URL.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="link-text" className="text-xs font-semibold text-muted-foreground">Display Text</Label>
+              <Input
+                id="link-text"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="e.g. Visit Google"
+                className="rounded-lg h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="link-url" className="text-xs font-semibold text-muted-foreground">Destination URL</Label>
+              <Input
+                id="link-url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="e.g. google.com"
+                className="rounded-lg h-9 text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsLinkDialogOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!linkUrl.trim() || !linkText.trim()}
+              onClick={handleInsertLink}
+              className="text-xs font-semibold bg-primary text-primary-foreground"
+            >
+              Insert Link
             </Button>
           </DialogFooter>
         </DialogContent>

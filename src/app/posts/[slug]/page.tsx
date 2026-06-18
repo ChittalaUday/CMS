@@ -1,5 +1,5 @@
 
-import { getPostBySlug } from "@/app/dashboard/blogs/actions"
+import { getPostBySlug, getPostById } from "@/app/dashboard/blogs/actions"
 import { getSession } from "@/lib/session"
 import { redirect, notFound } from "next/navigation"
 import { Role, ADMIN_ROLES } from "@/lib/roles"
@@ -11,14 +11,16 @@ export const dynamic = "force-dynamic"
 
 interface PageProps {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ id?: string }>
 }
 
-export default async function PostPreviewPage({ params }: PageProps) {
+export default async function PostPreviewPage({ params, searchParams }: PageProps) {
   const user = await getSession()
   if (!user) redirect("/")
 
   const { slug } = await params
-  const post = await getPostBySlug(slug)
+  const { id } = await searchParams
+  const post = id ? await getPostById(id) : await getPostBySlug(slug)
 
   if (!post) notFound()
 

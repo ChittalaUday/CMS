@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  Star,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,10 +38,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { PostMetaHoverCard } from "./PostMetaHoverCard"
 import { PublishButton } from "./PublishButton"
 import { PublishRevisionButton } from "./PublishRevisionButton"
 import { Role } from "@/lib/roles"
+import { Switch } from "@/components/ui/switch"
+import { toast } from "sonner"
 
 interface Author {
   id: string
@@ -74,6 +83,7 @@ interface Post {
   slug: string
   content: string
   published: boolean
+  featured: boolean
   createdAt: Date | string
   updatedAt: Date | string
   author: Author | null
@@ -97,13 +107,28 @@ interface BlogsTableClientProps {
 export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTableClientProps) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
+  const handleToggleFeatured = (postId: string, postTitle: string, currentFeatured: boolean) => {
+    startTransition(async () => {
+      try {
+        const { toggleFeatured } = await import("./actions")
+        await toggleFeatured(postId)
+        toast.success(
+          currentFeatured
+            ? `"${postTitle}" is no longer featured`
+            : `"${postTitle}" is now featured`
+        )
+      } catch (err: any) {
+        toast.error(err.message || "Failed to update featured status")
+      }
+    })
+  }
+
   const handleRowClick = (post: Post) => {
-    const hasDraft = post.published && (post.drafts?.length ?? 0) > 0
-    const draft = post.drafts?.[0]
-    if (hasDraft && draft) {
-      router.push(`/editor?id=${draft.id}`)
+    if (!post.published) {
+      router.push(`/editor?id=${post.id}`)
     } else {
       setSelectedPost(post)
       setIsSheetOpen(true)
@@ -126,6 +151,9 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Status
+                </th>
+                <th className="text-left px-4 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Featured
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">
                   Author
@@ -204,11 +232,10 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                       <td className="px-4 py-4">
                         <div className="flex flex-col gap-1">
                           <span
-                            className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit ${
-                              post.published
+                            className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit ${post.published
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                                 : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
-                            }`}
+                              }`}
                           >
                             {post.published ? (
                               <><CheckCircle2 className="size-3" /> Published</>
@@ -216,11 +243,18 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                               <><AlertTriangle className="size-3" /> Draft</>
                             )}
                           </span>
-                          {hasDraft && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 w-fit">
-                              <GitBranch className="size-2.5" /> Revision pending
-                            </span>
-                          )}
+
+                        </div>
+                      </td>
+
+                      {/* Featured */}
+                      <td className="px-4 py-4" onClick={handleActionClick}>
+                        <div className="flex items-center">
+                          <Switch
+                            checked={post.featured}
+                            disabled={!canPublish || isPending}
+                            onCheckedChange={() => handleToggleFeatured(post.id, post.title, post.featured)}
+                          />
                         </div>
                       </td>
 
@@ -264,63 +298,74 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
 
                       {/* Actions */}
                       <td className="px-3 sm:px-4 py-4" onClick={handleActionClick}>
-                        <div className="flex items-center justify-end gap-1">
-                          <div className="hidden sm:contents">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 rounded-lg hover:bg-muted"
-                              title="Preview post"
-                              asChild
-                            >
-                              <a href={`/posts/${post.slug}`} target="_blank" rel="noopener noreferrer">
-                                <Eye className="size-3.5 text-muted-foreground" />
-                              </a>
-                            </Button>
-                            {canPublish && (
-                              <PublishButton
-                                postId={post.id}
-                                postTitle={post.title}
-                                isPublished={post.published}
-                              />
-                            )}
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 rounded-lg data-[state=open]:opacity-100 hover:bg-muted"
-                              >
-                                <MoreHorizontal className="size-4 text-muted-foreground" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-36 text-sm">
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/dashboard/blogs/${post.id}/edit`}
-                                  className="flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Edit className="size-3.5 text-muted-foreground" />
-                                  Edit
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem asChild>
-                                <form action={handleDelete} className="w-full">
-                                  <input type="hidden" name="id" value={post.id} />
-                                  <button
-                                    type="submit"
-                                    className="w-full flex items-center gap-2 text-destructive cursor-pointer"
+                        <TooltipProvider>
+                          <div className="flex items-center justify-end gap-1">
+                            <div className="hidden sm:contents">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 rounded-lg hover:bg-muted"
+                                    asChild
                                   >
-                                    <Trash2 className="size-3.5" />
-                                    Delete
-                                  </button>
-                                </form>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                                    <a href={`/posts/${post.slug}`} target="_blank" rel="noopener noreferrer">
+                                      <Eye className="size-3.5 text-muted-foreground" />
+                                    </a>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Preview post</TooltipContent>
+                              </Tooltip>
+                              {canPublish && (
+                                <PublishButton
+                                  postId={post.id}
+                                  postTitle={post.title}
+                                  isPublished={post.published}
+                                />
+                              )}
+                            </div>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-8 rounded-lg data-[state=open]:opacity-100 hover:bg-muted"
+                                    >
+                                      <MoreHorizontal className="size-4 text-muted-foreground" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-36 text-sm">
+                                    <DropdownMenuItem asChild>
+                                      <Link
+                                        href={`/dashboard/blogs/${post.id}/edit`}
+                                        className="flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <Edit className="size-3.5 text-muted-foreground" />
+                                        Edit
+                                      </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                      <form action={handleDelete} className="w-full">
+                                        <input type="hidden" name="id" value={post.id} />
+                                        <button
+                                          type="submit"
+                                          className="w-full flex items-center gap-2 text-destructive cursor-pointer"
+                                        >
+                                          <Trash2 className="size-3.5" />
+                                          Delete
+                                        </button>
+                                      </form>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">More actions</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
                       </td>
                     </tr>
 
@@ -349,31 +394,38 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                             <AlertTriangle className="size-3" /> Pending Review
                           </span>
                         </td>
+                        <td className="px-4 py-3" />
                         <td className="px-4 py-3 hidden md:table-cell" />
                         <td className="px-4 py-3 hidden lg:table-cell" />
                         <td className="px-4 py-3 hidden lg:table-cell" />
                         <td className="px-3 sm:px-4 py-3" onClick={handleActionClick}>
-                          <div className="flex items-center justify-end gap-1">
-                            <div className="hidden sm:contents">
-                              {canPublish && (
-                                <PublishRevisionButton
-                                  draftId={draft.id}
-                                  parentTitle={post.title}
-                                />
-                              )}
+                          <TooltipProvider>
+                            <div className="flex items-center justify-end gap-1">
+                              <div className="hidden sm:contents">
+                                {canPublish && (
+                                  <PublishRevisionButton
+                                    draftId={draft.id}
+                                    parentTitle={post.title}
+                                  />
+                                )}
+                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 rounded-lg hover:bg-muted"
+                                    asChild
+                                  >
+                                    <Link href={`/editor?id=${draft.id}`}>
+                                      <Edit className="size-3.5 text-muted-foreground" />
+                                    </Link>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Edit revision</TooltipContent>
+                              </Tooltip>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 rounded-lg hover:bg-muted"
-                              title="Edit revision"
-                              asChild
-                            >
-                              <Link href={`/editor?id=${draft.id}`}>
-                                <Edit className="size-3.5 text-muted-foreground" />
-                              </Link>
-                            </Button>
-                          </div>
+                          </TooltipProvider>
                         </td>
                       </tr>
                     )}
@@ -395,14 +447,18 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                 <div className="space-y-1 pr-4">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                        selectedPost.published
+                      className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${selectedPost.published
                           ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                           : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
-                      }`}
+                        }`}
                     >
                       {selectedPost.published ? "Published" : "Draft"}
                     </span>
+                    {selectedPost.featured && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                        <Star className="size-2.5 fill-amber-500 text-amber-500" /> Featured
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground font-mono">
                       {new Date(selectedPost.createdAt).toLocaleDateString("en-GB", {
                         day: "2-digit",
@@ -462,7 +518,7 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                     <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
                       {selectedPost.title}
                     </h2>
-                    
+
                     <div className="flex items-center gap-3 pt-1">
                       <div className="size-9 rounded-full bg-primary/10 border border-primary/15 flex items-center justify-center overflow-hidden">
                         {selectedPost.author?.avatarUrl ? (
@@ -502,7 +558,7 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                       <BarChart3 className="size-4 text-primary" />
                       Post Statistics
                     </div>
-                    
+
                     {/* Stat Cards Grid */}
                     <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
                       {/* Views */}

@@ -33,6 +33,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Mail,
   Phone,
   ExternalLink,
@@ -160,7 +166,7 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
     return matchesSearch && matchesStatus
   })
 
-  // Status counts for the pill filters
+  // Status counts for the stat cards
   const counts = applications.reduce(
     (acc, a) => {
       acc[a.status] = (acc[a.status] ?? 0) + 1
@@ -168,6 +174,15 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
     },
     {} as Record<string, number>
   )
+
+  const statCards = [
+    { key: "ALL" as const,         label: "Total",      count: applications.length,      dotColor: "bg-foreground",    cardColor: statusFilter === "ALL" ? "border-primary bg-primary/5" : "border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/5" },
+    { key: "NEW" as const,         label: "New",        count: counts["NEW"] ?? 0,        dotColor: "bg-blue-500",      cardColor: statusFilter === "NEW" ? "border-blue-500 bg-blue-500/5" : "border-border/60 bg-card/40 hover:border-blue-500/40 hover:bg-blue-500/5" },
+    { key: "REVIEWING" as const,   label: "Reviewing",  count: counts["REVIEWING"] ?? 0,  dotColor: "bg-yellow-500",    cardColor: statusFilter === "REVIEWING" ? "border-yellow-500 bg-yellow-500/5" : "border-border/60 bg-card/40 hover:border-yellow-500/40 hover:bg-yellow-500/5" },
+    { key: "SHORTLISTED" as const, label: "Shortlisted",count: counts["SHORTLISTED"] ?? 0,dotColor: "bg-purple-500",    cardColor: statusFilter === "SHORTLISTED" ? "border-purple-500 bg-purple-500/5" : "border-border/60 bg-card/40 hover:border-purple-500/40 hover:bg-purple-500/5" },
+    { key: "REJECTED" as const,    label: "Rejected",   count: counts["REJECTED"] ?? 0,   dotColor: "bg-red-500",       cardColor: statusFilter === "REJECTED" ? "border-red-500 bg-red-500/5" : "border-border/60 bg-card/40 hover:border-red-500/40 hover:bg-red-500/5" },
+    { key: "HIRED" as const,       label: "Hired",      count: counts["HIRED"] ?? 0,      dotColor: "bg-emerald-500",   cardColor: statusFilter === "HIRED" ? "border-emerald-500 bg-emerald-500/5" : "border-border/60 bg-card/40 hover:border-emerald-500/40 hover:bg-emerald-500/5" },
+  ]
 
   function handleUpdateStatus(id: string, status: ApplicationStatus, internalNotes?: string) {
     setUpdatingId(id)
@@ -315,52 +330,41 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
   }
 
 
-
   return (
     <>
-      {/* Filters bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="relative max-w-xs flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search applicants…"
-              className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
-            />
-          </div>
+      {/* Clickable stat cards */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        {statCards.map((card) => (
+          <button
+            key={card.key}
+            onClick={() => setStatusFilter(card.key)}
+            className={`group rounded-xl border p-3 flex flex-col items-start gap-1 text-left transition-all duration-150 cursor-pointer relative overflow-hidden ${card.cardColor}`}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1.5">
+                <span className={`size-2 rounded-full shrink-0 ${card.dotColor}`} />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{card.label}</span>
+              </div>
+              <span className="text-[9px] font-semibold text-muted-foreground/0 group-hover:text-muted-foreground/60 transition-all duration-150 uppercase tracking-wider">
+                {statusFilter === card.key ? "Active" : "Filter"}
+              </span>
+            </div>
+            <span className="text-2xl font-extrabold tracking-tight text-foreground leading-none">{card.count}</span>
+          </button>
+        ))}
+      </div>
 
-          {/* Status pill filters */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(["ALL", ...ALL_STATUSES] as const).map((s) => {
-              const isActive = statusFilter === s
-              const cfg = s !== "ALL" ? STATUS_CONFIG[s] : null
-              const count = s === "ALL" ? applications.length : (counts[s] ?? 0)
-
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`h-7 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all flex items-center gap-1 ${
-                    isActive
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted"
-                  }`}
-                >
-                  {cfg && (
-                    <span
-                      className={`size-1.5 rounded-full ${isActive ? "bg-primary-foreground" : cfg.dotColor}`}
-                    />
-                  )}
-                  {s === "ALL" ? "All" : cfg!.label}
-                  <span className="opacity-70">{count}</span>
-                </button>
-              )
-            })}
-          </div>
+      {/* Search + count row */}
+      <div className="flex items-center gap-3 justify-between">
+        <div className="relative max-w-xs flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search applicants…"
+            className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
+          />
         </div>
-
         <p className="text-xs text-muted-foreground shrink-0">
           {filtered.length} of {applications.length} shown
         </p>
@@ -523,55 +527,66 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
 
                       {/* Actions */}
                       <td className="px-3 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          <div className="hidden sm:contents">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 rounded-lg hover:bg-muted"
-                              title="View full application"
-                              onClick={() => openDrawer(app)}
-                            >
-                              <Eye className="size-3.5 text-muted-foreground" />
-                            </Button>
-                          </div>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 rounded-lg hover:bg-muted"
-                                disabled={isUpdating}
-                              >
-                                {isUpdating ? (
-                                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                                ) : (
-                                  <MoreHorizontal className="size-4 text-muted-foreground" />
-                                )}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44 text-sm">
-                              <DropdownMenuItem onClick={() => openDrawer(app)}>
-                                <Eye className="size-3.5 text-muted-foreground mr-2" />
-                                View Application
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {ALL_STATUSES.filter((s) => s !== app.status).map((s) => {
-                                const c = STATUS_CONFIG[s]
-                                return (
-                                  <DropdownMenuItem
-                                    key={s}
-                                    onClick={() => handleUpdateStatus(app.id, s)}
+                        <TooltipProvider>
+                          <div className="flex items-center justify-end gap-1">
+                            <div className="hidden sm:contents">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 rounded-lg hover:bg-muted"
+                                    onClick={() => openDrawer(app)}
                                   >
-                                    <span className={`size-2 rounded-full ${c.dotColor} mr-2`} />
-                                    Move to {c.label}
-                                  </DropdownMenuItem>
-                                )
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                                    <Eye className="size-3.5 text-muted-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">View full application</TooltipContent>
+                              </Tooltip>
+                            </div>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-8 rounded-lg hover:bg-muted"
+                                      disabled={isUpdating}
+                                    >
+                                      {isUpdating ? (
+                                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                                      ) : (
+                                        <MoreHorizontal className="size-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-44 text-sm">
+                                    <DropdownMenuItem onClick={() => openDrawer(app)}>
+                                      <Eye className="size-3.5 text-muted-foreground mr-2" />
+                                      View Application
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {ALL_STATUSES.filter((s) => s !== app.status).map((s) => {
+                                      const c = STATUS_CONFIG[s]
+                                      return (
+                                        <DropdownMenuItem
+                                          key={s}
+                                          onClick={() => handleUpdateStatus(app.id, s)}
+                                        >
+                                          <span className={`size-2 rounded-full ${c.dotColor} mr-2`} />
+                                          Move to {c.label}
+                                        </DropdownMenuItem>
+                                      )
+                                    })}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Move / more actions</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
                       </td>
                     </tr>
                   )

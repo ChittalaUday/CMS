@@ -417,5 +417,7 @@ Education: [highest degree or Unknown]`.trim()
   }
 }
 
-// Automatically kick off queues when module loaded
-initializeQueues().catch(err => console.error("Failed to automatically boot queues:", err))
+// Automatically kick off queues when module loaded (except during Next.js builds)
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  initializeQueues().catch(err => console.error("Failed to automatically boot queues:", err))
+}

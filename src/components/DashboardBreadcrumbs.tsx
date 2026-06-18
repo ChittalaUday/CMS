@@ -58,7 +58,9 @@ export function DashboardBreadcrumbs() {
     const href = "/" + segments.slice(0, i + 1).join("/")
 
     if (isId) {
-      if (segments[i + 1] === "edit") {
+      const nextSegment = segments[i + 1]
+
+      if (nextSegment && (nextSegment === "edit" || routeMap[nextSegment])) {
         continue
       }
       items.push({ label: "Details", href })

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe } from "lucide-react"
+import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getRevisionComparison, publishPostDraftRevision } from "./actions"
@@ -211,7 +211,7 @@ export function RevisionCompareDialog({
           <DialogHeader className="px-6 py-4 border-b shrink-0 flex-row items-center justify-between space-y-0">
             <div>
               <DialogTitle className="flex items-center gap-2 text-base">
-                <GitMerge className="size-4 text-emerald-600" />
+                <GitMerge className="size-4 text-primary" />
                 Review Changes Before Publishing
               </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -235,12 +235,12 @@ export function RevisionCompareDialog({
               {/* Sticky column headers */}
               <div className="grid grid-cols-2 border-b sticky top-0 bg-background z-10 shadow-sm">
                 <div className="px-6 py-3 flex items-center gap-2.5 border-r">
-                  <div className="size-2 rounded-full bg-blue-500 shrink-0" />
+                  <div className="size-2 rounded-full bg-primary shrink-0" />
                   <span className="text-xs font-semibold text-foreground">Published</span>
                   <span className="text-xs text-muted-foreground">— current live version</span>
                 </div>
                 <div className="px-6 py-3 flex items-center gap-2.5">
-                  <div className="size-2 rounded-full bg-amber-500 shrink-0" />
+                  <div className="size-2 rounded-full bg-muted-foreground shrink-0" />
                   <span className="text-xs font-semibold text-foreground">Draft Revision</span>
                   <span className="text-xs text-muted-foreground">— will replace published</span>
                 </div>
@@ -292,9 +292,9 @@ export function RevisionCompareDialog({
                         key={i}
                         className={cn(
                           tok.type === "removed" &&
-                          "bg-red-500/20 text-red-700 dark:text-red-400 line-through rounded-sm px-0.5",
+                          "bg-destructive/15 text-destructive line-through rounded-sm px-0.5",
                           tok.type === "added" &&
-                          "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm px-0.5",
+                          "bg-primary/10 text-primary rounded-sm px-0.5",
                         )}
                       >
                         {tok.text}
@@ -318,7 +318,7 @@ export function RevisionCompareDialog({
                     className={cn(
                       "text-xs font-mono px-2 py-0.5 rounded",
                       slugChanged
-                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold"
+                        ? "bg-primary/10 text-primary font-semibold"
                         : "bg-muted/40 text-muted-foreground",
                     )}
                   >
@@ -354,7 +354,7 @@ export function RevisionCompareDialog({
                           className={cn(
                             "text-[11px] h-5 px-2",
                             catsChanged && !parentCats.includes(n) &&
-                            "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30",
+                            "bg-primary/10 text-primary border border-primary/25",
                           )}
                         >
                           {n}
@@ -381,7 +381,7 @@ export function RevisionCompareDialog({
                       Content — Revision
                     </span>
                     {hasContentChanges && (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/8">
+                      <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                         has changes
                       </Badge>
                     )}
@@ -390,7 +390,7 @@ export function RevisionCompareDialog({
 
                 {!hasContentChanges ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
-                    <Check className="size-4 mx-auto mb-2 text-emerald-500" />
+                    <Check className="size-4 mx-auto mb-2 text-primary" />
                     Content is identical
                   </div>
                 ) : (
@@ -408,26 +408,24 @@ export function RevisionCompareDialog({
                         <div
                           className={cn(
                             "px-6 py-3 border-r text-sm relative",
-                            row.left.type === "removed" && "bg-red-500/8",
+                            row.left.type === "removed" && "bg-destructive/5",
                           )}
                         >
                           {row.left.type === "removed" && (
-                            <span className="absolute left-2 top-3.5 text-red-500 font-bold text-xs select-none">
-                              −
-                            </span>
+                            <Minus className="absolute left-2 top-3.5 size-3 text-destructive select-none" />
                           )}
                           {row.left.html ? (
                             <div
                               className={cn(
                                 HTML_STYLES,
                                 row.left.type === "removed"
-                                  ? "line-through text-red-700/80 dark:text-red-300/80 pl-3"
+                                  ? "line-through text-destructive/70 pl-3"
                                   : "text-muted-foreground/80",
                               )}
                               dangerouslySetInnerHTML={{ __html: row.left.html }}
                             />
                           ) : (
-                            <div className="h-full border border-dashed border-red-300/40 rounded" />
+                            <div className="h-full border border-dashed border-destructive/20 rounded" />
                           )}
                         </div>
 
@@ -435,26 +433,24 @@ export function RevisionCompareDialog({
                         <div
                           className={cn(
                             "px-6 py-3 text-sm relative",
-                            row.right.type === "added" && "bg-emerald-500/8",
+                            row.right.type === "added" && "bg-primary/5",
                           )}
                         >
                           {row.right.type === "added" && (
-                            <span className="absolute left-2 top-3.5 text-emerald-500 font-bold text-xs select-none">
-                              +
-                            </span>
+                            <Plus className="absolute left-2 top-3.5 size-3 text-primary select-none" />
                           )}
                           {row.right.html ? (
                             <div
                               className={cn(
                                 HTML_STYLES,
                                 row.right.type === "added"
-                                  ? "text-emerald-800 dark:text-emerald-200 pl-3"
+                                  ? "text-foreground pl-3"
                                   : "text-muted-foreground/80",
                               )}
                               dangerouslySetInnerHTML={{ __html: row.right.html }}
                             />
                           ) : (
-                            <div className="h-full border border-dashed border-emerald-300/40 rounded" />
+                            <div className="h-full border border-dashed border-primary/20 rounded" />
                           )}
                         </div>
                       </div>
@@ -481,7 +477,7 @@ export function RevisionCompareDialog({
               </Button>
               <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 px-4"
+                className="gap-1.5 px-4"
                 onClick={handlePublish}
                 disabled={isPending || loading || !data}
               >
@@ -514,7 +510,7 @@ function FieldLabel({
       {icon}
       {label}
       {changed && (
-        <span className="text-amber-600 dark:text-amber-400 normal-case font-semibold tracking-normal text-[10px] bg-amber-500/10 px-1.5 py-px rounded-full border border-amber-500/25">
+        <span className="text-primary normal-case font-semibold tracking-normal text-[10px] bg-primary/10 px-1.5 py-px rounded-full border border-primary/20">
           changed
         </span>
       )}
