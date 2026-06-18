@@ -22,9 +22,21 @@ async function requireSuperAdmin() {
 const clientSchema = z.object({
   name: z.string().min(1, "Name is required"),
   slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and hyphens"),
-  domain: z.string().optional(),
+  domain: z.string()
+    .transform(v => v === "" ? undefined : v)
+    .optional()
+    .refine(
+      val => !val || /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i.test(val),
+      "Invalid domain format (e.g., example.com)"
+    ),
   description: z.string().optional(),
-  logoUrl: z.string().optional(),
+  logoUrl: z.string()
+    .transform(v => v === "" ? undefined : v)
+    .optional()
+    .refine(
+      val => !val || /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/.test(val),
+      "Invalid URL format"
+    ),
 })
 
 export const createClient = actionClient

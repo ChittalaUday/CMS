@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation"
+import { getSession } from "@/lib/session"
+import { Role } from "@/generated/prisma/enums"
 import { getClientsPaginated } from "./actions"
 import { ClientsTableClient } from "./ClientsTableClient"
 
@@ -8,6 +11,8 @@ type PageProps = {
 }
 
 export default async function ClientsPage({ searchParams }: PageProps) {
+  const user = await getSession()
+  if (!user || user.role !== Role.SUPER_ADMIN) redirect("/dashboard")
 
   const params = await searchParams
   const search = params.search ?? ""

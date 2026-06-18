@@ -14,6 +14,8 @@ import {
 } from "@/lib/roles"
 import { getClientScope, requireClientScope } from "@/lib/client-context"
 import { getClientIdFromRequestHeaders } from "@/lib/api-auth"
+import { sanitizePlainText } from "@/lib/sanitize"
+import { z } from "zod"
 
 const MAX_DRAFTS = 10
 
@@ -138,8 +140,48 @@ export type JobPostingInput = {
   closingDate?: string | null
   questions?: QuestionInput[]
   keywords?: string[]
-
 }
+
+// --- Validation schemas ---
+
+const questionSchema = z.object({
+  id: z.string().optional(),
+  question: z.string().min(1, "Question text is required"),
+  type: z.enum(["SHORT_TEXT", "LONG_TEXT", "SINGLE_CHOICE", "MULTIPLE_CHOICE", "YES_NO", "FILE"]),
+  required: z.boolean(),
+  order: z.number().int().min(0),
+  options: z.array(z.string()).optional(),
+})
+
+const jobPostingSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  slug: z.string().max(200).optional(),
+  department: z.string().min(1, "Department is required").max(100),
+  location: z.string().min(1, "Location is required").max(200),
+  jobType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP", "TEMPORARY"]),
+  description: z.string().min(1, "Description is required"),
+  descriptionJson: z.unknown().optional(),
+  responsibilities: z.string().optional(),
+  responsibilitiesJson: z.unknown().optional(),
+  requirements: z.string().optional(),
+  requirementsJson: z.unknown().optional(),
+  salaryMin: z.number().nullable().optional(),
+  salaryMax: z.number().nullable().optional(),
+  currency: z.string().max(10).optional(),
+  closingDate: z.string().nullable().optional(),
+  questions: z.array(questionSchema).optional(),
+  keywords: z.array(z.string()).optional(),
+})
+
+const applicationSubmitSchema = z.object({
+  jobId: z.string().min(1, "Job ID is required"),
+  applicantName: z.string().min(1, "Name is required").max(200),
+  applicantEmail: z.email("Invalid email address"),
+  applicantPhone: z.string().max(30).optional(),
+  resumeUrl: z.url().optional().or(z.literal("")).transform(v => v || undefined),
+  coverLetter: z.string().max(10000).optional(),
+  answers: z.array(z.object({ questionId: z.string().min(1), answer: z.string() })),
+})
 
 // --- Draft limit helper ---
 
@@ -264,6 +306,7 @@ function buildQuestionsCreate(questions: QuestionInput[]) {
 }
 
 export async function createJobPosting(data: JobPostingInput) {
+  jobPostingSchema.parse(data)
   const user = await requireCareersAccess()
   await assertDraftLimit(user.id)
   const clientId = await requireClientScope()
@@ -309,6 +352,7 @@ export async function createJobPosting(data: JobPostingInput) {
 }
 
 export async function updateJobPosting(id: string, data: JobPostingInput) {
+  jobPostingSchema.parse(data)
   const user = await assertJobOwnership(id)
 
   const existing = await prisma.jobPosting.findUnique({
@@ -679,6 +723,7 @@ export type ApplicationSubmitInput = {
 }
 
 export async function submitApplication(data: ApplicationSubmitInput) {
+  applicationSubmitSchema.parse(data)
   const duplicate = await prisma.jobApplication.findFirst({
     where: { jobId: data.jobId, applicantEmail: data.applicantEmail.toLowerCase().trim() },
   })
@@ -709,13 +754,13 @@ export async function submitApplication(data: ApplicationSubmitInput) {
     const app = await prisma.jobApplication.create({
       data: {
         jobId: data.jobId,
-        applicantName: data.applicantName.trim(),
+        applicantName: sanitizePlainText(data.applicantName.trim()),
         applicantEmail: data.applicantEmail.toLowerCase().trim(),
         applicantPhone: data.applicantPhone?.trim() || null,
         resumeUrl: data.resumeUrl?.trim() || null,
-        coverLetter: data.coverLetter?.trim() || null,
+        coverLetter: data.coverLetter ? sanitizePlainText(data.coverLetter.trim()) || null : null,
         answers: data.answers.length
-          ? { create: data.answers.map((a) => ({ questionId: a.questionId, answer: a.answer })) }
+          ? { create: data.answers.map((a) => ({ questionId: a.questionId, answer: sanitizePlainText(a.answer) })) }
           : undefined,
       },
     })

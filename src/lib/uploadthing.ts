@@ -17,12 +17,12 @@ export const ourFileRouter = {
     })),
 
   editorUploader: f({
-    image: { maxFileSize: "10MB", maxFileCount: 20 },
-    pdf: { maxFileSize: "25MB", maxFileCount: 5 },
+    image: { maxFileSize: "8MB", maxFileCount: 20 },
+    pdf: { maxFileSize: "32MB", maxFileCount: 5 },
     video: { maxFileSize: "512MB", maxFileCount: 3 },
-    audio: { maxFileSize: "50MB", maxFileCount: 10 },
+    audio: { maxFileSize: "64MB", maxFileCount: 10 },
     text: { maxFileSize: "4MB", maxFileCount: 10 },
-    blob: { maxFileSize: "25MB", maxFileCount: 5 },
+    blob: { maxFileSize: "32MB", maxFileCount: 5 },
   })
     .middleware(async () => {
       const user = await getSession();

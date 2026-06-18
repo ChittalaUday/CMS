@@ -82,16 +82,24 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const ALLOWED_RESUME_TYPES = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ]
+
       if (uploadedFile && uploadedFile.size > 0) {
-        // 10 MB limit on resume uploads via the public API
         if (uploadedFile.size > 10 * 1024 * 1024) {
           return NextResponse.json({ error: "Resume file must be under 10 MB" }, { status: 400 })
+        }
+        if (!ALLOWED_RESUME_TYPES.includes(uploadedFile.type)) {
+          return NextResponse.json({ error: "Resume must be a PDF or Word document (.pdf, .doc, .docx)" }, { status: 400 })
         }
         const { UTApi } = await import("uploadthing/server")
         const utapi = new UTApi()
         const uploadResponse = await utapi.uploadFiles(uploadedFile)
         if (uploadResponse.data) {
-          resumeUrl = uploadResponse.data.url
+          resumeUrl = uploadResponse.data.ufsUrl
           if (fileQuestionIdForUpload) {
             answers = answers.filter((a) => a.questionId !== fileQuestionIdForUpload)
             answers.push({ questionId: fileQuestionIdForUpload, answer: resumeUrl })
