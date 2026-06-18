@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { useAction } from "next-safe-action/hooks"
 import { updateProfile, updatePassword } from "@/app/_actions/settings"
 import { logoutAction } from "@/app/_actions/auth"
-import { useUploadThing } from "@/lib/uploadthing-react"
+import { useUploadThing } from "@/lib/upload"
 import { useTheme } from "next-themes"
 import type { Role } from "@/generated/prisma/enums"
 import {

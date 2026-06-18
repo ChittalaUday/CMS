@@ -1,5 +1,5 @@
 import { createHash } from "crypto"
-import { prisma } from "./prisma"
+import { prisma } from "@/lib/db/prisma"
 
 export async function validateApiKey(request: Request): Promise<{
   clientId: string

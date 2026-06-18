@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { useAction } from "next-safe-action/hooks"
 import { updateProfile } from "@/app/_actions/settings"
-import { useUploadThing } from "@/lib/uploadthing-react"
+import { useUploadThing } from "@/lib/upload"
 import type { Role } from "@/generated/prisma/enums"
 import { Loader2, LinkIcon, UploadIcon, AtSignIcon, UserIcon, FileTextIcon, ShieldIcon } from "lucide-react"
 

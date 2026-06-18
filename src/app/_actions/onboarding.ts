@@ -1,7 +1,7 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
-import { getSession } from "@/lib/session"
+import { prisma } from "@/lib/db/prisma"
+import { getSession } from "@/lib/auth/session"
 import { revalidatePath } from "next/cache"
 
 export async function completeOnboarding(data: {

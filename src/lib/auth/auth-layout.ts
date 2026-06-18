@@ -1,7 +1,7 @@
 import "server-only"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
-import type { Role } from "@/lib/roles"
+import type { Role } from "@/lib/auth/roles"
 
 /**
  * Shared gate for layout.tsx files.

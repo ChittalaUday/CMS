@@ -2,7 +2,7 @@ import "server-only"
 import { cookies } from "next/headers"
 import { cache } from "react"
 import { randomBytes } from "crypto"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 
 const SESSION_COOKIE = "session_token"
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 
 import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 
 export async function POST(req: NextRequest) {
   const user = await getSession();

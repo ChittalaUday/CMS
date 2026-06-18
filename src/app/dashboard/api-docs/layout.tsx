@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth-layout"
+import { requireAuth } from "@/lib/auth/auth-layout"
 
 export const dynamic = "force-dynamic"
 

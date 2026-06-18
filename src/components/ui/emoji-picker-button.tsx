@@ -7,7 +7,7 @@ import { useEditorRef } from 'platejs/react';
 import { SmilePlus, Search, X, Clock } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolbarButton } from '@/components/ui/toolbar';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 const SIDE_RIGHT = { side: 'right' as const };
 

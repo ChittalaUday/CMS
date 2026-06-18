@@ -1,5 +1,5 @@
-import { getSession } from "@/lib/session"
-import { isDeveloper } from "@/lib/roles"
+import { getSession } from "@/lib/auth/session"
+import { isDeveloper } from "@/lib/auth/roles"
 import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"

@@ -1,11 +1,11 @@
 "use server"
 
 import { createHash, randomBytes } from "crypto"
-import { prisma } from "@/lib/prisma"
-import { getSession } from "@/lib/session"
-import { actionClient } from "@/lib/safe-action"
+import { prisma } from "@/lib/db/prisma"
+import { getSession } from "@/lib/auth/session"
+import { actionClient } from "@/lib/utils/safe-action"
 import { Role } from "@/generated/prisma/enums"
-import { getAllScopeIds } from "@/lib/api-registry"
+import { getAllScopeIds } from "@/lib/utils/api-registry"
 import { z } from "zod"
 import { revalidatePath } from "next/cache"
 

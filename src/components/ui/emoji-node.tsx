@@ -5,7 +5,7 @@ import * as React from 'react';
 import type { PlateElementProps } from 'platejs/react';
 
 import { PlateElement } from 'platejs/react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 /**
  * EmojiInputElement – renders the inline `:query` pill while the user

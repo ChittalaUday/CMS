@@ -48,7 +48,7 @@ import { ClientForm } from "./ClientForm"
 import { ApiKeyManager } from "./ApiKeyManager"
 import { useDebounce } from "@/hooks/use-debounce"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

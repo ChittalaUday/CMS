@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
-import { prisma } from "@/lib/prisma"
-import { getClientStats, listApiKeys } from "../actions"
+import { prisma } from "@/lib/db/prisma"
+import { getClientStats, listApiKeys, getClientSecurityConfig } from "../actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { ClientForm } from "../ClientForm"
 import { ApiKeyManager } from "../ApiKeyManager"
+import { ClientSecurityForm } from "../ClientSecurityForm"
 import { ArrowLeft, Users, FileText, Briefcase, BarChart3 } from "lucide-react"
 import Link from "next/link"
 import { suspendClient, deleteClient, removeUserFromClient } from "../actions"
@@ -61,9 +62,10 @@ export default async function ClientDetailPage({ params, searchParams }: PagePro
 
   if (!client) notFound()
 
-  const [stats, apiKeys] = await Promise.all([
+  const [stats, apiKeys, securityConfig] = await Promise.all([
     getClientStats(id),
     listApiKeys(id),
+    getClientSecurityConfig(id),
   ])
 
   const { label: statusLabel, className: statusClass } = STATUS_BADGE[client.status] ?? STATUS_BADGE.INACTIVE
@@ -89,6 +91,7 @@ export default async function ClientDetailPage({ params, searchParams }: PagePro
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="users">Users ({client.users.length})</TabsTrigger>
           <TabsTrigger value="api-keys">API Keys ({apiKeys.length})</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
@@ -192,6 +195,22 @@ export default async function ClientDetailPage({ params, searchParams }: PagePro
         {/* API Keys */}
         <TabsContent value="api-keys" className="mt-6">
           <ApiKeyManager clientId={id} initialKeys={apiKeys} />
+        </TabsContent>
+
+        {/* Security */}
+        <TabsContent value="security" className="mt-6 space-y-6">
+          <div>
+            <h3 className="text-base font-semibold">API Security Configuration</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Controls rate limiting, CORS, and IP access for all public API routes used by this client.
+              Changes take effect immediately for new requests.
+            </p>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <ClientSecurityForm clientId={id} initial={securityConfig} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Settings */}

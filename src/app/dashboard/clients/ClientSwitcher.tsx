@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Check, ChevronsUpDown, Building2, Globe } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils/utils"
 import { setActiveClient } from "./switcher-actions"
 
 type Client = { id: string; name: string; slug: string }

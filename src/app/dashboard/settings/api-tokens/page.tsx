@@ -1,8 +1,8 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
-import { Role } from "@/lib/roles"
+import { Role } from "@/lib/auth/roles"
 import { listApiTokens } from "@/app/_actions/api-tokens"
-import { API_REGISTRY } from "@/lib/api-registry"
+import { API_REGISTRY } from "@/lib/utils/api-registry"
 import { ApiTokensManager } from "./ApiTokensManager"
 
 export const dynamic = "force-dynamic"

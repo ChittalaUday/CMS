@@ -1,13 +1,13 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
-import { createSession, getSession } from "@/lib/session"
+import { prisma } from "@/lib/db/prisma"
+import { createSession, getSession } from "@/lib/auth/session"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
 import { revalidatePath } from "next/cache"
 import { Role } from "@/generated/prisma/enums"
-import { ADMIN_ROLES } from "@/lib/roles"
-import { INVITE_EXPIRY_MS } from "@/lib/invite-utils"
+import { ADMIN_ROLES } from "@/lib/auth/roles"
+import { INVITE_EXPIRY_MS } from "@/lib/auth/invite-utils"
 
 const SALT_ROUNDS = 12
 

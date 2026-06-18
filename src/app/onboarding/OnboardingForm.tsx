@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { completeOnboarding } from "@/app/_actions/onboarding"
-import { useUploadThing } from "@/lib/uploadthing-react"
+import { useUploadThing } from "@/lib/upload"
 import {
   Loader2Icon,
   UserIcon,

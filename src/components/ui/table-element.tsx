@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { PlateElement, PlateElementProps } from 'platejs/react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 export function TableElement({ className, ...props }: PlateElementProps) {
   return (

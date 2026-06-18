@@ -1,21 +1,19 @@
 "use server"
 
-import crypto from "crypto"
 import { revalidatePath } from "next/cache"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@/generated/prisma/client"
-import { getSession } from "@/lib/session"
-import { uploadToR2, deleteFromR2 } from "@/lib/s3"
+import { getSession } from "@/lib/auth/session"
+import { uploadToStorage, deleteFromStorage, getImageDimensions } from "@/lib/upload"
 import { Role } from "@/generated/prisma/enums"
-import { getImageDimensions } from "@/lib/image-metadata"
 
 import {
   ADMIN_ROLES,
   BLOG_ACCESS_ROLES,
-} from "@/lib/roles"
-import { getClientScope, requireClientScope } from "@/lib/client-context"
-import { sanitizeBlogHtml } from "@/lib/sanitize"
-import { getClientIdFromRequestHeaders } from "@/lib/api-auth"
+} from "@/lib/auth/roles"
+import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
+import { sanitizeBlogHtml } from "@/lib/utils/sanitize"
+import { getClientIdFromRequestHeaders } from "@/lib/auth/api-auth"
 
 // --- Auth Helpers ---
 async function requireAuth() {
@@ -730,37 +728,19 @@ export async function uploadMediaItem(formData: FormData) {
   const file = formData.get("file") as File | null
   if (!file) throw new Error("No file provided")
 
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-
-  // Compute SHA-256 hash of the file content for deduplication
-  const shaKey = crypto.createHash("sha256").update(buffer).digest("hex")
-
   try {
-    // Check if the file already exists in the database
-    const existing = await prisma.media.findUnique({
-      where: { shaKey },
-    })
+    const { shaKey, buffer, url } = await uploadToStorage(file, "uploads")
 
-    if (existing) {
-      return existing
-    }
-
-    // Clean filename to avoid directory traversal or weird symbols
-    const cleanFilename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-    const key = `uploads/${cleanFilename}`
-
-    // Upload to R2 and get public URL
-    const fileUrl = await uploadToR2(key, buffer, file.type)
+    const existing = await prisma.media.findUnique({ where: { shaKey } })
+    if (existing) return existing
 
     const dimensions = getImageDimensions(buffer, file.type)
-
-    // Save record to DB
     const clientId = await requireClientScope()
+
     const media = await prisma.media.create({
       data: {
         filename: file.name,
-        url: fileUrl,
+        url,
         mimeType: file.type,
         size: file.size,
         width: dimensions?.width ?? null,
@@ -778,7 +758,6 @@ export async function uploadMediaItem(formData: FormData) {
   }
 }
 
-
 export async function deleteMediaItem(id: string) {
   const user = await requireBlogAccess()
   const media = await prisma.media.findUnique({ where: { id } })
@@ -788,12 +767,10 @@ export async function deleteMediaItem(id: string) {
     throw new Error("Unauthorized: you do not have access to this media item.")
   }
 
-  // Extract S3/R2 key from the URL
   const match = media.url.match(/uploads\/.*$/)
   const key = match ? match[0] : media.url.split("/").pop()!
 
-  // Delete from R2
-  await deleteFromR2(key).catch((err) => {
+  await deleteFromStorage(key).catch((err: unknown) => {
     console.warn(`Could not delete R2 object at key ${key}:`, err)
   })
 

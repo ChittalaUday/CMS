@@ -15,7 +15,7 @@ import {
   CopyIcon, LinkIcon, KeyRoundIcon, RefreshCwIcon, CheckIcon,
   ClockIcon, MailIcon, Loader2Icon,
 } from "lucide-react"
-import { Role } from "@/lib/roles"
+import { Role } from "@/lib/auth/roles"
 import PasswordIndicator from "@/components/PasswordIndicator"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"

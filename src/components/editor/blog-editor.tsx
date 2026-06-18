@@ -42,7 +42,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { MediaSelectorModal } from '@/components/MediaSelectorModal';
 import { EmojiPickerButton } from '@/components/ui/emoji-picker-button';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';

@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect, notFound } from "next/navigation"
-import { Role, CAREERS_ACCESS_ROLES } from "@/lib/roles"
+import { Role, CAREERS_ACCESS_ROLES } from "@/lib/auth/roles"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, Briefcase, MapPin } from "lucide-react"

@@ -1,8 +1,8 @@
 
 import { getPostBySlug, getPostById } from "@/app/dashboard/blogs/actions"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect, notFound } from "next/navigation"
-import { Role, ADMIN_ROLES } from "@/lib/roles"
+import { Role, ADMIN_ROLES } from "@/lib/auth/roles"
 import Link from "next/link"
 import { ArrowLeft, Edit, Calendar, User, Tag, Globe, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"

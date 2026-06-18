@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
-import { API_REGISTRY } from "@/lib/api-registry"
+import { API_REGISTRY } from "@/lib/utils/api-registry"
 import { ApiDocsPage } from "./ApiDocsPage"
 
 export const metadata = { title: "API Documentation" }

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useTransition } from "react"
 import type { Role } from "@/generated/prisma/enums"
-import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, isDeveloper } from "@/lib/roles"
+import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, isDeveloper } from "@/lib/auth/roles"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {

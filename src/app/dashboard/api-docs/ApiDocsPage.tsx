@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { type ApiCategory, type ApiEndpoint } from "@/lib/api-registry"
+import { type ApiCategory, type ApiEndpoint } from "@/lib/utils/api-registry"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {

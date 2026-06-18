@@ -1,7 +1,7 @@
 import type { FileRouter } from 'uploadthing/next';
 
 import { createUploadthing } from 'uploadthing/next';
-import { getSession } from '@/lib/session';
+import { getSession } from '@/lib/auth/session';
 
 const f = createUploadthing();
 

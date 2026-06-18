@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { validateApiKey } from "@/lib/api-auth"
-import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/rate-limit"
+import { prisma } from "@/lib/db/prisma"
+import { validateApiKey } from "@/lib/auth/api-auth"
+import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/utils/rate-limit"
 import { submitApplication } from "@/app/dashboard/careers/actions"
-import logger from "@/lib/logger"
+import { uploadViaUploadThing } from "@/lib/upload"
+import logger from "@/lib/utils/logger"
 
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request)
@@ -82,31 +83,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const ALLOWED_RESUME_TYPES = [
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ]
-
       if (uploadedFile && uploadedFile.size > 0) {
-        if (uploadedFile.size > 10 * 1024 * 1024) {
-          return NextResponse.json({ error: "Resume file must be under 10 MB" }, { status: 400 })
-        }
-        if (!ALLOWED_RESUME_TYPES.includes(uploadedFile.type)) {
-          return NextResponse.json({ error: "Resume must be a PDF or Word document (.pdf, .doc, .docx)" }, { status: 400 })
-        }
-        const { UTApi } = await import("uploadthing/server")
-        const utapi = new UTApi()
-        const uploadResponse = await utapi.uploadFiles(uploadedFile)
-        if (uploadResponse.data) {
-          resumeUrl = uploadResponse.data.ufsUrl
+        try {
+          const uploaded = await uploadViaUploadThing(uploadedFile)
+          resumeUrl = uploaded.url
           if (fileQuestionIdForUpload) {
             answers = answers.filter((a) => a.questionId !== fileQuestionIdForUpload)
             answers.push({ questionId: fileQuestionIdForUpload, answer: resumeUrl })
           }
-        } else if (uploadResponse.error) {
-          logger.error({ err: uploadResponse.error }, "api/public/careers/apply resume upload failed")
-          return NextResponse.json({ error: "Failed to upload resume" }, { status: 500 })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to upload resume"
+          const status = msg.includes("not allowed") || msg.includes("exceeds") ? 400 : 500
+          logger.error({ err }, "api/public/careers/apply resume upload failed")
+          return NextResponse.json({ error: msg }, { status })
         }
       }
 

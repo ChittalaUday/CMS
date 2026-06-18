@@ -5,11 +5,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { cookies } from "next/headers"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 import { Building2 } from "lucide-react"
 
 import { DashboardBreadcrumbs } from "@/components/DashboardBreadcrumbs"

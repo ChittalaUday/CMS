@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
-import { Role, ADMIN_ROLES } from "@/lib/roles"
+import { Role, ADMIN_ROLES } from "@/lib/auth/roles"
 import { getEditorsPaginated } from "@/app/_actions/users"
 import { UserList } from "./UserList"
 

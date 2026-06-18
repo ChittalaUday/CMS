@@ -29,7 +29,7 @@ import { FixedToolbar } from '@/components/ui/fixed-toolbar';
 import { ToolbarGroup, ToolbarButton } from '@/components/ui/toolbar';
 import { MarkToolbarButton } from '@/components/ui/mark-toolbar-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 import { 
   BoldIcon, 
   ItalicIcon, 

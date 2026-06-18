@@ -1,9 +1,9 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
-import { getSession } from "@/lib/session"
+import { prisma } from "@/lib/db/prisma"
+import { getSession } from "@/lib/auth/session"
 import { revalidatePath } from "next/cache"
-import { actionClient } from "@/lib/safe-action"
+import { actionClient } from "@/lib/utils/safe-action"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
 

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils/utils"
 import { getRevisionComparison, publishPostDraftRevision } from "./actions"
 
 // --- Word-level diff (for title) ---

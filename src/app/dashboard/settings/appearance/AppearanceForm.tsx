@@ -3,7 +3,7 @@
 import { useTheme } from "next-themes"
 import { Separator } from "@/components/ui/separator"
 import { MonitorIcon, SunIcon, MoonIcon, CheckIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils/utils"
 import { ACCENT_PRESETS, useAccentColor } from "@/hooks/use-accent-color"
 import { useMounted } from "@/hooks/use-mounted"
 

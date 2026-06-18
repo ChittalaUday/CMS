@@ -1,5 +1,5 @@
 import { getInviteByToken } from "@/app/_actions/invites"
-import { getInviteStatus } from "@/lib/invite-utils"
+import { getInviteStatus } from "@/lib/auth/invite-utils"
 import { notFound } from "next/navigation"
 import { InviteSetupForm } from "./InviteSetupForm"
 import { GalleryVerticalEndIcon, CheckCircle2Icon, ClockIcon } from "lucide-react"

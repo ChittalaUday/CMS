@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { generateApiKey, revokeApiKey } from "./actions"
-import { API_REGISTRY, type ApiCategory } from "@/lib/api-registry"
+import { API_REGISTRY, type ApiCategory } from "@/lib/utils/api-registry"
 import { toast } from "sonner"
 import { Copy, Check, KeyRound, Plus, Loader2, AlertTriangle, Shield } from "lucide-react"
 import { useRouter } from "next/navigation"

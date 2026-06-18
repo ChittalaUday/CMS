@@ -1,8 +1,8 @@
 import "server-only"
-import { getSession } from "./session"
+import { getSession } from "@/lib/auth/session"
 import { Role } from "@/generated/prisma/enums"
 import { cookies } from "next/headers"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 
 export async function getClientScope(): Promise<string | null> {
   const session = await getSession()

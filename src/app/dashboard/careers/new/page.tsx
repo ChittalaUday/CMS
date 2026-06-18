@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
-import { Role, CAREERS_ACCESS_ROLES } from "@/lib/roles"
+import { Role, CAREERS_ACCESS_ROLES } from "@/lib/auth/roles"
 import { JobForm } from "../JobForm"
 
 export const dynamic = "force-dynamic"

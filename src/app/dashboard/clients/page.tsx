@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { Role } from "@/generated/prisma/enums"
 import { getClientsPaginated } from "./actions"
 import { ClientsTableClient } from "./ClientsTableClient"

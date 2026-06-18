@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useAction } from "next-safe-action/hooks"
 import { createApiToken, revokeApiToken } from "@/app/_actions/api-tokens"
-import { type ApiCategory } from "@/lib/api-registry"
+import { type ApiCategory } from "@/lib/utils/api-registry"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

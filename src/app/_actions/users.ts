@@ -1,21 +1,21 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { Role } from "@/generated/prisma/enums"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
 import { revalidatePath } from "next/cache"
-import { actionClient } from "@/lib/safe-action"
+import { actionClient } from "@/lib/utils/safe-action"
 import { z } from "zod"
 import {
   ADMIN_ROLES,
   MANAGEABLE_BY_SUPER_ADMIN,
   MANAGEABLE_BY_ADMIN,
-} from "@/lib/roles"
-import { INVITE_EXPIRY_MS } from "@/lib/invite-utils"
-import { getClientScope } from "@/lib/client-context"
+} from "@/lib/auth/roles"
+import { INVITE_EXPIRY_MS } from "@/lib/auth/invite-utils"
+import { getClientScope } from "@/lib/utils/client-context"
 
 const SALT_ROUNDS = 12
 

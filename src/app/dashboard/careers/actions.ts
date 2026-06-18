@@ -1,20 +1,20 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@/generated/prisma/client"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { Role, QueueStatus } from "@/generated/prisma/enums"
 import { processQueue, calculateAtsScoreInternal, generateJobKeywords } from "@/lib/queues/ats-queue"
-import { generateText } from "@/lib/ai"
+import { generateText } from "@/lib/ai/ai"
 import {
   ADMIN_ROLES,
   CAREERS_ACCESS_ROLES,
   CAREERS_ADMIN_ROLES,
-} from "@/lib/roles"
-import { getClientScope, requireClientScope } from "@/lib/client-context"
-import { getClientIdFromRequestHeaders } from "@/lib/api-auth"
-import { sanitizePlainText } from "@/lib/sanitize"
+} from "@/lib/auth/roles"
+import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
+import { getClientIdFromRequestHeaders } from "@/lib/auth/api-auth"
+import { sanitizePlainText } from "@/lib/utils/sanitize"
 import { z } from "zod"
 
 const MAX_DRAFTS = 10

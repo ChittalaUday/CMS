@@ -1,13 +1,13 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
-import { getSession } from "@/lib/session"
+import { prisma } from "@/lib/db/prisma"
+import { getSession } from "@/lib/auth/session"
 import { Role } from "@/generated/prisma/enums"
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { randomBytes, createHash } from "crypto"
 import { z } from "zod"
-import { actionClient } from "@/lib/safe-action"
+import { actionClient } from "@/lib/utils/safe-action"
 
 async function requireSuperAdmin() {
   const session = await getSession()
@@ -157,7 +157,7 @@ export async function getClientStats(clientId: string) {
 
 // ── API Key management ────────────────────────────────────────────────────────
 
-import { getAllScopeIds } from "@/lib/api-registry"
+import { getAllScopeIds } from "@/lib/utils/api-registry"
 
 export async function listApiKeys(clientId: string) {
   await requireSuperAdmin()
@@ -235,6 +235,36 @@ export async function revokeApiKey(keyId: string, clientId: string) {
     data: { revokedAt: new Date() },
   })
   revalidatePath(`/dashboard/clients/${clientId}`)
+}
+
+// ── Security config ───────────────────────────────────────────────────────────
+
+export async function getClientSecurityConfig(clientId: string) {
+  await requireSuperAdmin()
+  return prisma.clientSecurityConfig.findUnique({ where: { clientId } })
+}
+
+const securityConfigSchema = z.object({
+  apiRateLimitRpm: z.number().int().min(1).max(10000),
+  apiRateLimitBurst: z.number().int().min(1).max(1000),
+  maxApiKeys: z.number().int().min(1).max(100),
+  allowedOrigins: z.array(z.string().min(1)).default([]),
+  allowedIps: z.array(z.string().min(1)).default([]),
+})
+
+export async function upsertClientSecurityConfig(
+  clientId: string,
+  data: z.infer<typeof securityConfigSchema>
+) {
+  await requireSuperAdmin()
+  const parsed = securityConfigSchema.parse(data)
+  const config = await prisma.clientSecurityConfig.upsert({
+    where: { clientId },
+    create: { clientId, ...parsed },
+    update: parsed,
+  })
+  revalidatePath(`/dashboard/clients/${clientId}`)
+  return config
 }
 
 // ── Paginated client list ─────────────────────────────────────────────────────

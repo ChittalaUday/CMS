@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { QueueStatus } from "@/generated/prisma/enums"
 import { atsQueue, keywordQueue } from "./queue-manager"
 import { queueEvents, activeAtsTaskIds, activeKeywordTaskIds } from "./queue-events"
-import { generateText, computeSemanticSimilarity } from "@/lib/ai"
+import { generateText, computeSemanticSimilarity } from "@/lib/ai/ai"
 
 // Auto-healing and queue recovery loader
 export async function initializeQueues() {

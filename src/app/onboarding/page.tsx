@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import { OnboardingForm } from "./OnboardingForm"
 import { GalleryVerticalEndIcon } from "lucide-react"

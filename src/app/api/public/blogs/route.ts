@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { validateApiKey } from "@/lib/api-auth"
-import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/rate-limit"
-import logger from "@/lib/logger"
+import { prisma } from "@/lib/db/prisma"
+import { validateApiKey } from "@/lib/auth/api-auth"
+import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/utils/rate-limit"
+import logger from "@/lib/utils/logger"
 
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request)

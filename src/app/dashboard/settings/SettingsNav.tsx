@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { UserIcon, PaletteIcon, KeyRoundIcon, ShieldIcon } from "lucide-react"
-import { type Role, Role as RoleEnum } from "@/lib/roles"
+import { UserIcon, PaletteIcon, KeyRoundIcon, ShieldIcon, ServerIcon } from "lucide-react"
+import { type Role, Role as RoleEnum } from "@/lib/auth/roles"
 
 const BASE_NAV_ITEMS = [
   { href: "/dashboard/settings/profile",    label: "Personal Info", icon: UserIcon    },
@@ -12,13 +12,21 @@ const BASE_NAV_ITEMS = [
 ]
 
 const ADMIN_NAV_ITEMS = [
-  { href: "/dashboard/settings/api-tokens", label: "API Tokens", icon: ShieldIcon },
+  { href: "/dashboard/settings/api-tokens", label: "API Tokens",   icon: ShieldIcon  },
+]
+
+const SUPER_ADMIN_NAV_ITEMS = [
+  { href: "/dashboard/settings/system",     label: "System",        icon: ServerIcon  },
 ]
 
 export function SettingsNav({ role }: { role: Role }) {
   const pathname = usePathname()
-  // API Tokens in settings is ADMIN-only; SUPER_ADMIN manages tokens per-client
-  const navItems = role === RoleEnum.ADMIN ? [...BASE_NAV_ITEMS, ...ADMIN_NAV_ITEMS] : BASE_NAV_ITEMS
+  const navItems =
+    role === RoleEnum.SUPER_ADMIN
+      ? [...BASE_NAV_ITEMS, ...SUPER_ADMIN_NAV_ITEMS]
+      : role === RoleEnum.ADMIN
+      ? [...BASE_NAV_ITEMS, ...ADMIN_NAV_ITEMS]
+      : BASE_NAV_ITEMS
 
   return (
     <div className="space-y-4">

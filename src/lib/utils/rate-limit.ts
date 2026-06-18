@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 
 // Token bucket per client — resets counters when the minute window rolls over.
 // In serverless environments this is per-instance (best-effort), not distributed.

@@ -1,8 +1,8 @@
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
-import { Role } from "@/lib/roles"
+import { Role } from "@/lib/auth/roles"
 import { BlogEditor } from "@/components/editor/blog-editor"
-import { isAIConfigured } from "@/lib/ai-config"
+import { isAIConfigured } from "@/lib/ai/ai-config"
 
 export const dynamic = "force-dynamic"
 

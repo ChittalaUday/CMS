@@ -1,9 +1,9 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db/prisma"
 import bcrypt from "bcryptjs"
-import { createSession, deleteSession, getSession } from "@/lib/session"
-import { actionClient } from "@/lib/safe-action"
+import { createSession, deleteSession, getSession } from "@/lib/auth/session"
+import { actionClient } from "@/lib/utils/safe-action"
 import { z } from "zod"
 
 // Pre-computed at module load time so it's ready on the first request.

@@ -47,7 +47,7 @@ import {
 import { PostMetaHoverCard } from "./PostMetaHoverCard"
 import { PublishButton } from "./PublishButton"
 import { PublishRevisionButton } from "./PublishRevisionButton"
-import { Role } from "@/lib/roles"
+import { Role } from "@/lib/auth/roles"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 

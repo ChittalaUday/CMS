@@ -1,7 +1,7 @@
 "use server"
 
 import { cookies } from "next/headers"
-import { getSession } from "@/lib/session"
+import { getSession } from "@/lib/auth/session"
 import { Role } from "@/generated/prisma/enums"
 
 export async function setActiveClient(clientId: string | null) {
