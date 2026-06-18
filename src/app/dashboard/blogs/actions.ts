@@ -1,11 +1,14 @@
 "use server"
 
+import crypto from "crypto"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/session"
 import { uploadToR2, deleteFromR2 } from "@/lib/s3"
 import { Role } from "@/generated/prisma/enums"
+import { getImageDimensions } from "@/lib/image-metadata"
+
 import {
   ADMIN_ROLES,
   BLOG_ACCESS_ROLES,
@@ -98,17 +101,26 @@ function handlePrismaError(err: unknown, context?: string): never {
 }
 
 // --- Posts Actions ---
+const REVISION_INCLUDE = {
+  author: { select: { id: true, name: true, email: true } },
+  featuredImage: true,
+  categories: { include: { category: true } },
+  _count: { select: { comments: true, likes: true, views: true } },
+} as const
+
 export async function getPosts() {
   const user = await requireBlogAccess()
-  const where: Prisma.PostWhereInput = user.role === Role.EDITOR ? { authorId: user.id } : {}
+  // Exclude draft revisions (draftParentId != null) — they appear as children in the table
+  const where: Prisma.PostWhereInput = {
+    draftParentId: null,
+    ...(user.role === Role.EDITOR ? { authorId: user.id } : {}),
+  }
   return await prisma.post.findMany({
     where,
     orderBy: { createdAt: "desc" },
     include: {
-      author: { select: { id: true, name: true, email: true } },
-      featuredImage: true,
-      categories: { include: { category: true } },
-      _count: { select: { comments: true, likes: true, views: true } },
+      ...REVISION_INCLUDE,
+      drafts: { take: 1, include: REVISION_INCLUDE },
     },
   })
 }
@@ -125,7 +137,8 @@ export async function getPostsPaginated(params: {
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
   const skip = (page - 1) * pageSize
 
-  const where: Prisma.PostWhereInput = {}
+  // Exclude draft revisions — they are shown as child rows in the table
+  const where: Prisma.PostWhereInput = { draftParentId: null }
 
   // Editors can only see their own posts
   if (user.role === Role.EDITOR) {
@@ -150,10 +163,8 @@ export async function getPostsPaginated(params: {
       skip,
       take: pageSize,
       include: {
-        author: { select: { id: true, name: true, email: true } },
-        featuredImage: true,
-        categories: { include: { category: true } },
-        _count: { select: { comments: true, likes: true, views: true } },
+        ...REVISION_INCLUDE,
+        drafts: { take: 1, include: REVISION_INCLUDE },
       },
     }),
     prisma.post.count({ where }),
@@ -180,6 +191,15 @@ export async function getPostById(id: string) {
         include: { author: { select: { name: true, email: true } } },
       },
       media: { include: { media: true } },
+      // Include parent link and any pending draft revision
+      draftParent: { select: { id: true, slug: true, title: true, published: true } },
+      drafts: {
+        take: 1,
+        include: {
+          featuredImage: true,
+          categories: { include: { category: true } },
+        },
+      },
     },
   })
   if (post && user.role === Role.EDITOR && post.authorId !== user.id) {
@@ -254,34 +274,38 @@ export async function createPost(data: PostInput) {
 export async function updatePost(id: string, data: PostInput) {
   const user = await requireBlogAccess()
 
-  if (user.role === Role.EDITOR) {
-    const existing = await prisma.post.findUnique({ where: { id }, select: { authorId: true } })
-    if (!existing) throw new Error("Post not found.")
-    if (existing.authorId !== user.id) throw new Error("Unauthorized: you can only edit your own posts.")
+  const existing = await prisma.post.findUnique({
+    where: { id },
+    select: { authorId: true, draftParentId: true, slug: true },
+  })
+  if (!existing) throw new Error("Post not found.")
+
+  if (user.role === Role.EDITOR && existing.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only edit your own posts.")
   }
 
+  // Draft revisions keep their internal --draft slug; store the proposed published slug in metadata
+  const isRevision = existing.draftParentId !== null
+  const slugToStore = isRevision ? existing.slug : data.slug
+  const metadataToStore = isRevision
+    ? { ...(data.metadata as Record<string, unknown>), proposedSlug: data.slug }
+    : data.metadata || {}
+
   try {
-    // Clear existing category joins
-    await prisma.postCategory.deleteMany({
-      where: { postId: id },
-    })
+    await prisma.postCategory.deleteMany({ where: { postId: id } })
 
     const post = await prisma.post.update({
       where: { id },
       data: {
         title: data.title,
-        slug: data.slug,
+        slug: slugToStore,
         content: data.content,
         contentJson: data.contentJson || {},
-        published: data.published ?? false,
+        published: isRevision ? false : (data.published ?? false),
         featuredImageId: data.featuredImageId || null,
-        metadata: data.metadata || {},
+        metadata: metadataToStore,
         categories: data.categoryIds
-          ? {
-              create: data.categoryIds.map((catId) => ({
-                categoryId: catId,
-              })),
-            }
+          ? { create: data.categoryIds.map((catId) => ({ categoryId: catId })) }
           : undefined,
       },
     })
@@ -290,16 +314,13 @@ export async function updatePost(id: string, data: PostInput) {
     revalidatePath(`/dashboard/blogs/${id}/edit`)
     return post
   } catch (err) {
-    // P2002 on slug: if the conflicting slug belongs to THIS post, it's a no-op
-    // (happens during auto-save when the slug hasn't changed)
     if (
       isPrismaKnownError(err) &&
       err.code === "P2002" &&
       (err.meta?.target as string[] | undefined)?.includes("slug")
     ) {
-      const owner = await prisma.post.findUnique({ where: { slug: data.slug } })
+      const owner = await prisma.post.findUnique({ where: { slug: slugToStore } })
       if (owner && owner.id === id) {
-        // Slug belongs to this post — safe to ignore; re-fetch and return
         return await prisma.post.findUnique({ where: { id } })
       }
     }
@@ -328,6 +349,154 @@ export async function togglePublished(id: string) {
   } catch (err) {
     handlePrismaError(err, "togglePublished")
   }
+}
+
+// Creates a draft revision for a published post, or updates the existing one.
+// The revision is a shadow copy — the published post is untouched until publishPostDraftRevision is called.
+export async function upsertPostDraftRevision(parentId: string, data: PostInput) {
+  const user = await requireBlogAccess()
+
+  const parent = await prisma.post.findUnique({
+    where: { id: parentId },
+    include: { drafts: { take: 1, select: { id: true, slug: true } } },
+  })
+  if (!parent) throw new Error("Post not found.")
+  if (!parent.published) throw new Error("Draft revisions are only for published posts.")
+  if (parent.draftParentId) throw new Error("Cannot create a revision of a revision.")
+
+  if (user.role === Role.EDITOR && parent.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only edit your own posts.")
+  }
+
+  const existingDraft = parent.drafts[0]
+
+  try {
+    if (existingDraft) {
+      await prisma.postCategory.deleteMany({ where: { postId: existingDraft.id } })
+      const updated = await prisma.post.update({
+        where: { id: existingDraft.id },
+        data: {
+          title: data.title,
+          slug: existingDraft.slug,
+          content: data.content,
+          contentJson: data.contentJson || {},
+          published: false,
+          featuredImageId: data.featuredImageId || null,
+          metadata: { ...(data.metadata as Record<string, unknown>), proposedSlug: data.slug },
+          categories: data.categoryIds
+            ? { create: data.categoryIds.map((catId) => ({ categoryId: catId })) }
+            : undefined,
+        },
+      })
+      revalidatePath("/dashboard/blogs")
+      return updated
+    }
+
+    // Create revision — slug must be unique; use parentSlug--draft
+    let draftSlug = `${parent.slug}--draft`
+    let attempt = 1
+    while (await prisma.post.findUnique({ where: { slug: draftSlug }, select: { id: true } })) {
+      draftSlug = `${parent.slug}--draft-${attempt++}`
+    }
+
+    const draft = await prisma.post.create({
+      data: {
+        title: data.title,
+        slug: draftSlug,
+        content: data.content,
+        contentJson: data.contentJson || {},
+        published: false,
+        authorId: parent.authorId,
+        featuredImageId: data.featuredImageId || null,
+        draftParentId: parentId,
+        metadata: { ...(data.metadata as Record<string, unknown>), proposedSlug: data.slug },
+        categories: data.categoryIds
+          ? { create: data.categoryIds.map((catId) => ({ categoryId: catId })) }
+          : undefined,
+      },
+    })
+    revalidatePath("/dashboard/blogs")
+    return draft
+  } catch (err) {
+    handlePrismaError(err, "upsertPostDraftRevision")
+  }
+}
+
+// Applies a draft revision to its parent published post, then deletes the revision.
+export async function publishPostDraftRevision(draftId: string) {
+  const user = await requireBlogAccess()
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can publish posts.")
+  }
+
+  const draft = await prisma.post.findUnique({
+    where: { id: draftId },
+    include: { categories: true },
+  })
+  if (!draft) throw new Error("Draft revision not found.")
+  if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
+
+  const proposedSlug = ((draft.metadata as Record<string, unknown>)?.proposedSlug as string) || null
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.postCategory.deleteMany({ where: { postId: draft.draftParentId! } })
+
+      await tx.post.update({
+        where: { id: draft.draftParentId! },
+        data: {
+          title: draft.title,
+          ...(proposedSlug ? { slug: proposedSlug } : {}),
+          content: draft.content,
+          contentJson: draft.contentJson || {},
+          published: true,
+          featuredImageId: draft.featuredImageId || null,
+          metadata: (() => {
+            const m = { ...(draft.metadata as Record<string, unknown>) }
+            delete m.proposedSlug
+            return m
+          })() as Prisma.InputJsonValue,
+          categories: draft.categories.length > 0
+            ? { create: draft.categories.map((c) => ({ categoryId: c.categoryId })) }
+            : undefined,
+        },
+      })
+
+      await tx.post.delete({ where: { id: draftId } })
+    })
+
+    revalidatePath("/dashboard/blogs")
+    if (proposedSlug) revalidatePath(`/posts/${proposedSlug}`)
+    return { parentId: draft.draftParentId }
+  } catch (err) {
+    handlePrismaError(err, "publishPostDraftRevision")
+  }
+}
+
+// Fetches both the published parent and its draft revision for the comparison dialog.
+export async function getRevisionComparison(draftId: string) {
+  await requireBlogAccess()
+
+  const draft = await prisma.post.findUnique({
+    where: { id: draftId },
+    include: {
+      categories: { include: { category: true } },
+      featuredImage: true,
+    },
+  })
+  if (!draft || !draft.draftParentId) throw new Error("Draft revision not found.")
+
+  const parent = await prisma.post.findUnique({
+    where: { id: draft.draftParentId },
+    include: {
+      categories: { include: { category: true } },
+      featuredImage: true,
+    },
+  })
+  if (!parent) throw new Error("Parent post not found.")
+
+  return { draft, parent }
 }
 
 export async function deletePost(id: string) {
@@ -458,13 +627,27 @@ export async function uploadMediaItem(formData: FormData) {
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  // Clean filename to avoid directory traversal or weird symbols
-  const cleanFilename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-  const key = `uploads/${cleanFilename}`
+  // Compute SHA-256 hash of the file content for deduplication
+  const shaKey = crypto.createHash("sha256").update(buffer).digest("hex")
 
   try {
+    // Check if the file already exists in the database
+    const existing = await prisma.media.findUnique({
+      where: { shaKey },
+    })
+
+    if (existing) {
+      return existing
+    }
+
+    // Clean filename to avoid directory traversal or weird symbols
+    const cleanFilename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
+    const key = `uploads/${cleanFilename}`
+
     // Upload to R2 and get public URL
     const fileUrl = await uploadToR2(key, buffer, file.type)
+
+    const dimensions = getImageDimensions(buffer, file.type)
 
     // Save record to DB
     const media = await prisma.media.create({
@@ -473,7 +656,10 @@ export async function uploadMediaItem(formData: FormData) {
         url: fileUrl,
         mimeType: file.type,
         size: file.size,
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
         userId: user.id,
+        shaKey,
       },
     })
 
@@ -483,6 +669,7 @@ export async function uploadMediaItem(formData: FormData) {
     handlePrismaError(err, "uploadMediaItem")
   }
 }
+
 
 export async function deleteMediaItem(id: string) {
   await requireBlogAccess()

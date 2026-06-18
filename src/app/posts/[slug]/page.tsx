@@ -1,3 +1,4 @@
+
 import { getPostBySlug } from "@/app/dashboard/blogs/actions"
 import { getSession } from "@/lib/session"
 import { redirect, notFound } from "next/navigation"
@@ -21,7 +22,7 @@ export default async function PostPreviewPage({ params }: PageProps) {
 
   if (!post) notFound()
 
-  const canEdit = (ADMIN_ROLES as readonly Role[]).includes(user.role as Role) || user.id === post.author.id
+  const canEdit = (ADMIN_ROLES as readonly Role[]).includes(user.role as Role) || user.id === post.author?.id
   const categories = post.categories ?? []
 
   return (
@@ -97,7 +98,7 @@ export default async function PostPreviewPage({ params }: PageProps) {
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-10 pb-8 border-b border-border/60">
           <span className="flex items-center gap-1.5 font-medium">
             <User className="size-3.5 text-muted-foreground/60" />
-            {post.author.name || post.author.email}
+            {post.author?.name || post.author?.email || "Unknown Author"}
           </span>
           <span className="flex items-center gap-1.5 font-mono text-xs">
             <Calendar className="size-3.5 text-muted-foreground/60" />

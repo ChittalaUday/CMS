@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -18,6 +18,9 @@ import {
   Activity,
   BarChart3,
   ExternalLink,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,6 +39,7 @@ import {
 } from "@/components/ui/sheet"
 import { PostMetaHoverCard } from "./PostMetaHoverCard"
 import { PublishButton } from "./PublishButton"
+import { PublishRevisionButton } from "./PublishRevisionButton"
 import { Role } from "@/lib/roles"
 
 interface Author {
@@ -81,6 +85,7 @@ interface Post {
     likes: number
     comments: number
   }
+  drafts?: Post[]
 }
 
 interface BlogsTableClientProps {
@@ -95,8 +100,14 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
   const router = useRouter()
 
   const handleRowClick = (post: Post) => {
-    setSelectedPost(post)
-    setIsSheetOpen(true)
+    const hasDraft = post.published && (post.drafts?.length ?? 0) > 0
+    const draft = post.drafts?.[0]
+    if (hasDraft && draft) {
+      router.push(`/editor?id=${draft.id}`)
+    } else {
+      setSelectedPost(post)
+      setIsSheetOpen(true)
+    }
   }
 
   const handleActionClick = (e: React.MouseEvent) => {
@@ -134,187 +145,239 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
               {posts.map((post) => {
                 const seoDesc = (post.metadata as any)?.seoDescription || ""
                 const tags: string[] = (post.metadata as any)?.tags || []
+                const hasDraft = post.published && (post.drafts?.length ?? 0) > 0
+                const draft = post.drafts?.[0]
 
                 return (
-                  <tr
-                    key={post.id}
-                    onClick={() => handleRowClick(post)}
-                    className="group hover:bg-muted/20 cursor-pointer transition-colors duration-150"
-                  >
-                    {/* Title */}
-                    <td className="px-5 py-4">
-                      <PostMetaHoverCard
-                        slug={post.slug}
-                        seoDescription={seoDesc}
-                        tags={tags}
-                        categories={post.categories}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="size-10 rounded-lg overflow-hidden border border-border/50 bg-muted/40 shrink-0 flex items-center justify-center">
-                            {post.featuredImage ? (
-                              <img
-                                src={post.featuredImage.url}
-                                alt={post.title}
-                                className="object-cover w-full h-full"
-                              />
-                            ) : (
-                              <BookOpen className="size-4 text-muted-foreground/40" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            {post.categories.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-1">
-                                {post.categories.slice(0, 2).map((c) => (
-                                  <span
-                                    key={c.categoryId}
-                                    className="text-[9px] font-bold uppercase tracking-wider bg-primary/8 text-primary/80 border border-primary/15 px-1.5 py-px rounded"
-                                  >
-                                    {c.category.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            <p className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
-                              {post.title}
-                            </p>
-                            {seoDesc && (
-                              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                                {seoDesc}
+                  <Fragment key={post.id}>
+                    <tr
+                      onClick={() => handleRowClick(post)}
+                      className="group hover:bg-muted/20 cursor-pointer transition-colors duration-150"
+                    >
+                      {/* Title */}
+                      <td className="px-5 py-4">
+                        <PostMetaHoverCard
+                          slug={post.slug}
+                          seoDescription={seoDesc}
+                          tags={tags}
+                          categories={post.categories}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="size-10 rounded-lg overflow-hidden border border-border/50 bg-muted/40 shrink-0 flex items-center justify-center">
+                              {post.featuredImage ? (
+                                <img
+                                  src={post.featuredImage.url}
+                                  alt={post.title}
+                                  className="object-cover w-full h-full"
+                                />
+                              ) : (
+                                <BookOpen className="size-4 text-muted-foreground/40" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              {post.categories.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-1">
+                                  {post.categories.slice(0, 2).map((c) => (
+                                    <span
+                                      key={c.categoryId}
+                                      className="text-[9px] font-bold uppercase tracking-wider bg-primary/8 text-primary/80 border border-primary/15 px-1.5 py-px rounded"
+                                    >
+                                      {c.category.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <p className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
+                                {post.title}
                               </p>
-                            )}
+                              {seoDesc && (
+                                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                                  {seoDesc}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </PostMetaHoverCard>
-                    </td>
+                        </PostMetaHoverCard>
+                      </td>
 
-                    {/* Status */}
-                    <td className="px-4 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                          post.published
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                            : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
-                        }`}
-                      >
-                        {post.published ? (
-                          <>
-                            <CheckCircle2 className="size-3" /> Published
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle className="size-3" /> Draft
-                          </>
-                        )}
-                      </span>
-                    </td>
-
-                    {/* Author */}
-                    <td className="px-4 py-4 hidden md:table-cell">
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium max-w-[130px] truncate">
-                        <User className="size-3 shrink-0 text-muted-foreground/60" />
-                        {post.author?.name || post.author?.email || "Deleted user"}
-                      </span>
-                    </td>
-
-                    {/* Date */}
-                    <td className="px-4 py-4 hidden lg:table-cell">
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-                        <Calendar className="size-3 text-muted-foreground/60" />
-                        {new Date(post.createdAt).toLocaleDateString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </td>
-
-                    {/* Stats */}
-                    <td className="px-4 py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-3 text-xs font-semibold text-muted-foreground/80">
-                        <span className="flex items-center gap-1" title="Views">
-                          <Eye className="size-3.5 text-muted-foreground/50" />
-                          {post._count.views}
-                        </span>
-                        <span className="flex items-center gap-1" title="Likes">
-                          <Heart className="size-3.5 text-muted-foreground/50" />
-                          {post._count.likes}
-                        </span>
-                        <span className="flex items-center gap-1" title="Comments">
-                          <MessageSquare className="size-3.5 text-muted-foreground/50" />
-                          {post._count.comments}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-3 sm:px-4 py-4" onClick={handleActionClick}>
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Preview + Publish — hidden on mobile, shown sm+ */}
-                        <div className="hidden sm:contents">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 rounded-lg hover:bg-muted"
-                            title="Preview post"
-                            asChild
+                      {/* Status */}
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit ${
+                              post.published
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                            }`}
                           >
-                            <a
-                              href={`/posts/${post.slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Eye className="size-3.5 text-muted-foreground" />
-                            </a>
-                          </Button>
-
-                          {canPublish && (
-                            <PublishButton
-                              postId={post.id}
-                              postTitle={post.title}
-                              isPublished={post.published}
-                            />
+                            {post.published ? (
+                              <><CheckCircle2 className="size-3" /> Published</>
+                            ) : (
+                              <><AlertTriangle className="size-3" /> Draft</>
+                            )}
+                          </span>
+                          {hasDraft && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 w-fit">
+                              <GitBranch className="size-2.5" /> Revision pending
+                            </span>
                           )}
                         </div>
+                      </td>
 
-                        {/* ⋯ dropdown — Edit + Delete */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                      {/* Author */}
+                      <td className="px-4 py-4 hidden md:table-cell">
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium max-w-[130px] truncate">
+                          <User className="size-3 shrink-0 text-muted-foreground/60" />
+                          {post.author?.name || post.author?.email || "Deleted user"}
+                        </span>
+                      </td>
+
+                      {/* Date */}
+                      <td className="px-4 py-4 hidden lg:table-cell">
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+                          <Calendar className="size-3 text-muted-foreground/60" />
+                          {new Date(post.createdAt).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </td>
+
+                      {/* Stats */}
+                      <td className="px-4 py-4 hidden lg:table-cell">
+                        <div className="flex items-center gap-3 text-xs font-semibold text-muted-foreground/80">
+                          <span className="flex items-center gap-1" title="Views">
+                            <Eye className="size-3.5 text-muted-foreground/50" />
+                            {post._count.views}
+                          </span>
+                          <span className="flex items-center gap-1" title="Likes">
+                            <Heart className="size-3.5 text-muted-foreground/50" />
+                            {post._count.likes}
+                          </span>
+                          <span className="flex items-center gap-1" title="Comments">
+                            <MessageSquare className="size-3.5 text-muted-foreground/50" />
+                            {post._count.comments}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-3 sm:px-4 py-4" onClick={handleActionClick}>
+                        <div className="flex items-center justify-end gap-1">
+                          <div className="hidden sm:contents">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="size-8 rounded-lg data-[state=open]:opacity-100 hover:bg-muted"
+                              className="size-8 rounded-lg hover:bg-muted"
+                              title="Preview post"
+                              asChild
                             >
-                              <MoreHorizontal className="size-4 text-muted-foreground" />
+                              <a href={`/posts/${post.slug}`} target="_blank" rel="noopener noreferrer">
+                                <Eye className="size-3.5 text-muted-foreground" />
+                              </a>
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-36 text-sm">
-                            <DropdownMenuItem asChild>
-                              <Link
-                                href={`/dashboard/blogs/${post.id}/edit`}
-                                className="flex items-center gap-2 cursor-pointer"
+                            {canPublish && (
+                              <PublishButton
+                                postId={post.id}
+                                postTitle={post.title}
+                                isPublished={post.published}
+                              />
+                            )}
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 rounded-lg data-[state=open]:opacity-100 hover:bg-muted"
                               >
-                                <Edit className="size-3.5 text-muted-foreground" />
-                                Edit
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem asChild>
-                              <form action={handleDelete} className="w-full">
-                                <input type="hidden" name="id" value={post.id} />
-                                <button
-                                  type="submit"
-                                  className="w-full flex items-center gap-2 text-destructive cursor-pointer"
+                                <MoreHorizontal className="size-4 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-36 text-sm">
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/dashboard/blogs/${post.id}/edit`}
+                                  className="flex items-center gap-2 cursor-pointer"
                                 >
-                                  <Trash2 className="size-3.5" />
-                                  Delete
-                                </button>
-                              </form>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </td>
-                  </tr>
+                                  <Edit className="size-3.5 text-muted-foreground" />
+                                  Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                <form action={handleDelete} className="w-full">
+                                  <input type="hidden" name="id" value={post.id} />
+                                  <button
+                                    type="submit"
+                                    className="w-full flex items-center gap-2 text-destructive cursor-pointer"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                    Delete
+                                  </button>
+                                </form>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Draft revision child row */}
+                    {hasDraft && draft && (
+                      <tr
+                        key={`${post.id}-draft`}
+                        onClick={() => router.push(`/editor?id=${draft.id}`)}
+                        className="bg-amber-500/5 border-l-2 border-amber-400/40 hover:bg-amber-500/10 cursor-pointer transition-colors duration-150"
+                      >
+                        <td className="pl-16 pr-5 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <GitBranch className="size-3.5 text-amber-500 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-foreground/80 line-clamp-1">
+                                {draft.title}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                Draft revision · last updated {new Date(draft.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                            <AlertTriangle className="size-3" /> Pending Review
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell" />
+                        <td className="px-4 py-3 hidden lg:table-cell" />
+                        <td className="px-4 py-3 hidden lg:table-cell" />
+                        <td className="px-3 sm:px-4 py-3" onClick={handleActionClick}>
+                          <div className="flex items-center justify-end gap-1">
+                            <div className="hidden sm:contents">
+                              {canPublish && (
+                                <PublishRevisionButton
+                                  draftId={draft.id}
+                                  parentTitle={post.title}
+                                />
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 rounded-lg hover:bg-muted"
+                              title="Edit revision"
+                              asChild
+                            >
+                              <Link href={`/editor?id=${draft.id}`}>
+                                <Edit className="size-3.5 text-muted-foreground" />
+                              </Link>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -324,7 +387,7 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
 
       {/* Slide-over Preview Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-4xl p-0 flex flex-col h-full bg-background border-l border-border">
+        <SheetContent side="right" className="w-full sm:max-w-4xl data-[side=right]:sm:max-w-4xl !sm:max-w-4xl p-0 flex flex-col h-full bg-background border-l border-border">
           {selectedPost && (
             <>
               {/* Header section with cover image or header info */}

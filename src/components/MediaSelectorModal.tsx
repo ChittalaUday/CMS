@@ -57,7 +57,12 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
       formData.append("file", file)
       
       const newMedia = await uploadMediaItem(formData)
-      setMediaItems((prev) => [newMedia as any, ...prev])
+      setMediaItems((prev) => {
+        if (prev.some((item) => item.id === newMedia.id)) {
+          return prev;
+        }
+        return [newMedia as any, ...prev];
+      })
       toast.success("File uploaded successfully")
     } catch (err: any) {
       toast.error(err.message || "File upload failed")

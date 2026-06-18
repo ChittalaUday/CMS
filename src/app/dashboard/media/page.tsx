@@ -71,7 +71,12 @@ export default function MediaLibraryPage() {
         const formData = new FormData()
         formData.append("file", files[i])
         const newMedia = await uploadMediaItem(formData)
-        setMediaItems((prev) => [newMedia as any, ...prev])
+        setMediaItems((prev) => {
+          if (prev.some((item) => item.id === newMedia.id)) {
+            return prev;
+          }
+          return [newMedia as any, ...prev];
+        })
       }
       toast.success("Uploaded successfully")
       setPage(1)

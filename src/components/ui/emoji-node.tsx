@@ -4,67 +4,31 @@ import * as React from 'react';
 
 import type { PlateElementProps } from 'platejs/react';
 
-import { EmojiInlineIndexSearch, insertEmoji } from '@platejs/emoji';
-import { EmojiPlugin } from '@platejs/emoji/react';
-import { PlateElement, usePluginOption } from 'platejs/react';
+import { PlateElement } from 'platejs/react';
+import { cn } from '@/lib/utils';
 
-import { useDebounce } from '@/hooks/use-debounce';
-
-import {
-  InlineCombobox,
-  InlineComboboxContent,
-  InlineComboboxEmpty,
-  InlineComboboxGroup,
-  InlineComboboxInput,
-  InlineComboboxItem,
-} from './inline-combobox';
-
-const TRAILING_COLON_REGEX = /:$/;
-
-export function EmojiInputElement(props: PlateElementProps) {
-  const { children, editor, element } = props;
-  const data = usePluginOption(EmojiPlugin, 'data')!;
-  const [value, setValue] = React.useState('');
-  const debouncedValue = useDebounce(value, 100);
-  const isPending = value !== debouncedValue;
-
-  const filteredEmojis = React.useMemo(() => {
-    if (debouncedValue.trim().length === 0) return [];
-
-    return EmojiInlineIndexSearch.getInstance(data)
-      .search(debouncedValue.replace(TRAILING_COLON_REGEX, ''))
-      .get();
-  }, [data, debouncedValue]);
+/**
+ * EmojiInputElement – renders the inline `:query` pill while the user
+ * searches for an emoji. The EmojiPlugin (withTriggerCombobox) drives
+ * selection/insertion — this component only provides the visual shell.
+ */
+export function EmojiInputElement({ className, ...props }: PlateElementProps) {
+  const { children, element } = props;
+  const query = (element as any).value ?? '';
 
   return (
-    <PlateElement as="span" {...props}>
-      <InlineCombobox
-        value={value}
-        element={element}
-        filter={false}
-        setValue={setValue}
-        trigger=":"
-        hideWhenNoValue
+    <PlateElement
+      as="span"
+      className={cn('inline-block', className)}
+      {...props}
+    >
+      <span
+        contentEditable={false}
+        className="select-none inline-flex items-center gap-0.5 rounded-sm bg-primary/10 border border-primary/20 px-1 text-sm text-primary"
       >
-        <InlineComboboxInput />
-
-        <InlineComboboxContent>
-          {!isPending && <InlineComboboxEmpty>No results</InlineComboboxEmpty>}
-
-          <InlineComboboxGroup>
-            {filteredEmojis.map((emoji) => (
-              <InlineComboboxItem
-                key={emoji.id}
-                value={emoji.name}
-                onClick={() => insertEmoji(editor, emoji)}
-              >
-                {emoji.skins[0].native} {emoji.name}
-              </InlineComboboxItem>
-            ))}
-          </InlineComboboxGroup>
-        </InlineComboboxContent>
-      </InlineCombobox>
-
+        <span className="font-bold">:</span>
+        <span>{query}</span>
+      </span>
       {children}
     </PlateElement>
   );

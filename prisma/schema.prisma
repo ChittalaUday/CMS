@@ -119,7 +119,12 @@ model Post {
   metadata        Json?          @default("{}")
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
-  
+
+  // Draft revision: a published post can have at most one pending revision
+  draftParentId   String?
+  draftParent     Post?          @relation("PostDraftVersion", fields: [draftParentId], references: [id], onDelete: Cascade)
+  drafts          Post[]         @relation("PostDraftVersion")
+
   comments        Comment[]
   likes           Like[]
   views           View[]
@@ -128,6 +133,7 @@ model Post {
 
   @@index([authorId])
   @@index([featuredImageId])
+  @@index([draftParentId])
 }
 
 model Category {
@@ -158,12 +164,14 @@ model Media {
   userId        String?
   user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt     DateTime    @default(now())
+  shaKey        String?     @unique
 
   featuredPosts Post[]      @relation("FeaturedImage")
   posts         PostMedia[]
 
   @@index([userId])
 }
+
 
 model PostMedia {
   postId  String
