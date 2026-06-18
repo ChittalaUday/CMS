@@ -12,7 +12,7 @@ import { z } from "zod"
 const DUMMY_HASH_PROMISE = bcrypt.hash("__timing_guard_never_matches__", 12)
 
 export const loginAction = actionClient
-  .schema(
+  .inputSchema(
     z.object({
       email: z.string().email(),
       password: z.string().min(1),

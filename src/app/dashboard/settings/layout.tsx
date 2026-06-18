@@ -28,7 +28,7 @@ export default async function SettingsLayout({
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar nav */}
         <aside className="w-full md:w-48 shrink-0">
-          <SettingsNav />
+          <SettingsNav role={user.role} />
         </aside>
 
         {/* Page content */}

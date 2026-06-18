@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useTransition } from "react"
 import type { Role } from "@/generated/prisma/enums"
-import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES } from "@/lib/roles"
+import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, isDeveloper } from "@/lib/roles"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -14,6 +14,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import {
   TerminalIcon,
@@ -24,10 +25,12 @@ import {
   BriefcaseIcon,
   SettingsIcon,
   LogOutIcon,
-  Activity,
+  Building2,
+  FileCodeIcon,
 } from "lucide-react"
 import { logoutAction } from "@/app/_actions/auth"
 import { toast } from "sonner"
+import { ClientSwitcher } from "@/app/dashboard/clients/ClientSwitcher"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: {
@@ -36,13 +39,19 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     email: string
     role: Role
     avatarUrl?: string | null
+    clientId?: string | null
   }
+  clients?: { id: string; name: string; slug: string }[]
+  activeClientId?: string | null
+  activeClientName?: string | null
 }
 
-export function AppSidebar({ user, ...props }: AppSidebarProps) {
+export function AppSidebar({ user, clients = [], activeClientId = null, activeClientName = null, ...props }: AppSidebarProps) {
   const isAdmin = (ADMIN_ROLES as readonly Role[]).includes(user.role)
   const canAccessBlogs = (BLOG_ACCESS_ROLES as readonly Role[]).includes(user.role)
   const canAccessCareers = (CAREERS_ACCESS_ROLES as readonly Role[]).includes(user.role)
+  const isSuperAdmin = user.role === "SUPER_ADMIN"
+  const isDevRole = isDeveloper(user.role)
   const [isPending, startTransition] = useTransition()
 
   const handleLogout = () => {
@@ -56,65 +65,79 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     })
   }
 
-  const navItems = [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: <LayoutDashboardIcon className="size-4" />,
-    },
-    ...(isAdmin
-      ? [
-          {
-            title: "User Management",
-            url: "/dashboard/users",
-            icon: <UsersIcon className="size-4" />,
-          },
-        ]
-      : []),
-    ...(canAccessBlogs
-      ? [
-          {
-            title: "Blogs",
-            url: "/dashboard/blogs",
-            icon: <BookOpenIcon className="size-4" />,
-          },
-          {
-            title: "Media Library",
-            url: "/dashboard/media",
-            icon: <ImageIcon className="size-4" />,
-          },
-        ]
-      : []),
-    ...(canAccessCareers
-      ? [
-          {
-            title: "Careers",
-            url: "/dashboard/careers",
-            icon: <BriefcaseIcon className="size-4" />,
-          },
-        ]
-      : []),
-    ...(user.role === "SUPER_ADMIN"
-      ? [
-          {
-            title: "DevTools",
-            url: "#",
-            icon: <TerminalIcon className="size-4" />,
-            items: [
+  // DEVELOPER role: only API Docs + Settings
+  const navItems = isDevRole
+    ? [
+        {
+          title: "API Docs",
+          url: "/dashboard/api-docs",
+          icon: <FileCodeIcon className="size-4" />,
+        },
+        {
+          title: "Settings",
+          url: "/dashboard/settings",
+          icon: <SettingsIcon className="size-4" />,
+        },
+      ]
+    : [
+        {
+          title: "Dashboard",
+          url: "/dashboard",
+          icon: <LayoutDashboardIcon className="size-4" />,
+        },
+        ...(isAdmin
+          ? [
               {
-                title: "Queue",
-                url: "/dashboard/careers/queue",
+                title: "User Management",
+                url: "/dashboard/users",
+                icon: <UsersIcon className="size-4" />,
               },
-            ],
-          },
-        ]
-      : []),
-    {
-      title: "Settings",
-      url: "/dashboard/settings",
-      icon: <SettingsIcon className="size-4" />,
-    },
-  ]
+            ]
+          : []),
+        ...(canAccessBlogs
+          ? [
+              {
+                title: "Blogs",
+                url: "/dashboard/blogs",
+                icon: <BookOpenIcon className="size-4" />,
+              },
+              {
+                title: "Media Library",
+                url: "/dashboard/media",
+                icon: <ImageIcon className="size-4" />,
+              },
+            ]
+          : []),
+        ...(canAccessCareers
+          ? [
+              {
+                title: "Careers",
+                url: "/dashboard/careers",
+                icon: <BriefcaseIcon className="size-4" />,
+              },
+            ]
+          : []),
+        ...(isSuperAdmin
+          ? [
+              {
+                title: "DevTools",
+                url: "#",
+                icon: <TerminalIcon className="size-4" />,
+                items: [{ title: "Queue", url: "/dashboard/careers/queue" }],
+              },
+            ]
+          : []),
+        {
+          title: "API Docs",
+          url: "/dashboard/api-docs",
+          icon: <FileCodeIcon className="size-4" />,
+        },
+        {
+          title: "Settings",
+          url: "/dashboard/settings",
+          icon: <SettingsIcon className="size-4" />,
+        },
+      ]
 
   return (
     <Sidebar variant="inset" {...props}>
@@ -133,6 +156,39 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
+        </SidebarMenu>
+
+        {/* Client section */}
+        <SidebarMenu className="px-1 pt-1 pb-0.5 space-y-1">
+          {isSuperAdmin ? (
+            <>
+              <SidebarMenuItem>
+                <ClientSwitcher
+                  clients={clients}
+                  activeClientId={activeClientId}
+                  activeClientName={activeClientName}
+                />
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="/dashboard/clients">
+                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">Manage Clients</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </>
+          ) : activeClientName ? (
+            <SidebarMenuItem>
+              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{activeClientName}</p>
+                  <p className="text-[10px] text-muted-foreground">Your workspace</p>
+                </div>
+              </div>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarHeader>
 

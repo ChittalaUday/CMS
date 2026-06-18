@@ -15,6 +15,7 @@ import {
   MANAGEABLE_BY_ADMIN,
 } from "@/lib/roles"
 import { INVITE_EXPIRY_MS } from "@/lib/invite-utils"
+import { getClientScope } from "@/lib/client-context"
 
 const SALT_ROUNDS = 12
 
@@ -28,13 +29,17 @@ async function ensureAdmin() {
 
 export async function getEditors() {
   const sessionUser = await ensureAdmin()
+  const clientId = await getClientScope()
 
   const manageableRoles = sessionUser.role === Role.SUPER_ADMIN
     ? MANAGEABLE_BY_SUPER_ADMIN
     : MANAGEABLE_BY_ADMIN
 
   return await prisma.user.findMany({
-    where: { role: { in: [...manageableRoles] } },
+    where: {
+      role: { in: [...manageableRoles] },
+      ...(clientId ? { clientId } : {}),
+    },
     select: {
       id: true,
       email: true,
@@ -58,6 +63,7 @@ export async function getEditorsPaginated(params: {
   pageSize?: number
 }) {
   const sessionUser = await ensureAdmin()
+  const clientId = await getClientScope()
 
   const manageableRoles = sessionUser.role === Role.SUPER_ADMIN
     ? MANAGEABLE_BY_SUPER_ADMIN
@@ -69,6 +75,7 @@ export async function getEditorsPaginated(params: {
 
   const where: Prisma.UserWhereInput = {
     role: { in: [...manageableRoles] },
+    ...(clientId ? { clientId } : {}),
   }
 
   if (params.role && params.role !== "all") {
@@ -118,7 +125,7 @@ export async function getEditorsPaginated(params: {
 }
 
 export const createEditor = actionClient
-  .schema(
+  .inputSchema(
     z.object({
       email: z.string().email("Invalid email format"),
       username: z.string().min(3, "Username must be at least 3 characters").max(30).regex(/^[a-zA-Z0-9_-]+$/, "Username cannot contain spaces or special characters"),
@@ -152,6 +159,11 @@ export const createEditor = actionClient
     const code = randomBytes(4).toString("hex").toUpperCase()
     const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS)
 
+    const clientId = await getClientScope()
+    const assignedClientId = sessionUser.role === Role.SUPER_ADMIN
+      ? (sessionUser.clientId ?? clientId)
+      : sessionUser.clientId
+
     const user = await prisma.user.create({
       data: {
         email: data.email,
@@ -160,6 +172,7 @@ export const createEditor = actionClient
         password: tempPassword,
         role: targetRole,
         onboardingCompleted: false,
+        clientId: assignedClientId ?? undefined,
         invite: {
           create: {
             token,
@@ -167,6 +180,7 @@ export const createEditor = actionClient
             email: data.email,
             invitedById: sessionUser.id,
             expiresAt,
+            clientId: assignedClientId ?? undefined,
           },
         },
       },
@@ -177,7 +191,7 @@ export const createEditor = actionClient
   })
 
 export const updateEditor = actionClient
-  .schema(
+  .inputSchema(
     z.object({
       id: z.string(),
       email: z.string().email("Invalid email format"),
@@ -192,6 +206,10 @@ export const updateEditor = actionClient
 
     const existing = await prisma.user.findUnique({ where: { id } })
     if (!existing) throw new Error("User not found")
+
+    if (sessionUser.role !== Role.SUPER_ADMIN && existing.clientId !== sessionUser.clientId) {
+      throw new Error("You are not authorized to manage this account.")
+    }
 
     const manageableRoles: readonly Role[] =
       sessionUser.role === Role.SUPER_ADMIN
@@ -233,12 +251,16 @@ export const updateEditor = actionClient
   })
 
 export const deleteEditor = actionClient
-  .schema(z.object({ id: z.string() }))
+  .inputSchema(z.object({ id: z.string() }))
   .action(async ({ parsedInput: { id } }) => {
     const sessionUser = await ensureAdmin()
 
     const existing = await prisma.user.findUnique({ where: { id } })
     if (!existing) throw new Error("User not found")
+
+    if (sessionUser.role !== Role.SUPER_ADMIN && existing.clientId !== sessionUser.clientId) {
+      throw new Error("You are not authorized to delete this account.")
+    }
 
     const manageableRoles: readonly Role[] =
       sessionUser.role === Role.SUPER_ADMIN

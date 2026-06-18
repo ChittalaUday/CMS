@@ -16,7 +16,14 @@ export const ourFileRouter = {
       url: file.ufsUrl,
     })),
 
-  editorUploader: f(['image', 'text', 'blob', 'pdf', 'video', 'audio'])
+  editorUploader: f({
+    image: { maxFileSize: "10MB", maxFileCount: 20 },
+    pdf: { maxFileSize: "25MB", maxFileCount: 5 },
+    video: { maxFileSize: "512MB", maxFileCount: 3 },
+    audio: { maxFileSize: "50MB", maxFileCount: 10 },
+    text: { maxFileSize: "4MB", maxFileCount: 10 },
+    blob: { maxFileSize: "25MB", maxFileCount: 5 },
+  })
     .middleware(async () => {
       const user = await getSession();
       if (!user) throw new Error('Unauthorized');

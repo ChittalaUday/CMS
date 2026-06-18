@@ -12,6 +12,8 @@ import {
   CAREERS_ACCESS_ROLES,
   CAREERS_ADMIN_ROLES,
 } from "@/lib/roles"
+import { getClientScope, requireClientScope } from "@/lib/client-context"
+import { getClientIdFromRequestHeaders } from "@/lib/api-auth"
 
 const MAX_DRAFTS = 10
 
@@ -36,14 +38,18 @@ async function requireCareersAdmin() {
 
 async function assertJobOwnership(jobId: string) {
   const user = await requireCareersAccess()
-  if ((ADMIN_ROLES as readonly Role[]).includes(user.role)) return user
 
   const job = await prisma.jobPosting.findUnique({
     where: { id: jobId },
-    select: { createdById: true },
+    select: { createdById: true, clientId: true },
   })
   if (!job) throw new Error("Job posting not found.")
-  if (job.createdById !== user.id) {
+
+  if (user.role !== Role.SUPER_ADMIN && job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this job posting.")
+  }
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role) && job.createdById !== user.id) {
     throw new Error("Unauthorized: you can only manage job postings you created.")
   }
   return user
@@ -163,7 +169,10 @@ export async function getJobPostings(params: {
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
   const skip = (page - 1) * pageSize
 
-  const where: Prisma.JobPostingWhereInput = {}
+  const clientId = await getClientScope()
+  const where: Prisma.JobPostingWhereInput = {
+    ...(clientId ? { clientId } : {}),
+  }
   if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
     where.createdById = user.id
   }
@@ -218,6 +227,10 @@ export async function getJobPostingById(id: string) {
 
   if (!job) return null
 
+  if (user.role !== Role.SUPER_ADMIN && job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this job posting.")
+  }
+
   if (!(ADMIN_ROLES as readonly Role[]).includes(user.role) && job.createdById !== user.id) {
     throw new Error("Unauthorized: you can only view your own job postings.")
   }
@@ -226,8 +239,13 @@ export async function getJobPostingById(id: string) {
 }
 
 export async function getJobPostingBySlug(slug: string) {
-  return await prisma.jobPosting.findUnique({
-    where: { slug, status: "PUBLISHED" },
+  const clientId = await getClientIdFromRequestHeaders()
+  return await prisma.jobPosting.findFirst({
+    where: {
+      slug,
+      status: "PUBLISHED",
+      ...(clientId ? { clientId } : {}),
+    },
     include: { questions: { orderBy: { order: "asc" } } },
   })
 }
@@ -248,6 +266,7 @@ function buildQuestionsCreate(questions: QuestionInput[]) {
 export async function createJobPosting(data: JobPostingInput) {
   const user = await requireCareersAccess()
   await assertDraftLimit(user.id)
+  const clientId = await requireClientScope()
 
   const slug = data.slug?.trim() || toSlug(data.title)
 
@@ -270,6 +289,7 @@ export async function createJobPosting(data: JobPostingInput) {
         currency: data.currency || "INR",
         closingDate: data.closingDate ? new Date(data.closingDate) : null,
         createdById: user.id,
+        clientId,
         questions: data.questions?.length
           ? { create: buildQuestionsCreate(data.questions) }
           : undefined,
@@ -293,7 +313,7 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
 
   const existing = await prisma.jobPosting.findUnique({
     where: { id },
-    select: { status: true, draftParentId: true, keywords: true },
+    select: { status: true, draftParentId: true, keywords: true, clientId: true },
   })
   if (existing?.status === "DRAFT" && !existing.draftParentId) {
     await assertDraftLimit(user.id, id)
@@ -342,7 +362,9 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
       err.code === "P2002" &&
       (err.meta?.target as string[] | undefined)?.includes("slug")
     ) {
-      const owner = await prisma.jobPosting.findUnique({ where: { slug } })
+      const owner = await prisma.jobPosting.findFirst({
+        where: { slug, clientId: existing?.clientId },
+      })
       if (owner && owner.id === id) return await prisma.jobPosting.findUnique({ where: { id } })
     }
     handlePrismaError(err, "updateJobPosting")
@@ -361,7 +383,17 @@ export async function updateJobStatus(id: string, status: "DRAFT" | "PUBLISHED" 
 }
 
 export async function deleteJobPosting(id: string) {
-  await requireCareersAdmin()
+  const user = await requireCareersAdmin()
+  const job = await prisma.jobPosting.findUnique({
+    where: { id },
+    select: { clientId: true },
+  })
+  if (!job) throw new Error("Job posting not found.")
+
+  if (user.role !== Role.SUPER_ADMIN && job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this job posting.")
+  }
+
   try {
     await prisma.jobPosting.delete({ where: { id } })
     revalidatePath("/dashboard/careers")
@@ -411,6 +443,7 @@ export async function createDraftOf(publishedJobId: string) {
       status: "DRAFT",
       draftParentId: publishedJobId,
       createdById: user.id,
+      clientId: source.clientId,
       keywords: source.keywords,
       keywordStatus: source.keywordStatus,
 
@@ -527,9 +560,14 @@ export async function getApplications(
 
   const job = await prisma.jobPosting.findUnique({
     where: { id: jobId },
-    select: { createdById: true },
+    select: { createdById: true, clientId: true },
   })
   if (!job) throw new Error("Job posting not found.")
+
+  if (user.role !== Role.SUPER_ADMIN && job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this job posting.")
+  }
+
   if (!(ADMIN_ROLES as readonly Role[]).includes(user.role) && job.createdById !== user.id) {
     throw new Error("Unauthorized: you can only view applications for your own job postings.")
   }
@@ -577,12 +615,16 @@ export async function getApplicationById(id: string) {
   const application = await prisma.jobApplication.findUnique({
     where: { id },
     include: {
-      job: { select: { id: true, title: true, createdById: true } },
+      job: { select: { id: true, title: true, createdById: true, clientId: true } },
       answers: { include: { question: true }, orderBy: { question: { order: "asc" } } },
     },
   })
 
   if (!application) return null
+
+  if (user.role !== Role.SUPER_ADMIN && application.job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this application.")
+  }
 
   if (!(ADMIN_ROLES as readonly Role[]).includes(user.role) && application.job.createdById !== user.id) {
     throw new Error("Unauthorized.")
@@ -600,9 +642,13 @@ export async function updateApplicationStatus(
 
   const application = await prisma.jobApplication.findUnique({
     where: { id },
-    include: { job: { select: { createdById: true } } },
+    include: { job: { select: { createdById: true, clientId: true } } },
   })
   if (!application) throw new Error("Application not found.")
+
+  if (user.role !== Role.SUPER_ADMIN && application.job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this application.")
+  }
 
   if (!(ADMIN_ROLES as readonly Role[]).includes(user.role) && application.job.createdById !== user.id) {
     throw new Error("Unauthorized.")
@@ -687,10 +733,12 @@ export async function submitApplication(data: ApplicationSubmitInput) {
 
 export async function getCareersDashboardStats() {
   const user = await requireCareersAccess()
+  const clientId = await getClientScope()
 
-  const where: Prisma.JobPostingWhereInput = (ADMIN_ROLES as readonly Role[]).includes(user.role)
-    ? {}
-    : { createdById: user.id }
+  const where: Prisma.JobPostingWhereInput = {
+    ...(clientId ? { clientId } : {}),
+    ...((ADMIN_ROLES as readonly Role[]).includes(user.role) ? {} : { createdById: user.id }),
+  }
 
   const [totalJobs, publishedJobs, totalApplications, newApplications] = await Promise.all([
     prisma.jobPosting.count({ where }),
@@ -703,7 +751,17 @@ export async function getCareersDashboardStats() {
 }
 
 export async function getAtsScore(applicationId: string, model?: string) {
-  await requireCareersAccess()
+  const user = await requireCareersAccess()
+
+  const application = await prisma.jobApplication.findUnique({
+    where: { id: applicationId },
+    select: { job: { select: { clientId: true } } },
+  })
+  if (!application) throw new Error("Application not found.")
+
+  if (user.role !== Role.SUPER_ADMIN && application.job.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this application.")
+  }
 
   // Reset to PENDING so the queue worker picks it up
   await prisma.jobApplication.update({

@@ -19,7 +19,7 @@ const usernameSchema = z
   )
 
 export const updateProfile = actionClient
-  .schema(
+  .inputSchema(
     z.object({
       username: usernameSchema,
       name: z.string().max(80, "Name must be at most 80 characters").optional(),
@@ -52,7 +52,7 @@ export const updateProfile = actionClient
   })
 
 export const updatePassword = actionClient
-  .schema(
+  .inputSchema(
     z
       .object({
         newPassword: z.string().min(8, "Password must be at least 8 characters"),

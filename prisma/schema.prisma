@@ -12,6 +12,13 @@ enum Role {
   ADMIN
   HR
   EDITOR
+  DEVELOPER
+}
+
+enum ClientStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
 }
 
 
@@ -64,6 +71,8 @@ model User {
   bio                 String?
   onboardingCompleted Boolean   @default(true)
   role                Role      @default(EDITOR)
+  clientId            String?
+  client              Client?   @relation("ClientUsers", fields: [clientId], references: [id], onDelete: SetNull)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   sessions            Session[]
@@ -75,6 +84,10 @@ model User {
   jobPostings         JobPosting[]
   invitesSent         UserInvite[] @relation("InvitesSent")
   invite              UserInvite?  @relation("UserInvite")
+  clientsCreated      Client[]     @relation("ClientCreatedBy")
+  apiKeysCreated      ClientApiKey[] @relation("ApiKeyCreatedBy")
+
+  @@index([clientId])
 }
 
 model UserInvite {
@@ -86,6 +99,7 @@ model UserInvite {
   user        User      @relation("UserInvite", fields: [userId], references: [id], onDelete: Cascade)
   invitedById String
   invitedBy   User      @relation("InvitesSent", fields: [invitedById], references: [id])
+  clientId    String?
   expiresAt   DateTime
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
@@ -108,7 +122,7 @@ model Session {
 model Post {
   id              String         @id @default(cuid())
   title           String
-  slug            String         @unique
+  slug            String
   content         String
   contentJson     Json?
   published       Boolean        @default(false)
@@ -118,6 +132,8 @@ model Post {
   featuredImageId String?
   featuredImage   Media?         @relation("FeaturedImage", fields: [featuredImageId], references: [id], onDelete: SetNull)
   metadata        Json?          @default("{}")
+  clientId        String?
+  client          Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -132,17 +148,25 @@ model Post {
   categories      PostCategory[]
   media           PostMedia[]
 
+  @@unique([slug, clientId])
   @@index([authorId])
   @@index([featuredImageId])
   @@index([draftParentId])
+  @@index([clientId])
 }
 
 model Category {
   id        String         @id @default(cuid())
-  name      String         @unique
-  slug      String         @unique
+  name      String
+  slug      String
+  clientId  String?
+  client    Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
   createdAt DateTime       @default(now())
   posts     PostCategory[]
+
+  @@unique([name, clientId])
+  @@unique([slug, clientId])
+  @@index([clientId])
 }
 
 model PostCategory {
@@ -164,6 +188,8 @@ model Media {
   height        Int?
   userId        String?
   user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  clientId      String?
+  client        Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
   createdAt     DateTime    @default(now())
   shaKey        String?     @unique
 
@@ -171,6 +197,7 @@ model Media {
   posts         PostMedia[]
 
   @@index([userId])
+  @@index([clientId])
 }
 
 
@@ -230,7 +257,7 @@ model View {
 model JobPosting {
   id                   String           @id @default(cuid())
   title                String
-  slug                 String           @unique
+  slug                 String
   department           String
   location             String
   jobType              JobType          @default(FULL_TIME)
@@ -254,13 +281,17 @@ model JobPosting {
   applications         JobApplication[]
   keywords             String[]         @default([])
   keywordStatus        QueueStatus      @default(IDLE)
+  clientId             String?
+  client               Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
+  @@unique([slug, clientId])
   @@index([createdById])
   @@index([status])
   @@index([draftParentId])
+  @@index([clientId])
 }
 
 model JobQuestion {
@@ -316,4 +347,94 @@ model JobAnswer {
 
   @@index([applicationId])
   @@index([questionId])
+}
+
+// --- Multi-tenancy ---
+
+model Client {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  domain      String?
+  description String?
+  logoUrl     String?
+  status      ClientStatus @default(ACTIVE)
+  createdById String?
+  createdBy   User?        @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  users          User[]              @relation("ClientUsers")
+  posts          Post[]
+  jobPostings    JobPosting[]
+  media          Media[]
+  categories     Category[]
+  apiKeys        ClientApiKey[]
+  securityConfig ClientSecurityConfig?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([slug])
+  @@index([status])
+}
+
+model ClientApiKey {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String
+  scopes      String[]  @default(["read:blogs", "read:careers", "write:applications"])
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdById String?
+  createdBy   User?     @relation("ApiKeyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([clientId])
+  @@index([keyHash])
+}
+
+// Per-client security configuration — rate limits, CORS, IP rules, key caps
+model ClientSecurityConfig {
+  id              String   @id @default(cuid())
+  clientId        String   @unique
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // API rate limiting (requests per minute / burst allowance)
+  apiRateLimitRpm   Int      @default(60)
+  apiRateLimitBurst Int      @default(10)
+
+  // CORS — additional allowed origins beyond Client.domain (empty = only Client.domain)
+  allowedOrigins  String[] @default([])
+
+  // Max active (non-revoked, non-expired) API keys per client
+  maxApiKeys      Int      @default(10)
+
+  // IP allowlist — empty means all IPs are allowed
+  allowedIps      String[] @default([])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([clientId])
+}
+
+// Registry of all public API scopes — seeded from src/lib/api-registry.ts
+// Serves as the authoritative DB record for scope validation and auditing.
+model ApiScopeDefinition {
+  id            String   @id            // e.g. "read:blogs"
+  categoryId    String                  // e.g. "blogs"
+  categoryLabel String                  // e.g. "Blogs"
+  permission    String                  // "read" | "write"
+  label         String
+  description   String
+  endpoints     Json                    // { method: string; path: string }[]
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive])
 }

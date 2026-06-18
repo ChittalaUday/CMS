@@ -41,7 +41,20 @@ export const getSession = cache(async () => {
   const session = await prisma.session.findUnique({
     where: { id: token },
     include: {
-      user: { select: { id: true, email: true, username: true, name: true, bio: true, role: true, avatarUrl: true, onboardingCompleted: true } },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          name: true,
+          bio: true,
+          role: true,
+          avatarUrl: true,
+          onboardingCompleted: true,
+          clientId: true,
+          client: { select: { status: true } },
+        },
+      },
     },
   })
 
@@ -52,5 +65,10 @@ export const getSession = cache(async () => {
     return null
   }
 
-  return session.user
+  const user = session.user
+  if (user.role !== "SUPER_ADMIN" && user.clientId && user.client?.status !== "ACTIVE") {
+    return null
+  }
+
+  return user
 })

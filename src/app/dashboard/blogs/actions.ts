@@ -13,6 +13,9 @@ import {
   ADMIN_ROLES,
   BLOG_ACCESS_ROLES,
 } from "@/lib/roles"
+import { getClientScope, requireClientScope } from "@/lib/client-context"
+import { sanitizeBlogHtml } from "@/lib/sanitize"
+import { getClientIdFromRequestHeaders } from "@/lib/api-auth"
 
 // --- Auth Helpers ---
 async function requireAuth() {
@@ -110,10 +113,11 @@ const REVISION_INCLUDE = {
 
 export async function getPosts() {
   const user = await requireBlogAccess()
-  // Exclude draft revisions (draftParentId != null) — they appear as children in the table
+  const clientId = await getClientScope()
   const where: Prisma.PostWhereInput = {
     draftParentId: null,
     ...(user.role === Role.EDITOR ? { authorId: user.id } : {}),
+    ...(clientId ? { clientId } : {}),
   }
   return await prisma.post.findMany({
     where,
@@ -125,7 +129,7 @@ export async function getPosts() {
   })
 }
 
-export async function getPostsPaginated(params: {
+export async function getPostsPaginated(options: {
   search?: string
   categoryId?: string
   status?: string
@@ -134,36 +138,40 @@ export async function getPostsPaginated(params: {
 }) {
   const user = await requireBlogAccess()
 
-  const page = Math.max(1, params.page ?? 1)
-  const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 15))
+  const page = Math.max(1, options.page ?? 1)
+  const pageSize = Math.min(50, Math.max(1, options.pageSize ?? 15))
   const skip = (page - 1) * pageSize
 
+  const clientId = await getClientScope()
   // Exclude draft revisions — they are shown as child rows in the table
-  const where: Prisma.PostWhereInput = { draftParentId: null }
+  const where: Prisma.PostWhereInput = {
+    draftParentId: null,
+    ...(clientId ? { clientId } : {}),
+  }
 
   // Editors can only see their own posts
   if (user.role === Role.EDITOR) {
     where.authorId = user.id
   }
 
-  if (params.status === "published") {
+  if (options.status === "published") {
     where.published = true
-  } else if (params.status === "draft") {
+  } else if (options.status === "draft") {
     where.published = false
-  } else if (params.status === "revision") {
+  } else if (options.status === "revision") {
     where.published = true
     where.drafts = { some: {} }
   }
 
-  if (params.search?.trim()) {
+  if (options.search?.trim()) {
     where.OR = [
-      { title: { contains: params.search.trim(), mode: "insensitive" } },
-      { slug: { contains: params.search.trim(), mode: "insensitive" } },
+      { title: { contains: options.search.trim(), mode: "insensitive" } },
+      { slug: { contains: options.search.trim(), mode: "insensitive" } },
     ]
   }
 
-  if (params.categoryId) {
-    where.categories = { some: { categoryId: params.categoryId } }
+  if (options.categoryId) {
+    where.categories = { some: { categoryId: options.categoryId } }
   }
 
   const [posts, totalCount] = await Promise.all([
@@ -213,16 +221,26 @@ export async function getPostById(id: string) {
       },
     },
   })
-  if (post && user.role === Role.EDITOR && post.authorId !== user.id) {
+
+  if (!post) return null
+
+  if (user.role !== Role.SUPER_ADMIN && post.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+
+  if (user.role === Role.EDITOR && post.authorId !== user.id) {
     throw new Error("Unauthorized: you can only view your own posts.")
   }
   return post
 }
 
 export async function getPostBySlug(slug: string) {
-  await requireBlogAccess()
-  return await prisma.post.findUnique({
-    where: { slug },
+  const clientId = await getClientIdFromRequestHeaders()
+  return await prisma.post.findFirst({
+    where: {
+      slug,
+      ...(clientId ? { clientId } : {}),
+    },
     include: {
       author: { select: { id: true, name: true, email: true } },
       featuredImage: true,
@@ -245,19 +263,22 @@ export type PostInput = {
 
 export async function createPost(data: PostInput) {
   const user = await requireBlogAccess()
+  const clientId = await requireClientScope()
+  const safeContent = sanitizeBlogHtml(data.content)
 
   try {
     const post = await prisma.post.create({
       data: {
         title: data.title,
         slug: data.slug,
-        content: data.content,
+        content: safeContent,
         contentJson: data.contentJson || {},
         published: data.published ?? false,
         featured: data.featured ?? false,
         authorId: user.id,
         featuredImageId: data.featuredImageId || null,
         metadata: data.metadata || {},
+        clientId,
         categories: data.categoryIds
           ? {
               create: data.categoryIds.map((id) => ({
@@ -277,7 +298,7 @@ export async function createPost(data: PostInput) {
       err.code === "P2002" &&
       (err.meta?.target as string[] | undefined)?.includes("slug")
     ) {
-      const existing = await prisma.post.findUnique({ where: { slug: data.slug } })
+      const existing = await prisma.post.findFirst({ where: { slug: data.slug, clientId } })
       if (existing) return existing
     }
     handlePrismaError(err, "createPost")
@@ -286,9 +307,11 @@ export async function createPost(data: PostInput) {
 
 export async function updatePost(id: string, data: PostInput) {
   const user = await requireBlogAccess()
+  const clientId = await getClientScope()
+  const safeContent = sanitizeBlogHtml(data.content)
 
   const existing = await prisma.post.findUnique({
-    where: { id },
+    where: { id, ...(clientId ? { clientId } : {}) },
     select: { authorId: true, draftParentId: true, slug: true },
   })
   if (!existing) throw new Error("Post not found.")
@@ -312,7 +335,7 @@ export async function updatePost(id: string, data: PostInput) {
       data: {
         title: data.title,
         slug: slugToStore,
-        content: data.content,
+        content: safeContent,
         contentJson: data.contentJson || {},
         published: isRevision ? false : (data.published ?? false),
         featured: isRevision ? (data.featured ?? false) : (data.featured ?? false),
@@ -333,7 +356,9 @@ export async function updatePost(id: string, data: PostInput) {
       err.code === "P2002" &&
       (err.meta?.target as string[] | undefined)?.includes("slug")
     ) {
-      const owner = await prisma.post.findUnique({ where: { slug: slugToStore } })
+      const owner = await prisma.post.findFirst({
+        where: { slug: slugToStore, clientId: clientId ?? undefined },
+      })
       if (owner && owner.id === id) {
         return await prisma.post.findUnique({ where: { id } })
       }
@@ -350,8 +375,12 @@ export async function togglePublished(id: string) {
   }
 
   try {
-    const post = await prisma.post.findUnique({ where: { id }, select: { published: true } })
+    const post = await prisma.post.findUnique({ where: { id }, select: { published: true, clientId: true } })
     if (!post) throw new Error("Post not found")
+
+    if (user.role !== Role.SUPER_ADMIN && post.clientId !== user.clientId) {
+      throw new Error("Unauthorized: you do not have access to this post.")
+    }
 
     const updated = await prisma.post.update({
       where: { id },
@@ -373,8 +402,12 @@ export async function toggleFeatured(id: string) {
   }
 
   try {
-    const post = await prisma.post.findUnique({ where: { id }, select: { featured: true } })
+    const post = await prisma.post.findUnique({ where: { id }, select: { featured: true, clientId: true } })
     if (!post) throw new Error("Post not found")
+
+    if (user.role !== Role.SUPER_ADMIN && post.clientId !== user.clientId) {
+      throw new Error("Unauthorized: you do not have access to this post.")
+    }
 
     const updated = await prisma.post.update({
       where: { id },
@@ -392,12 +425,16 @@ export async function toggleFeatured(id: string) {
 // The revision is a shadow copy — the published post is untouched until publishPostDraftRevision is called.
 export async function upsertPostDraftRevision(parentId: string, data: PostInput) {
   const user = await requireBlogAccess()
+  const safeContent = sanitizeBlogHtml(data.content)
 
   const parent = await prisma.post.findUnique({
     where: { id: parentId },
     include: { drafts: { take: 1, select: { id: true, slug: true } } },
   })
   if (!parent) throw new Error("Post not found.")
+  if (user.role !== Role.SUPER_ADMIN && parent.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
   if (!parent.published) throw new Error("Draft revisions are only for published posts.")
   if (parent.draftParentId) throw new Error("Cannot create a revision of a revision.")
 
@@ -415,7 +452,7 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
         data: {
           title: data.title,
           slug: existingDraft.slug,
-          content: data.content,
+          content: safeContent,
           contentJson: data.contentJson || {},
           published: false,
           featured: data.featured ?? false,
@@ -433,7 +470,7 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
     // Create revision — slug must be unique; use parentSlug--draft
     let draftSlug = `${parent.slug}--draft`
     let attempt = 1
-    while (await prisma.post.findUnique({ where: { slug: draftSlug }, select: { id: true } })) {
+    while (await prisma.post.findFirst({ where: { slug: draftSlug, clientId: parent.clientId }, select: { id: true } })) {
       draftSlug = `${parent.slug}--draft-${attempt++}`
     }
 
@@ -474,6 +511,9 @@ export async function publishPostDraftRevision(draftId: string) {
     include: { categories: true },
   })
   if (!draft) throw new Error("Draft revision not found.")
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
   if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
 
   const proposedSlug = ((draft.metadata as Record<string, unknown>)?.proposedSlug as string) || null
@@ -516,7 +556,7 @@ export async function publishPostDraftRevision(draftId: string) {
 
 // Fetches both the published parent and its draft revision for the comparison dialog.
 export async function getRevisionComparison(draftId: string) {
-  await requireBlogAccess()
+  const user = await requireBlogAccess()
 
   const draft = await prisma.post.findUnique({
     where: { id: draftId },
@@ -526,6 +566,9 @@ export async function getRevisionComparison(draftId: string) {
     },
   })
   if (!draft || !draft.draftParentId) throw new Error("Draft revision not found.")
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
 
   const parent = await prisma.post.findUnique({
     where: { id: draft.draftParentId },
@@ -541,11 +584,20 @@ export async function getRevisionComparison(draftId: string) {
 
 export async function deletePost(id: string) {
   const user = await requireBlogAccess()
+  const clientId = await getClientScope()
 
-  if (user.role === Role.EDITOR) {
-    const existing = await prisma.post.findUnique({ where: { id }, select: { authorId: true } })
-    if (!existing) throw new Error("Post not found.")
-    if (existing.authorId !== user.id) throw new Error("Unauthorized: you can only delete your own posts.")
+  const existing = await prisma.post.findUnique({
+    where: { id },
+    select: { authorId: true, clientId: true },
+  })
+  if (!existing) throw new Error("Post not found.")
+
+  if (user.role !== Role.SUPER_ADMIN && existing.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+
+  if (user.role === Role.EDITOR && existing.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only delete your own posts.")
   }
 
   try {
@@ -559,17 +611,20 @@ export async function deletePost(id: string) {
 // --- Categories Actions ---
 export async function getCategories() {
   await requireBlogAccess()
+  const clientId = await getClientScope()
   return await prisma.category.findMany({
+    where: clientId ? { clientId } : undefined,
     orderBy: { name: "asc" },
   })
 }
 
 export async function createCategory(name: string) {
   await requireBlogAccess()
+  const clientId = await requireClientScope()
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "")
   try {
     const category = await prisma.category.create({
-      data: { name, slug },
+      data: { name, slug, clientId },
     })
     revalidatePath("/dashboard/blogs")
     return category
@@ -579,7 +634,17 @@ export async function createCategory(name: string) {
 }
 
 export async function deleteCategory(id: string) {
-  await requireBlogAccess()
+  const user = await requireBlogAccess()
+
+  const category = await prisma.category.findUnique({
+    where: { id },
+    select: { clientId: true },
+  })
+  if (!category) throw new Error("Category not found.")
+
+  if (user.role !== Role.SUPER_ADMIN && category.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this category.")
+  }
 
   // Verify that the category is not used by any posts
   const usageCount = await prisma.postCategory.count({
@@ -599,36 +664,37 @@ export async function deleteCategory(id: string) {
 }
 
 // --- Media Actions ---
-export async function getMediaItems(params?: {
+export async function getMediaItems(options?: {
   search?: string
   type?: string
   page?: number
   pageSize?: number
 }) {
   await requireBlogAccess()
+  const clientId = await getClientScope()
 
-  const page = Math.max(1, params?.page ?? 1)
-  const pageSize = Math.min(50, Math.max(1, params?.pageSize ?? 24))
+  const page = Math.max(1, options?.page ?? 1)
+  const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? 24))
   const skip = (page - 1) * pageSize
 
-  const where: Prisma.MediaWhereInput = {}
+  const where: Prisma.MediaWhereInput = clientId ? { clientId } : {}
 
-  if (params?.search?.trim()) {
-    const query = params.search.trim()
+  if (options?.search?.trim()) {
+    const query = options.search.trim()
     where.OR = [
       { filename: { contains: query, mode: "insensitive" } },
       { mimeType: { contains: query, mode: "insensitive" } },
     ]
   }
 
-  if (params?.type && params.type !== "all") {
-    if (params.type === "image") {
+  if (options?.type && options.type !== "all") {
+    if (options.type === "image") {
       where.mimeType = { startsWith: "image/" }
-    } else if (params.type === "video") {
+    } else if (options.type === "video") {
       where.mimeType = { startsWith: "video/" }
-    } else if (params.type === "audio") {
+    } else if (options.type === "audio") {
       where.mimeType = { startsWith: "audio/" }
-    } else if (params.type === "document") {
+    } else if (options.type === "document") {
       where.AND = [
         { NOT: { mimeType: { startsWith: "image/" } } },
         { NOT: { mimeType: { startsWith: "video/" } } },
@@ -690,6 +756,7 @@ export async function uploadMediaItem(formData: FormData) {
     const dimensions = getImageDimensions(buffer, file.type)
 
     // Save record to DB
+    const clientId = await requireClientScope()
     const media = await prisma.media.create({
       data: {
         filename: file.name,
@@ -700,6 +767,7 @@ export async function uploadMediaItem(formData: FormData) {
         height: dimensions?.height ?? null,
         userId: user.id,
         shaKey,
+        clientId,
       },
     })
 
@@ -712,9 +780,13 @@ export async function uploadMediaItem(formData: FormData) {
 
 
 export async function deleteMediaItem(id: string) {
-  await requireBlogAccess()
+  const user = await requireBlogAccess()
   const media = await prisma.media.findUnique({ where: { id } })
   if (!media) throw new Error("Media item not found")
+
+  if (user.role !== Role.SUPER_ADMIN && media.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this media item.")
+  }
 
   // Extract S3/R2 key from the URL
   const match = media.url.match(/uploads\/.*$/)

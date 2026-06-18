@@ -28,6 +28,7 @@ const ROLE_BADGE: Record<Role, { label: string; className: string }> = {
   [Role.ADMIN]: { label: "Admin", className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
   [Role.HR]: { label: "HR", className: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" },
   [Role.EDITOR]: { label: "Editor", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+  [Role.DEVELOPER]: { label: "Developer", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
 }
 
 type InviteInfo = { token: string; code: string; expiresAt: Date }
@@ -218,7 +219,7 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
 
   const createForm = useForm<z.infer<typeof createSchema>>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: "", username: "", email: "", role: "EDITOR" },
+    defaultValues: { name: "", username: "", email: "", role: "ADMIN" },
   })
 
   const editForm = useForm<z.infer<typeof editSchema>>({
@@ -271,9 +272,20 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
   }, [debouncedSearch, role, pathname, searchParams, router, currentSearch, currentRole])
 
   function openCreateModal() {
-    createForm.reset({ name: "", username: "", email: "", role: "EDITOR" })
+    createForm.reset({ name: "", username: "", email: "", role: "ADMIN" })
     setModalMode("create")
   }
+
+  useEffect(() => {
+    if (searchParams?.get("invite") === "true") {
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete("invite")
+      const query = params.toString()
+      const cleanUrl = query ? `${pathname}?${query}` : pathname
+      router.replace(cleanUrl)
+      openCreateModal()
+    }
+  }, [searchParams, pathname, router])
 
   function openEditModal(editor: EditorUser) {
     editForm.reset({

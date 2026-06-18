@@ -48,7 +48,10 @@ export async function acceptInvite(token: string, password: string): Promise<voi
   await prisma.$transaction([
     prisma.user.update({
       where: { id: invite.userId },
-      data: { password: hashed },
+      data: {
+        password: hashed,
+        ...(invite.clientId ? { clientId: invite.clientId } : {}),
+      },
     }),
     prisma.userInvite.update({
       where: { token },
@@ -68,9 +71,13 @@ export async function regenerateInvite(userId: string) {
 
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true },
+    select: { email: true, clientId: true },
   })
   if (!targetUser) throw new Error("User not found.")
+
+  if (sessionUser.role !== Role.SUPER_ADMIN && targetUser.clientId !== sessionUser.clientId) {
+    throw new Error("Unauthorized: you do not have access to this user's invite.")
+  }
 
   const token = randomBytes(32).toString("hex")
   const code = randomBytes(4).toString("hex").toUpperCase()

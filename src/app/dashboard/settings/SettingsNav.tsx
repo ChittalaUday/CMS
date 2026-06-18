@@ -2,22 +2,28 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { UserIcon, PaletteIcon, KeyRoundIcon } from "lucide-react"
+import { UserIcon, PaletteIcon, KeyRoundIcon, ShieldIcon } from "lucide-react"
+import { type Role, Role as RoleEnum } from "@/lib/roles"
 
-const NAV_ITEMS = [
-  { href: "/dashboard/settings/profile",    label: "Personal Info",          icon: UserIcon    },
-  { href: "/dashboard/settings/appearance", label: "Appearance",             icon: PaletteIcon },
-  { href: "/dashboard/settings/account",    label: "Account",                icon: KeyRoundIcon },
+const BASE_NAV_ITEMS = [
+  { href: "/dashboard/settings/profile",    label: "Personal Info", icon: UserIcon    },
+  { href: "/dashboard/settings/appearance", label: "Appearance",    icon: PaletteIcon },
+  { href: "/dashboard/settings/account",    label: "Account",       icon: KeyRoundIcon },
 ]
 
-export function SettingsNav() {
+const ADMIN_NAV_ITEMS = [
+  { href: "/dashboard/settings/api-tokens", label: "API Tokens", icon: ShieldIcon },
+]
+
+export function SettingsNav({ role }: { role: Role }) {
   const pathname = usePathname()
+  // API Tokens in settings is ADMIN-only; SUPER_ADMIN manages tokens per-client
+  const navItems = role === RoleEnum.ADMIN ? [...BASE_NAV_ITEMS, ...ADMIN_NAV_ITEMS] : BASE_NAV_ITEMS
 
   return (
     <div className="space-y-4">
-      {/* Nav links */}
       <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/")
           return (
             <Link

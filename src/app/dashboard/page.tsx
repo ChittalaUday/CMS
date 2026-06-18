@@ -1,6 +1,12 @@
+import { getSession } from "@/lib/session"
+import { isDeveloper } from "@/lib/roles"
+import { redirect } from "next/navigation"
+
 export const dynamic = "force-dynamic"
 
-export default function Page() {
+export default async function Page() {
+  const user = await getSession()
+  if (user && isDeveloper(user.role)) redirect("/dashboard/api-docs")
   return (
     <>
       <div className="grid auto-rows-min gap-4 md:grid-cols-3">
