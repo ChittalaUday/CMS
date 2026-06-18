@@ -127,8 +127,12 @@ export function CareersTableClient({
     }
   }
 
-  const handleRowClick = (jobId: string) => {
-    router.push(`/dashboard/careers/${jobId}/applications`)
+  const handleRowClick = (jobId: string, status: JobStatus) => {
+    if (status === JobStatus.DRAFT) {
+      router.push(`/dashboard/careers/${jobId}/edit`)
+    } else {
+      router.push(`/dashboard/careers/${jobId}/applications`)
+    }
   }
 
   const handleActionClick = (e: React.MouseEvent) => {
@@ -178,7 +182,7 @@ export function CareersTableClient({
               return (
                 <tr
                   key={job.id}
-                  onClick={() => handleRowClick(job.id)}
+                  onClick={() => handleRowClick(job.id, job.status)}
                   className="group hover:bg-muted/20 cursor-pointer transition-colors duration-150"
                 >
                   {/* Title */}

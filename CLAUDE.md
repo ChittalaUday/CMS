@@ -59,9 +59,12 @@ There are no automated tests in this project.
 
 **Database** — Prisma 7 with the `pg` adapter. Client singleton is `src/lib/prisma.ts`. The generated client outputs to `src/generated/prisma` (not the default location) — always import from there or via the `@/lib/prisma` singleton. Run `prisma:generate` after any schema change.
 
-**Rich Text Editor** — Plate.js v53 (`platejs`) at `src/components/EditorialEditor.tsx` and `src/components/RichTextEditor.tsx`. Post content is stored as both serialized HTML (`content`) and Plate JSON (`contentJson`) in the `Post` model.
+**Rich Text Editor** — Plate.js v53 (`platejs`) at `src/components/EditorialEditor.tsx` and `src/components/RichTextEditor.tsx`. Highly streamlined, stripped of bloated custom editor plugins/nodes in favor of a clean, lightweight architecture. Content is stored as both serialized HTML (`content`) and Plate JSON (`contentJson`) in the `Post` model.
 
-**AI features** — Vercel AI SDK routes at `src/app/api/ai/`. Uses `@ai-sdk/gateway` with `AI_GATEWAY_API_KEY` to reach Claude. Streaming responses use the AI SDK's standard `streamText` pattern.
+**AI & ATS Queue** — Dual AI integration:
+1. **Ollama Integration** (`src/lib/ai.ts`) — local models (defaulting to `qwen3:0.6b` and `all-minilm:l6-v2`) for server-side text generation and semantic similarity (cosine similarity on vector embeddings).
+2. **ATS Application Scorer** (`src/lib/queues/ats-queue.ts`) — uses `p-queue` to run concurrent background jobs that parse candidate resumes via `unpdf`, pre-match keywords, compute semantic similarity against job requirements, score compatibility, and extract structured metadata (skills, experience, location, education).
+3. **Vercel AI SDK** — streaming assistance endpoints at `src/app/api/ai/` route to external LLMs via `@ai-sdk/gateway`.
 
 **Media / File uploads** — dual pipeline:
 - **UploadThing** (`src/lib/uploadthing.ts`, route at `src/app/api/uploadthing/`) for user-facing uploads in the editor
@@ -71,7 +74,9 @@ There are no automated tests in this project.
 
 ### Data model summary
 
-`User` (SUPER_ADMIN / ADMIN / EDITOR) → `Post` (stores Plate JSON + HTML) → `Category` (many-to-many via `PostCategory`), `Media` (many-to-many via `PostMedia`), `Comment`, `Like`, `View`. `Media` records track files uploaded to R2/UploadThing.
+- **Blogs**: `User` (SUPER_ADMIN / ADMIN / HR / EDITOR) → `Post` (stores Plate JSON + HTML) → `Category` (many-to-many via `PostCategory`), `Media` (many-to-many via `PostMedia`), `Comment`, `Like`, `View`.
+- **Careers & ATS**: `JobPosting` (with keywords & draft support) → `JobQuestion` → `JobAnswer` ← `JobApplication` (tracks PDF resume, parsed metrics, ATS scores, and `QueueStatus` background states).
+- **Media**: `Media` records track files uploaded to R2/UploadThing.
 
 ### Route protection — two layers
 

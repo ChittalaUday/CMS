@@ -81,6 +81,7 @@ export default async function CareersPage({ searchParams }: PageProps) {
         </Button>
       </div>
 
+
       {/* Toolbar */}
       <Suspense>
         <JobsToolbar totalCount={totalCount} search={search} statusFilter={status} />

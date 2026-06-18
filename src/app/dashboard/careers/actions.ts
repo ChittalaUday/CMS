@@ -895,3 +895,55 @@ export async function updateJobKeywords(jobId: string, keywords: string[]) {
   
   return updated
 }
+
+export async function getExportData(filters: {
+  startDate?: string
+  endDate?: string
+  status?: string
+  search?: string
+}) {
+  const user = await requireCareersAccess()
+
+  const where: Prisma.JobPostingWhereInput = {
+    status: { in: ["PUBLISHED", "CLOSED"] },
+  }
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    where.createdById = user.id
+  }
+
+  const jobs = await prisma.jobPosting.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: {
+      questions: {
+        orderBy: { order: "asc" },
+      },
+      applications: {
+        where: {
+          AND: [
+            filters.startDate ? { createdAt: { gte: new Date(filters.startDate) } } : {},
+            filters.endDate ? { createdAt: { lte: new Date(filters.endDate + "T23:59:59.999Z") } } : {},
+            filters.status && filters.status !== "ALL" ? { status: filters.status as any } : {},
+            filters.search?.trim() ? {
+              OR: [
+                { applicantName: { contains: filters.search.trim(), mode: "insensitive" } },
+                { applicantEmail: { contains: filters.search.trim(), mode: "insensitive" } },
+              ],
+            } : {},
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          answers: {
+            include: {
+              question: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  return jobs
+}
+

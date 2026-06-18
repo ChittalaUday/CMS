@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, Briefcase, MapPin } from "lucide-react"
 import { getApplications, getJobPostingById } from "../../actions"
 import { ApplicationsView } from "./ApplicationsView"
+import { ExportButton } from "../../ExportButton"
 
 export const dynamic = "force-dynamic"
 
@@ -75,14 +76,17 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
               </span>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="h-9 text-xs gap-1.5 border-border/60"
-          >
-            <Link href={`/dashboard/careers/${id}/edit`}>Edit Posting</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton jobId={id} className="h-9 text-xs" />
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="h-9 text-xs gap-1.5 border-border/60"
+            >
+              <Link href={`/dashboard/careers/${id}/edit`}>Edit Posting</Link>
+            </Button>
+          </div>
         </div>
       </div>
 
