@@ -22,6 +22,10 @@ import {
   ChevronRight,
   GitBranch,
   Star,
+  Clock,
+  Send,
+  Undo2,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -84,6 +88,8 @@ interface Post {
   content: string
   published: boolean
   featured: boolean
+  scheduledAt?: Date | string | null
+  reviewRequested?: boolean
   createdAt: Date | string
   updatedAt: Date | string
   author: Author | null
@@ -101,13 +107,15 @@ interface Post {
 interface BlogsTableClientProps {
   posts: Post[]
   canPublish: boolean
+  showEditorDrafts: boolean
   handleDelete: (formData: FormData) => Promise<void>
 }
 
-export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTableClientProps) {
+export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDelete }: BlogsTableClientProps) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [isReviewPending, startReviewTransition] = useTransition()
   const router = useRouter()
 
   const handleToggleFeatured = (postId: string, postTitle: string, currentFeatured: boolean) => {
@@ -122,6 +130,24 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
         )
       } catch (err: any) {
         toast.error(err.message || "Failed to update featured status")
+      }
+    })
+  }
+
+  const handleSubmitForReview = (postId: string, postTitle: string, isRequested: boolean) => {
+    startReviewTransition(async () => {
+      try {
+        if (isRequested) {
+          const { withdrawPostFromReview } = await import("./actions")
+          await withdrawPostFromReview(postId)
+          toast.success(`"${postTitle}" withdrawn — back to draft`)
+        } else {
+          const { submitPostForReview } = await import("./actions")
+          await submitPostForReview(postId)
+          toast.success(`"${postTitle}" submitted for review`)
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Failed to update review status")
       }
     })
   }
@@ -173,8 +199,11 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
               {posts.map((post) => {
                 const seoDesc = (post.metadata as any)?.seoDescription || ""
                 const tags: string[] = (post.metadata as any)?.tags || []
-                const hasDraft = post.published && (post.drafts?.length ?? 0) > 0
                 const draft = post.drafts?.[0]
+                // Show draft row only when: admin toggled "show editor drafts" OR editor has submitted for review
+                const hasDraft = post.published &&
+                  !!draft &&
+                  (showEditorDrafts || draft.reviewRequested === true)
 
                 return (
                   <Fragment key={post.id}>
@@ -231,19 +260,36 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                       {/* Status */}
                       <td className="px-4 py-4">
                         <div className="flex flex-col gap-1">
-                          <span
-                            className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit ${post.published
-                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                                : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
-                              }`}
-                          >
-                            {post.published ? (
-                              <><CheckCircle2 className="size-3" /> Published</>
-                            ) : (
-                              <><AlertTriangle className="size-3" /> Draft</>
-                            )}
-                          </span>
-
+                          {post.scheduledAt && !post.published ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit bg-sky-500/10 text-sky-500 border-sky-500/20">
+                              <Clock className="size-3" /> Scheduled
+                            </span>
+                          ) : post.reviewRequested && !post.published ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                              <Send className="size-3" /> Pending Review
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit ${post.published
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                  : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                                }`}
+                            >
+                              {post.published ? (
+                                <><CheckCircle2 className="size-3" /> Published</>
+                              ) : (
+                                <><AlertTriangle className="size-3" /> Draft</>
+                              )}
+                            </span>
+                          )}
+                          {post.scheduledAt && !post.published && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {new Date(post.scheduledAt).toLocaleString("en-GB", {
+                                day: "2-digit", month: "short", year: "numeric",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -321,7 +367,34 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                                   postId={post.id}
                                   postTitle={post.title}
                                   isPublished={post.published}
+                                  scheduledAt={post.scheduledAt}
                                 />
+                              )}
+                              {!canPublish && !post.published && !post.scheduledAt && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      disabled={isReviewPending}
+                                      onClick={() => handleSubmitForReview(post.id, post.title, post.reviewRequested ?? false)}
+                                      className={`size-8 rounded-lg flex items-center justify-center transition-colors hover:bg-muted disabled:opacity-50 ${
+                                        post.reviewRequested
+                                          ? "text-amber-500 hover:text-amber-600"
+                                          : "text-muted-foreground/50 hover:text-amber-500"
+                                      }`}
+                                    >
+                                      {isReviewPending ? (
+                                        <Loader2 className="size-3.5 animate-spin" />
+                                      ) : post.reviewRequested ? (
+                                        <Undo2 className="size-3.5" />
+                                      ) : (
+                                        <Send className="size-3.5" />
+                                      )}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    {post.reviewRequested ? "Withdraw from review" : "Submit for review"}
+                                  </TooltipContent>
+                                </Tooltip>
                               )}
                             </div>
                             <Tooltip>
@@ -336,7 +409,7 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                                       <MoreHorizontal className="size-4 text-muted-foreground" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-36 text-sm">
+                                  <DropdownMenuContent align="end" className="w-44 text-sm">
                                     <DropdownMenuItem asChild>
                                       <Link
                                         href={`/dashboard/blogs/${post.id}/edit`}
@@ -346,6 +419,28 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                                         Edit
                                       </Link>
                                     </DropdownMenuItem>
+                                    {!canPublish && !post.published && !post.scheduledAt && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          disabled={isReviewPending}
+                                          onClick={() => handleSubmitForReview(post.id, post.title, post.reviewRequested ?? false)}
+                                          className="flex items-center gap-2 cursor-pointer"
+                                        >
+                                          {post.reviewRequested ? (
+                                            <>
+                                              <Undo2 className="size-3.5 text-muted-foreground" />
+                                              Withdraw Review
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Send className="size-3.5 text-amber-500" />
+                                              Send for Review
+                                            </>
+                                          )}
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem asChild>
                                       <form action={handleDelete} className="w-full">
@@ -390,9 +485,15 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                            <AlertTriangle className="size-3" /> Pending Review
-                          </span>
+                          {draft.reviewRequested ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                              <AlertTriangle className="size-3" /> Pending Review
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-muted text-muted-foreground border-border/60">
+                              <GitBranch className="size-3" /> Editor Draft
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3" />
                         <td className="px-4 py-3 hidden md:table-cell" />
@@ -402,10 +503,11 @@ export function BlogsTableClient({ posts, canPublish, handleDelete }: BlogsTable
                           <TooltipProvider>
                             <div className="flex items-center justify-end gap-1">
                               <div className="hidden sm:contents">
-                                {canPublish && (
+                                {canPublish && draft.reviewRequested && (
                                   <PublishRevisionButton
                                     draftId={draft.id}
                                     parentTitle={post.title}
+                                    scheduledAt={draft.scheduledAt}
                                   />
                                 )}
                               </div>

@@ -96,6 +96,7 @@ interface Application {
 interface ApplicationsViewProps {
   applications: Application[]
   job: any
+  search?: string
 }
 
 const STATUS_CONFIG: Record<
@@ -130,18 +131,18 @@ const STATUS_CONFIG: Record<
 }
 
 
-// Full pipeline order for the dropdown
-const ALL_STATUSES: ApplicationStatus[] = [
-  "NEW",
-  "REVIEWING",
-  "SHORTLISTED",
-  "REJECTED",
-  "HIRED",
-]
+const ALLOWED_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
+  NEW: ["REVIEWING"],
+  REVIEWING: ["NEW", "SHORTLISTED", "REJECTED"],
+  SHORTLISTED: ["REVIEWING", "HIRED"],
+  HIRED: ["SHORTLISTED"],
+  REJECTED: ["REVIEWING"],
+}
 
-export function ApplicationsView({ applications: initial, job }: ApplicationsViewProps) {
+export function ApplicationsView({ applications: initial, job, search: propSearch }: ApplicationsViewProps) {
   const [applications, setApplications] = useState(initial)
-  const [search, setSearch] = useState("")
+  const [localSearch, setLocalSearch] = useState("")
+  const search = propSearch !== undefined ? propSearch : localSearch
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "ALL">("ALL")
   const [selected, setSelected] = useState<Application | null>(null)
   const [notes, setNotes] = useState("")
@@ -356,15 +357,19 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
 
       {/* Search + count row */}
       <div className="flex items-center gap-3 justify-between">
-        <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search applicants…"
-            className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
-          />
-        </div>
+        {propSearch === undefined ? (
+          <div className="relative max-w-xs flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              placeholder="Search applicants…"
+              className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
+            />
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         <p className="text-xs text-muted-foreground shrink-0">
           {filtered.length} of {applications.length} shown
         </p>
@@ -567,19 +572,23 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
                                       <Eye className="size-3.5 text-muted-foreground mr-2" />
                                       View Application
                                     </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    {ALL_STATUSES.filter((s) => s !== app.status).map((s) => {
-                                      const c = STATUS_CONFIG[s]
-                                      return (
-                                        <DropdownMenuItem
-                                          key={s}
-                                          onClick={() => handleUpdateStatus(app.id, s)}
-                                        >
-                                          <span className={`size-2 rounded-full ${c.dotColor} mr-2`} />
-                                          Move to {c.label}
-                                        </DropdownMenuItem>
-                                      )
-                                    })}
+                                    {ALLOWED_TRANSITIONS[app.status].length > 0 && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        {ALLOWED_TRANSITIONS[app.status].map((s) => {
+                                          const c = STATUS_CONFIG[s]
+                                          return (
+                                            <DropdownMenuItem
+                                              key={s}
+                                              onClick={() => handleUpdateStatus(app.id, s)}
+                                            >
+                                              <span className={`size-2 rounded-full ${c.dotColor} mr-2`} />
+                                              Move to {c.label}
+                                            </DropdownMenuItem>
+                                          )
+                                        })}
+                                      </>
+                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TooltipTrigger>
@@ -634,7 +643,7 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
 
                 <div className="flex items-center gap-3 flex-wrap sm:ml-auto">
                   {/* Status update control */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span
                       className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
                         STATUS_CONFIG[selected.status].classes
@@ -646,23 +655,26 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
                       {STATUS_CONFIG[selected.status].label}
                     </span>
 
-                    <Select
-                      value={selected.status}
-                      onValueChange={(v) =>
-                        handleUpdateStatus(selected.id, v as ApplicationStatus, notes)
-                      }
-                    >
-                      <SelectTrigger className="h-8 text-xs w-36 bg-muted/30 border-border/60">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ALL_STATUSES.map((s) => (
-                          <SelectItem key={s} value={s} className="text-xs">
-                            {STATUS_CONFIG[s].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {ALLOWED_TRANSITIONS[selected.status].map((s) => {
+                      const cfg = STATUS_CONFIG[s]
+                      return (
+                        <Button
+                          key={s}
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px] px-2.5 gap-1.5 font-bold uppercase tracking-wider border-border/60 hover:bg-muted"
+                          disabled={updatingId === selected.id}
+                          onClick={() => handleUpdateStatus(selected.id, s, notes)}
+                        >
+                          {updatingId === selected.id ? (
+                            <Loader2 className="size-2.5 animate-spin" />
+                          ) : (
+                            <span className={`size-1.5 rounded-full ${cfg.dotColor}`} />
+                          )}
+                          {cfg.label}
+                        </Button>
+                      )
+                    })}
                   </div>
 
                   <Separator orientation="vertical" className="h-6 bg-border/60 hidden sm:block" />
