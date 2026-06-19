@@ -7,6 +7,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
+import { Calendar } from "lucide-react"
 import { WidgetCard } from "./WidgetCard"
 import type { AppsByDay } from "../_data/dashboard-queries"
 
@@ -29,7 +30,7 @@ function shortDate(iso: any) {
 
 export function ApplicationsTimelineWidget({ data, days }: Props) {
   return (
-    <WidgetCard title="Applications Over Time" description={`Last ${days} days`} contentClassName="pb-2">
+    <WidgetCard title="Applications Over Time" description={`Last ${days} days`} contentClassName="pb-2" icon={Calendar}>
       <ChartContainer config={CHART_CONFIG} className="w-full aspect-[4/1] min-h-[140px]">
         <AreaChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <defs>

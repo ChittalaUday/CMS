@@ -49,6 +49,18 @@ export type FunnelRow = {
   REJECTED: number
   HIRED: number
 }
+export type ActiveJobRow = {
+  id: string
+  title: string
+  department: string
+  location: string
+  jobType: string
+  createdAt: Date
+  _count: {
+    applications: number
+  }
+}
+
 export type ATSRow = { jobTitle: string; avgScore: number; count: number }
 export type AppPerJob = { jobTitle: string; count: number }
 
@@ -67,6 +79,7 @@ export type CareersStats = {
   funnelByJob: FunnelRow[]
   atsScores: ATSRow[]
   appsPerJob: AppPerJob[]
+  activeJobs: ActiveJobRow[]
 }
 
 // ── Blog ─────────────────────────────────────────────────────────────────────
@@ -146,7 +159,7 @@ export async function fetchCareersStats(opts: {
   const jobFilter = clientId ? { clientId } : {}
   const sinceDate = since(days)
 
-  const [openJobs, newApplications, recentApps, funnelRaw, jobsWithApps] =
+  const [openJobs, newApplications, recentApps, funnelRaw, jobsWithApps, activeJobs] =
     await Promise.all([
       prisma.jobPosting.count({ where: { ...jobFilter, status: "PUBLISHED" } }),
       prisma.jobApplication.count({
@@ -172,6 +185,21 @@ export async function fetchCareersStats(opts: {
         },
         orderBy: { applications: { _count: "desc" } },
         take: 10,
+      }),
+      prisma.jobPosting.findMany({
+        where: { ...jobFilter, status: "PUBLISHED" },
+        select: {
+          id: true,
+          title: true,
+          department: true,
+          location: true,
+          jobType: true,
+          createdAt: true,
+          _count: {
+            select: { applications: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
       }),
     ])
 
@@ -244,5 +272,6 @@ export async function fetchCareersStats(opts: {
     funnelByJob,
     atsScores,
     appsPerJob,
+    activeJobs,
   }
 }

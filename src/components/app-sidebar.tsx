@@ -26,7 +26,6 @@ import {
   SettingsIcon,
   LogOutIcon,
   Building2,
-  FileCodeIcon,
 } from "lucide-react"
 import { logoutAction } from "@/app/_actions/auth"
 import { toast } from "sonner"
@@ -65,14 +64,9 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
     })
   }
 
-  // DEVELOPER role: only API Docs + Settings
+  // DEVELOPER role: only Settings
   const navItems = isDevRole
     ? [
-        {
-          title: "API Docs",
-          url: "/dashboard/api-docs",
-          icon: <FileCodeIcon className="size-4" />,
-        },
         {
           title: "Settings",
           url: "/dashboard/settings",
@@ -127,11 +121,6 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
               },
             ]
           : []),
-        {
-          title: "API Docs",
-          url: "/dashboard/api-docs",
-          icon: <FileCodeIcon className="size-4" />,
-        },
         {
           title: "Settings",
           url: "/dashboard/settings",

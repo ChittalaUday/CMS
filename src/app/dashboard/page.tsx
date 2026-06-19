@@ -16,13 +16,10 @@ import {
 
 import { WidgetGrid, WidgetSlot } from "./_widgets/WidgetGrid"
 import { StatCard } from "./_widgets/StatCard"
-import { BlogViewsChartWidget } from "./_widgets/BlogViewsChartWidget"
-import { BlogEngagementWidget } from "./_widgets/BlogEngagementWidget"
-import { TopPostsWidget } from "./_widgets/TopPostsWidget"
-import { ApplicationFunnelWidget } from "./_widgets/ApplicationFunnelWidget"
+import { ActiveCareersWidget } from "./_widgets/ActiveCareersWidget"
 import { ApplicationsPerJobWidget } from "./_widgets/ApplicationsPerJobWidget"
-import { ATSScoreWidget } from "./_widgets/ATSScoreWidget"
 import { ApplicationsTimelineWidget } from "./_widgets/ApplicationsTimelineWidget"
+import { TopPostsWidget } from "./_widgets/TopPostsWidget"
 import { TimeRangeSelector } from "./_widgets/TimeRangeSelector"
 import { fetchBlogStats, fetchCareersStats } from "./_data/dashboard-queries"
 
@@ -52,10 +49,10 @@ export default async function Page({
   const [blog, careers] = await Promise.all([
     canAccessBlogs(user.role)
       ? fetchBlogStats({
-          clientId,
-          userId: user.role === "EDITOR" ? user.id : undefined,
-          days,
-        })
+        clientId,
+        userId: user.role === "EDITOR" ? user.id : undefined,
+        days,
+      })
       : null,
     canAccessCareers(user.role)
       ? fetchCareersStats({ clientId, days })
@@ -113,29 +110,44 @@ export default async function Page({
               />
             </WidgetSlot>
 
-            {/* Blog charts */}
-            <WidgetSlot size="full">
-              <BlogViewsChartWidget data={blog.viewsPerDay} days={days} />
-            </WidgetSlot>
-            <WidgetSlot size="md">
-              <TopPostsWidget posts={blog.topPosts} />
-            </WidgetSlot>
-            <WidgetSlot size="md">
-              <BlogEngagementWidget data={blog.engagementByDay} days={days} />
-            </WidgetSlot>
-
             {/* Careers charts */}
-            <WidgetSlot size="full">
-              <ApplicationFunnelWidget data={careers.funnelByJob} />
+            <WidgetSlot size="md">
+              <ActiveCareersWidget jobs={careers.activeJobs} />
             </WidgetSlot>
             <WidgetSlot size="md">
               <ApplicationsPerJobWidget data={careers.appsPerJob} />
             </WidgetSlot>
-            <WidgetSlot size="md">
-              <ATSScoreWidget data={careers.atsScores} />
-            </WidgetSlot>
             <WidgetSlot size="full">
               <ApplicationsTimelineWidget data={careers.appsPerDay} days={days} />
+            </WidgetSlot>
+
+            {/* Blog widget */}
+            <WidgetSlot size="full">
+              <TopPostsWidget posts={blog.topPosts} />
+            </WidgetSlot>
+          </>
+        )}
+
+
+        {/* ── EDITOR only ── */}
+        {hasBlog && !hasCareers && (
+          <>
+            <WidgetSlot size="md">
+              <StatCard
+                title="Published Posts"
+                value={blog.totalPosts}
+                icon={FileText}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <StatCard
+                title="Total Views"
+                value={blog.totalViews}
+                icon={Eye}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <TopPostsWidget posts={blog.topPosts} />
             </WidgetSlot>
           </>
         )}
@@ -157,14 +169,11 @@ export default async function Page({
                 icon={Users}
               />
             </WidgetSlot>
-            <WidgetSlot size="full">
-              <ApplicationFunnelWidget data={careers.funnelByJob} />
+            <WidgetSlot size="md">
+              <ActiveCareersWidget jobs={careers.activeJobs} />
             </WidgetSlot>
             <WidgetSlot size="md">
               <ApplicationsPerJobWidget data={careers.appsPerJob} />
-            </WidgetSlot>
-            <WidgetSlot size="md">
-              <ATSScoreWidget data={careers.atsScores} />
             </WidgetSlot>
             <WidgetSlot size="full">
               <ApplicationsTimelineWidget data={careers.appsPerDay} days={days} />
@@ -172,34 +181,6 @@ export default async function Page({
           </>
         )}
 
-        {/* ── EDITOR only ── */}
-        {hasBlog && !hasCareers && (
-          <>
-            <WidgetSlot size="md">
-              <StatCard
-                title="Published Posts"
-                value={blog.totalPosts}
-                icon={FileText}
-              />
-            </WidgetSlot>
-            <WidgetSlot size="md">
-              <StatCard
-                title="Total Views"
-                value={blog.totalViews}
-                icon={Eye}
-              />
-            </WidgetSlot>
-            <WidgetSlot size="full">
-              <BlogViewsChartWidget data={blog.viewsPerDay} days={days} />
-            </WidgetSlot>
-            <WidgetSlot size="full">
-              <TopPostsWidget posts={blog.topPosts} />
-            </WidgetSlot>
-            <WidgetSlot size="full">
-              <BlogEngagementWidget data={blog.engagementByDay} days={days} />
-            </WidgetSlot>
-          </>
-        )}
       </WidgetGrid>
     </div>
   )

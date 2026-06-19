@@ -18,8 +18,8 @@ export function StatCard({ title, value, icon: Icon, trend }: StatCardProps) {
     <Card className="h-full">
       <CardContent className="flex flex-col gap-4 pt-5">
         <div className="flex items-start justify-between">
-          <div className="rounded-md bg-muted p-2">
-            <Icon className="h-5 w-5 text-muted-foreground" />
+          <div className="rounded-md bg-accent p-2">
+            <Icon className="h-5 w-5 text-primary" />
           </div>
           {trend && (
             <span

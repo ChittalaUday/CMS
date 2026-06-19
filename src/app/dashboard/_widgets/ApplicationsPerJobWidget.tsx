@@ -7,6 +7,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
+import { BarChart3 } from "lucide-react"
 import { WidgetCard } from "./WidgetCard"
 import type { AppPerJob } from "../_data/dashboard-queries"
 
@@ -20,7 +21,7 @@ interface Props {
 
 export function ApplicationsPerJobWidget({ data }: Props) {
   return (
-    <WidgetCard title="Applications per Job" description="Top 10 by count" contentClassName="pb-2">
+    <WidgetCard title="Applications per Job" description="Top 10 by count" contentClassName="pb-2" icon={BarChart3}>
       {data.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           No applications yet.

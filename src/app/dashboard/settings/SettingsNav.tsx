@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { UserIcon, PaletteIcon, KeyRoundIcon, ShieldIcon, ServerIcon } from "lucide-react"
+import { UserIcon, PaletteIcon, KeyRoundIcon, ShieldIcon, ServerIcon, FileCodeIcon } from "lucide-react"
 import { type Role, Role as RoleEnum } from "@/lib/auth/roles"
 
 const BASE_NAV_ITEMS = [
   { href: "/dashboard/settings/profile",    label: "Personal Info", icon: UserIcon    },
   { href: "/dashboard/settings/appearance", label: "Appearance",    icon: PaletteIcon },
   { href: "/dashboard/settings/account",    label: "Account",       icon: KeyRoundIcon },
+  { href: "/dashboard/api-docs",            label: "API Docs",      icon: FileCodeIcon },
 ]
 
 const ADMIN_NAV_ITEMS = [

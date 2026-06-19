@@ -16,6 +16,7 @@ interface WidgetCardProps {
   action?: React.ReactNode
   className?: string
   contentClassName?: string
+  icon?: React.ComponentType<{ className?: string }>
 }
 
 export function WidgetCard({
@@ -26,11 +27,15 @@ export function WidgetCard({
   action,
   className,
   contentClassName,
+  icon: Icon,
 }: WidgetCardProps) {
   return (
     <Card className={cn("h-full", className)}>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          {Icon && <Icon className="h-5 w-5 text-primary shrink-0" />}
+          <span>{title}</span>
+        </CardTitle>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}

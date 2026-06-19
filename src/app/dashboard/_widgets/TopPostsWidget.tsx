@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react"
 import { WidgetCard } from "./WidgetCard"
 import type { TopPost } from "../_data/dashboard-queries"
 
@@ -7,7 +8,7 @@ interface Props {
 
 export function TopPostsWidget({ posts }: Props) {
   return (
-    <WidgetCard title="Top Posts" description="By views">
+    <WidgetCard title="Top Posts" description="By views" icon={FileText}>
       {posts.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           No published posts yet.
@@ -19,9 +20,6 @@ export function TopPostsWidget({ posts }: Props) {
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="pb-2 font-medium pr-4">Title</th>
                 <th className="pb-2 font-medium text-right pr-4">Views</th>
-                <th className="pb-2 font-medium text-right hidden sm:table-cell pr-4">
-                  Likes
-                </th>
                 <th className="pb-2 font-medium text-right hidden md:table-cell">
                   Published
                 </th>
@@ -40,9 +38,6 @@ export function TopPostsWidget({ posts }: Props) {
                   </td>
                   <td className="py-2 pr-4 text-right tabular-nums">
                     {post.views.toLocaleString()}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums hidden sm:table-cell">
-                    {post.likes.toLocaleString()}
                   </td>
                   <td className="py-2 text-right text-muted-foreground hidden md:table-cell whitespace-nowrap">
                     {post.createdAt.toLocaleDateString("en-US", {
