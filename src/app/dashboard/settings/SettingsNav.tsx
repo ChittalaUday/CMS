@@ -9,7 +9,7 @@ const BASE_NAV_ITEMS = [
   { href: "/dashboard/settings/profile",    label: "Personal Info", icon: UserIcon    },
   { href: "/dashboard/settings/appearance", label: "Appearance",    icon: PaletteIcon },
   { href: "/dashboard/settings/account",    label: "Account",       icon: KeyRoundIcon },
-  { href: "/dashboard/api-docs",            label: "API Docs",      icon: FileCodeIcon },
+  { href: "/dashboard/settings/api-docs",   label: "API Docs",      icon: FileCodeIcon },
 ]
 
 const ADMIN_NAV_ITEMS = [

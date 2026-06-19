@@ -435,7 +435,7 @@ export function ApiTokensManager({ tokens, registry, hasClient }: Props) {
       <Separator />
 
       <Link
-        href="/dashboard/api-docs"
+        href="/dashboard/settings/api-docs"
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <BookOpenIcon className="size-4" />

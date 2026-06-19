@@ -32,7 +32,7 @@ export default async function Page({
 }) {
   const user = await getSession()
   if (!user) redirect("/")
-  if (isDeveloper(user.role)) redirect("/dashboard/api-docs")
+  if (isDeveloper(user.role)) redirect("/dashboard/settings/api-docs")
 
   const { days: daysParam } = await searchParams
   const days = Math.min(Math.max(Number(daysParam ?? 30), 7), 90)
