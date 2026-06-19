@@ -41,9 +41,20 @@ interface Application {
   answers?: Answer[]
 }
 
+interface JobPosting {
+  id: string
+  title: string
+  department: string
+  location: string
+  description: string | null
+  requirements: string | null
+  responsibilities: string | null
+  keywords: string[]
+}
+
 interface ApplicationsWrapperProps {
   applications: Application[]
-  job: any
+  job: JobPosting
 }
 
 export function ApplicationsWrapper({

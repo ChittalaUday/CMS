@@ -93,9 +93,20 @@ interface Application {
   answers?: Answer[]
 }
 
+interface JobPosting {
+  id: string
+  title: string
+  department: string
+  location: string
+  description: string | null
+  requirements: string | null
+  responsibilities: string | null
+  keywords: string[]
+}
+
 interface ApplicationsViewProps {
   applications: Application[]
-  job: any
+  job: JobPosting
   search?: string
 }
 
@@ -221,6 +232,7 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
   const [activeTab, setActiveTab] = useState<"ai" | "pdf">("ai")
   const [ollamaModels, setOllamaModels] = useState<{ name: string; model: string }[]>([])
   const [selectedModel, setSelectedModel] = useState<string>("")
+  const pollCancelledRef = useRef(false)
 
   // Fetch available Ollama models once on mount
   useEffect(() => {
@@ -229,16 +241,21 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
       .then((data) => {
         const models: { name: string; model: string }[] = data.models || []
         setOllamaModels(models)
-        // Default to the first available model if none selected
-        if (models.length > 0 && !selectedModel) {
-          setSelectedModel(models[0].name)
+        if (models.length > 0) {
+          setSelectedModel((prev) => prev || models[0].name)
         }
       })
-      .catch(() => {
-        // Ollama offline — no models to show
-      })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch(() => {})
   }, [])
+
+  // Cancel any in-flight poll when the drawer closes
+  useEffect(() => {
+    if (!selected) {
+      pollCancelledRef.current = true
+    } else {
+      pollCancelledRef.current = false
+    }
+  }, [selected])
 
   function openDrawer(app: Application) {
     setSelected(app)
@@ -256,17 +273,17 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
     setAtsScore(null)
     setAtsConfidence(null)
     setAtsJustification(null)
+    pollCancelledRef.current = false
 
     try {
-      // Fire-and-forget: enqueues the job and returns immediately (won't be cancelled on browser disconnect)
       await getAtsScore(selected.id, selectedModel || undefined)
       toast.info("Analysis queued — processing in the background...")
 
-      // Poll until the queue worker marks it COMPLETED or FAILED
       const poll = async () => {
+        if (pollCancelledRef.current) return
         try {
           const app = await getApplicationById(selected.id)
-          if (!app) return
+          if (pollCancelledRef.current || !app) return
 
           if (app.atsStatus === "COMPLETED") {
             setAtsScore(app.atsScore)
@@ -295,19 +312,20 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
             setIsAtsLoading(false)
             toast.error(app.atsJustification || "Analysis failed — please try again.")
           } else {
-            // Still PENDING or PROCESSING — keep polling
             setTimeout(poll, 2000)
           }
         } catch {
-          setIsAtsLoading(false)
-          toast.error("Failed to fetch analysis result.")
+          if (!pollCancelledRef.current) {
+            setIsAtsLoading(false)
+            toast.error("Failed to fetch analysis result.")
+          }
         }
       }
 
       setTimeout(poll, 2000)
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsAtsLoading(false)
-      toast.error(err.message || "Failed to queue ATS analysis.")
+      toast.error((err as Error).message || "Failed to queue ATS analysis.")
     }
   }
 
@@ -841,7 +859,6 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                   </div>
                 </div>
 
-                { }
                 <div className="flex flex-col h-full overflow-hidden border border-border/60 rounded-xl bg-card/25 p-4 space-y-4">
                   {/* Tabs header */}
                   <div className="shrink-0 pb-2 border-b border-border/40 flex items-center justify-between">

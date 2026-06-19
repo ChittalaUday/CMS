@@ -1183,7 +1183,6 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               )}
             </div>
 
-            <Separator className="bg-border/60" />
           </>
         )}
 

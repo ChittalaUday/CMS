@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Globe, Upload, Loader2 } from "lucide-react"
+import { Globe, Upload, Loader2, CalendarClock } from "lucide-react"
 import { useTransition } from "react"
 import { togglePublished } from "./actions"
 import { PublishSheet } from "./PublishSheet"
@@ -62,6 +62,8 @@ export function PublishButton({ postId, postTitle, isPublished, scheduledAt }: P
               <Loader2 className="size-3.5 animate-spin" />
             ) : isPublished ? (
               <Globe className="size-3.5" />
+            ) : isScheduled ? (
+              <CalendarClock className="size-3.5" />
             ) : (
               <Upload className="size-3.5" />
             )}

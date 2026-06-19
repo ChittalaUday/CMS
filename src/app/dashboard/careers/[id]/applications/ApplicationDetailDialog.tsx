@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useRef, useTransition } from "react"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
@@ -112,11 +112,21 @@ interface Application {
   answers?: Answer[]
 }
 
+interface JobPosting {
+  id: string
+  title: string
+  department: string
+  location: string
+  description: string | null
+  requirements: string | null
+  keywords: string[]
+}
+
 interface ApplicationDetailDialogProps {
   application: Application | null
   isOpen: boolean
   onClose: () => void
-  job: any
+  job: JobPosting
   onStatusChange: (id: string, status: ApplicationStatus, notes?: string) => Promise<void>
   onApplicationUpdate?: (app: Application) => void
 }
@@ -140,6 +150,7 @@ export function ApplicationDetailDialog({
   const [activeTab, setActiveTab] = useState<"ai" | "pdf">("ai")
   const [ollamaModels, setOllamaModels] = useState<{ name: string; model: string }[]>([])
   const [selectedModel, setSelectedModel] = useState<string>("")
+  const pollCancelledRef = useRef(false)
 
   useEffect(() => {
     if (application) {
@@ -156,12 +167,21 @@ export function ApplicationDetailDialog({
       .then((data) => {
         const models = data.models || []
         setOllamaModels(models)
-        if (models.length > 0 && !selectedModel) {
-          setSelectedModel(models[0].name)
+        if (models.length > 0) {
+          setSelectedModel((prev) => prev || models[0].name)
         }
       })
       .catch(() => {})
-  }, [selectedModel])
+  }, [])
+
+  // Cancel any in-flight poll when the dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      pollCancelledRef.current = true
+    } else {
+      pollCancelledRef.current = false
+    }
+  }, [isOpen])
 
   if (!application) return null
 
@@ -171,15 +191,17 @@ export function ApplicationDetailDialog({
     setAtsScore(null)
     setAtsConfidence(null)
     setAtsJustification(null)
+    pollCancelledRef.current = false
 
     try {
       await getAtsScore(application.id, selectedModel || undefined)
       toast.info("Analysis queued — processing in the background...")
 
       const poll = async () => {
+        if (pollCancelledRef.current) return
         try {
           const app = await getApplicationById(application.id)
-          if (!app) return
+          if (pollCancelledRef.current || !app) return
 
           if (app.atsStatus === "COMPLETED") {
             setAtsScore(app.atsScore)
@@ -188,7 +210,7 @@ export function ApplicationDetailDialog({
             setIsAtsLoading(false)
             toast.success("ATS analysis complete!")
             if (onApplicationUpdate) {
-              onApplicationUpdate(app as any)
+              onApplicationUpdate(app as unknown as Application)
             }
           } else if (app.atsStatus === "FAILED") {
             setIsAtsLoading(false)
@@ -197,15 +219,17 @@ export function ApplicationDetailDialog({
             setTimeout(poll, 2000)
           }
         } catch {
-          setIsAtsLoading(false)
-          toast.error("Failed to fetch analysis result.")
+          if (!pollCancelledRef.current) {
+            setIsAtsLoading(false)
+            toast.error("Failed to fetch analysis result.")
+          }
         }
       }
 
       setTimeout(poll, 2000)
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsAtsLoading(false)
-      toast.error(err.message || "Failed to queue ATS analysis.")
+      toast.error((err as Error).message || "Failed to queue ATS analysis.")
     }
   }
 

@@ -85,9 +85,19 @@ interface Application {
   answers?: Answer[]
 }
 
+interface JobPosting {
+  id: string
+  title: string
+  department: string
+  location: string
+  description: string | null
+  requirements: string | null
+  keywords: string[]
+}
+
 interface ApplicationsKanbanProps {
   applications: Application[]
-  job: any
+  job: JobPosting
   search?: string
 }
 
@@ -189,7 +199,7 @@ export function ApplicationsKanban({
     try {
       await updateApplicationStatus(id, newStatus, notes)
       toast.success(`Application updated to ${STATUS_CONFIG[newStatus].label}.`)
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Revert
       setApplications((prev) =>
         prev.map((a) => (a.id === id ? { ...a, status: original.status, notes: original.notes } : a))
@@ -197,7 +207,7 @@ export function ApplicationsKanban({
       if (selectedApp?.id === id) {
         setSelectedApp(original)
       }
-      toast.error(err.message || "Failed to update candidate status.")
+      toast.error((err as Error).message || "Failed to update candidate status.")
     }
   }
 
@@ -244,12 +254,12 @@ export function ApplicationsKanban({
     try {
       await updateApplicationStatus(applicationId, targetStatus, app.notes ?? undefined)
       toast.success(`Candidate moved to ${STATUS_CONFIG[targetStatus].label}.`)
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Revert optimistic update
       setApplications((prev) =>
         prev.map((a) => (a.id === applicationId ? { ...a, status: originalStatus } : a))
       )
-      toast.error(err.message || "Failed to move candidate status.")
+      toast.error((err as Error).message || "Failed to move candidate status.")
     }
   }
 
@@ -330,9 +340,9 @@ export function ApplicationsKanban({
         job={job}
         onStatusChange={handleStatusUpdate}
         onApplicationUpdate={(updated) => {
-          setApplications((prev) => prev.map((a) => (a.id === updated.id ? (updated as any) : a)))
+          setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
           if (selectedApp?.id === updated.id) {
-            setSelectedApp(updated as any)
+            setSelectedApp(updated)
           }
         }}
       />
