@@ -82,6 +82,10 @@ import {
   Wand2,
   BarChart2,
   BotOff,
+  Send,
+  SendHorizonal,
+  Undo2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { BaseBoldPlugin, BaseItalicPlugin, BaseUnderlinePlugin, BaseStrikethroughPlugin, BaseCodePlugin, BaseH1Plugin, BaseH2Plugin } from '@platejs/basic-nodes';
 import { ListElement, ListItemElement } from '@/components/ui/list-node';
@@ -219,6 +223,10 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
   const [isAddCatDialogOpen, setIsAddCatDialogOpen] = useState(false);
+
+  // Review / submission state (revision mode only)
+  const [reviewRequested, setReviewRequested] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // Auto save and publishing states
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -491,6 +499,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                 window.history.replaceState({}, '', `/editor?id=${existingDraft.id}`);
                 setParentPostId(post.id);
                 setTitle(existingDraft.title || "");
+                setReviewRequested(!!(existingDraft as any).reviewRequested);
                 // Show the proposed published slug (stored in metadata), not the --draft slug
                 const proposedSlug = (existingDraft.metadata as any)?.proposedSlug || post.slug;
                 setSlug(proposedSlug);
@@ -529,6 +538,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             } else if (post.draftParentId) {
               // Directly opened a revision — set parentPostId so publish button works correctly
               setParentPostId(post.draftParentId);
+              setReviewRequested(!!(post as any).reviewRequested);
               setTitle(post.title || "");
               const proposedSlug = (post.metadata as any)?.proposedSlug || post.slug;
               setSlug(proposedSlug);
@@ -1116,6 +1126,66 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           </div>
         </div>
 
+        {/* Review status banner (revision mode only) */}
+        {parentPostId && id && id !== parentPostId && (
+          <>
+            <div className={`rounded-xl border px-4 py-3 space-y-2 ${reviewRequested ? 'border-sky-500/25 bg-sky-500/8' : 'border-border/50 bg-muted/20'}`}>
+              <div className="flex items-center gap-2">
+                {reviewRequested ? (
+                  <ClipboardCheck className="size-3.5 text-sky-400 shrink-0" />
+                ) : (
+                  <Send className="size-3.5 text-muted-foreground shrink-0" />
+                )}
+                <span className="text-xs font-semibold text-foreground">
+                  {reviewRequested ? 'Pending Admin Review' : 'Not yet submitted'}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                {reviewRequested
+                  ? 'An admin will review and publish this revision.'
+                  : 'Submit for review when you\'re ready for an admin to publish.'}
+              </p>
+              {!isAdmin && (
+                <button
+                  type="button"
+                  disabled={isSubmittingReview}
+                  onClick={async () => {
+                    if (!id) return;
+                    try {
+                      setIsSubmittingReview(true);
+                      if (reviewRequested) {
+                        const { withdrawRevisionFromReview } = await import('@/app/dashboard/blogs/actions');
+                        await withdrawRevisionFromReview(id);
+                        setReviewRequested(false);
+                        toast.success('Review request withdrawn.');
+                      } else {
+                        const { submitRevisionForReview } = await import('@/app/dashboard/blogs/actions');
+                        await submitRevisionForReview(id);
+                        setReviewRequested(true);
+                        toast.success('Submitted for admin review.');
+                      }
+                    } catch (err: any) {
+                      toast.error(err.message || 'Failed.');
+                    } finally {
+                      setIsSubmittingReview(false);
+                    }
+                  }}
+                  className={`w-full h-8 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border ${reviewRequested ? 'border-destructive/30 text-destructive hover:bg-destructive/10' : 'border-primary/30 text-primary hover:bg-primary/10'}`}
+                >
+                  {isSubmittingReview ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : reviewRequested ? (
+                    <><Undo2 className="size-3.5" /> Withdraw Submission</>
+                  ) : (
+                    <><SendHorizonal className="size-3.5" /> Submit for Review</>
+                  )}
+                </button>
+              )}
+            </div>
+
+          </>
+        )}
+
         <Separator className="bg-border/60" />
 
         {/* Featured Post Toggle */}
@@ -1533,22 +1603,69 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             </Button>
 
             {parentPostId && id && id !== parentPostId ? (
-              <RevisionCompareDialog
-                draftId={id}
-                disabled={saveStatus === 'saving'}
-                trigger={
-                  <Button
-                    size="sm"
-                    className="h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-70 disabled:cursor-not-allowed"
-                    disabled={saveStatus === 'saving'}
-                  >
-                    <Rocket className="size-3.5" />
-                    Publish Revision
-                  </Button>
-                }
-                onPublished={() => router.push('/dashboard/blogs')}
-              />
-            ) : (
+              /* ── Revision mode ── */
+              isAdmin ? (
+                /* Admin: compare + publish/schedule */
+                <RevisionCompareDialog
+                  draftId={id}
+                  disabled={saveStatus === 'saving'}
+                  trigger={
+                    <Button
+                      size="sm"
+                      className="h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-70 disabled:cursor-not-allowed"
+                      disabled={saveStatus === 'saving'}
+                    >
+                      <Rocket className="size-3.5" />
+                      Publish Revision
+                    </Button>
+                  }
+                  onPublished={() => router.push('/dashboard/blogs')}
+                />
+              ) : reviewRequested ? (
+                /* Editor: already submitted — show withdraw button */
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8.5 gap-1.5 text-xs font-semibold border-sky-500/40 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                  disabled={isSubmittingReview}
+                  onClick={async () => {
+                    try {
+                      setIsSubmittingReview(true);
+                      const { withdrawRevisionFromReview } = await import('@/app/dashboard/blogs/actions');
+                      await withdrawRevisionFromReview(id!);
+                      setReviewRequested(false);
+                      toast.success('Review request withdrawn.');
+                    } catch (err: any) {
+                      toast.error(err.message || 'Failed to withdraw.');
+                    } finally {
+                      setIsSubmittingReview(false);
+                    }
+                  }}
+                >
+                  {isSubmittingReview ? <Loader2 className="size-3.5 animate-spin" /> : <ClipboardCheck className="size-3.5" />}
+                  Submitted for Review
+                </Button>
+              ) : (
+                /* Editor: not yet submitted — opens comparison dialog to confirm */
+                <RevisionCompareDialog
+                  draftId={id}
+                  mode="review"
+                  disabled={saveStatus === 'saving' || !id}
+                  trigger={
+                    <Button
+                      size="sm"
+                      className="h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={saveStatus === 'saving' || !id}
+                    >
+                      <SendHorizonal className="size-3.5" />
+                      Submit for Review
+                    </Button>
+                  }
+                  onReviewSubmitted={() => setReviewRequested(true)}
+                />
+              )
+            ) : isAdmin ? (
+              /* ── Fresh draft, admin only ── */
               <Button
                 size="sm"
                 className={cn(
@@ -1570,7 +1687,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                 )}
                 {parentPostId ? 'Publish Revision' : published ? 'Unpublish Post' : 'Publish Post'}
               </Button>
-            )}
+            ) : null /* Editor on fresh draft: no publish button */}
           </div>
         </header>
 

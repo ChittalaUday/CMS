@@ -1,39 +1,206 @@
 import { getSession } from "@/lib/auth/session"
-import { isDeveloper } from "@/lib/auth/roles"
+import {
+  canAccessBlogs,
+  canAccessCareers,
+  isDeveloper,
+  isSuperAdmin,
+} from "@/lib/auth/roles"
 import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
+import {
+  FileText,
+  Eye,
+  Briefcase,
+  Users,
+} from "lucide-react"
+
+import { WidgetGrid, WidgetSlot } from "./_widgets/WidgetGrid"
+import { StatCard } from "./_widgets/StatCard"
+import { BlogViewsChartWidget } from "./_widgets/BlogViewsChartWidget"
+import { BlogEngagementWidget } from "./_widgets/BlogEngagementWidget"
+import { TopPostsWidget } from "./_widgets/TopPostsWidget"
+import { ApplicationFunnelWidget } from "./_widgets/ApplicationFunnelWidget"
+import { ApplicationsPerJobWidget } from "./_widgets/ApplicationsPerJobWidget"
+import { ATSScoreWidget } from "./_widgets/ATSScoreWidget"
+import { ApplicationsTimelineWidget } from "./_widgets/ApplicationsTimelineWidget"
+import { TimeRangeSelector } from "./_widgets/TimeRangeSelector"
+import { fetchBlogStats, fetchCareersStats } from "./_data/dashboard-queries"
 
 export const dynamic = "force-dynamic"
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>
+}) {
   const user = await getSession()
-  if (user && isDeveloper(user.role)) redirect("/dashboard/api-docs")
+  if (!user) redirect("/")
+  if (isDeveloper(user.role)) redirect("/dashboard/api-docs")
+
+  const { days: daysParam } = await searchParams
+  const days = Math.min(Math.max(Number(daysParam ?? 30), 7), 90)
+
+  // Resolve active clientId
+  let clientId: string | null = null
+  if (isSuperAdmin(user.role)) {
+    const jar = await cookies()
+    clientId = jar.get("cms_active_client")?.value ?? null
+  } else {
+    clientId = user.clientId ?? null
+  }
+
+  const [blog, careers] = await Promise.all([
+    canAccessBlogs(user.role)
+      ? fetchBlogStats({
+          clientId,
+          userId: user.role === "EDITOR" ? user.id : undefined,
+          days,
+        })
+      : null,
+    canAccessCareers(user.role)
+      ? fetchCareersStats({ clientId, days })
+      : null,
+  ])
+
+  const hasBlog = blog !== null
+  const hasCareers = careers !== null
+  const hasAll = hasBlog && hasCareers
+
   return (
-    <>
-      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-        <div className="aspect-video rounded-xl bg-muted/50 flex items-center justify-center p-6 border border-border">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold text-foreground">Editors</h3>
-            <p className="text-3xl font-bold mt-2">Active</p>
-          </div>
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Welcome back, {user.name ?? user.username}
+          </p>
         </div>
-        <div className="aspect-video rounded-xl bg-muted/50 flex items-center justify-center p-6 border border-border">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold text-foreground">Blogs</h3>
-            <p className="text-3xl font-bold mt-2">Drafts</p>
-          </div>
-        </div>
-        <div className="aspect-video rounded-xl bg-muted/50 flex items-center justify-center p-6 border border-border">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold text-foreground">Settings</h3>
-            <p className="text-sm text-muted-foreground mt-2">Manage system settings</p>
-          </div>
-        </div>
+        <TimeRangeSelector />
       </div>
-      <div className="min-h-[400px] flex-1 rounded-xl bg-muted/50 border border-border p-6 flex flex-col justify-center items-center text-center">
-        <h2 className="text-xl font-bold mb-2">Welcome to your CMS Dashboard</h2>
-        <p className="text-muted-foreground max-w-md">Use the sidebar navigation to manage editors, check blog configurations, and control system settings.</p>
-      </div>
-    </>
+
+      <WidgetGrid>
+        {/* ── SUPER_ADMIN / ADMIN ── */}
+        {hasAll && (
+          <>
+            {/* Stat row */}
+            <WidgetSlot size="sm">
+              <StatCard
+                title="Published Posts"
+                value={blog.totalPosts}
+                icon={FileText}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="sm">
+              <StatCard
+                title="Total Views"
+                value={blog.totalViews}
+                icon={Eye}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="sm">
+              <StatCard
+                title="Open Jobs"
+                value={careers.openJobs}
+                icon={Briefcase}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="sm">
+              <StatCard
+                title={`New Applications (${days}d)`}
+                value={careers.newApplications}
+                icon={Users}
+              />
+            </WidgetSlot>
+
+            {/* Blog charts */}
+            <WidgetSlot size="full">
+              <BlogViewsChartWidget data={blog.viewsPerDay} days={days} />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <TopPostsWidget posts={blog.topPosts} />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <BlogEngagementWidget data={blog.engagementByDay} days={days} />
+            </WidgetSlot>
+
+            {/* Careers charts */}
+            <WidgetSlot size="full">
+              <ApplicationFunnelWidget data={careers.funnelByJob} />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <ApplicationsPerJobWidget data={careers.appsPerJob} />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <ATSScoreWidget data={careers.atsScores} />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <ApplicationsTimelineWidget data={careers.appsPerDay} days={days} />
+            </WidgetSlot>
+          </>
+        )}
+
+        {/* ── HR only ── */}
+        {!hasBlog && hasCareers && (
+          <>
+            <WidgetSlot size="md">
+              <StatCard
+                title="Open Jobs"
+                value={careers.openJobs}
+                icon={Briefcase}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <StatCard
+                title={`New Applications (${days}d)`}
+                value={careers.newApplications}
+                icon={Users}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <ApplicationFunnelWidget data={careers.funnelByJob} />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <ApplicationsPerJobWidget data={careers.appsPerJob} />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <ATSScoreWidget data={careers.atsScores} />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <ApplicationsTimelineWidget data={careers.appsPerDay} days={days} />
+            </WidgetSlot>
+          </>
+        )}
+
+        {/* ── EDITOR only ── */}
+        {hasBlog && !hasCareers && (
+          <>
+            <WidgetSlot size="md">
+              <StatCard
+                title="Published Posts"
+                value={blog.totalPosts}
+                icon={FileText}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="md">
+              <StatCard
+                title="Total Views"
+                value={blog.totalViews}
+                icon={Eye}
+              />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <BlogViewsChartWidget data={blog.viewsPerDay} days={days} />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <TopPostsWidget posts={blog.topPosts} />
+            </WidgetSlot>
+            <WidgetSlot size="full">
+              <BlogEngagementWidget data={blog.engagementByDay} days={days} />
+            </WidgetSlot>
+          </>
+        )}
+      </WidgetGrid>
+    </div>
   )
 }
-

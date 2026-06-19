@@ -2,9 +2,10 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useCallback, useTransition, useState, useEffect } from "react"
-import { Search, X, Filter } from "lucide-react"
+import { Search, X, Filter, GitBranch } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { useDebounce } from "@/hooks/use-debounce"
 
 interface Category {
@@ -18,9 +19,11 @@ interface BlogsToolbarProps {
   search: string
   categoryId: string
   status: string
+  showEditorDrafts: boolean
+  canToggleEditorDrafts: boolean
 }
 
-export function BlogsToolbar({ categories, totalCount, search, categoryId, status }: BlogsToolbarProps) {
+export function BlogsToolbar({ categories, totalCount, search, categoryId, status, showEditorDrafts, canToggleEditorDrafts }: BlogsToolbarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -63,7 +66,7 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId, statu
     }
   }, [debouncedSearch, search, updateParams])
 
-  const hasFilters = !!search || !!categoryId || !!status
+  const hasFilters = !!search || !!categoryId || !!status || showEditorDrafts
 
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -117,16 +120,36 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId, statu
           <option value="">All Statuses</option>
           <option value="published">Published</option>
           <option value="draft">Draft</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="pending_review">Pending Review</option>
           <option value="revision">Revision</option>
         </select>
       </div>
+
+      {/* Editor drafts toggle — admins only */}
+      {canToggleEditorDrafts && (
+        <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border/60 bg-muted/30 shrink-0">
+          <GitBranch className="size-3.5 text-muted-foreground/60" />
+          <label htmlFor="editor-drafts-toggle" className="text-xs font-medium text-muted-foreground cursor-pointer select-none whitespace-nowrap">
+            Editor drafts
+          </label>
+          <Switch
+            id="editor-drafts-toggle"
+            checked={showEditorDrafts}
+            onCheckedChange={(checked) =>
+              updateParams({ showEditorDrafts: checked ? "1" : undefined })
+            }
+            className="scale-75"
+          />
+        </div>
+      )}
 
       {/* Clear filters */}
       {hasFilters && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => updateParams({ search: undefined, categoryId: undefined, status: undefined })}
+          onClick={() => updateParams({ search: undefined, categoryId: undefined, status: undefined, showEditorDrafts: undefined })}
           className="h-9 text-xs gap-1.5 text-muted-foreground hover:text-foreground shrink-0"
         >
           <X className="size-3.5" />

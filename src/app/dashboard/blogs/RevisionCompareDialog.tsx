@@ -10,10 +10,11 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus, CalendarClock, Clock, X, CalendarCheck } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils/utils"
-import { getRevisionComparison, publishPostDraftRevision } from "./actions"
+import { getRevisionComparison, publishPostDraftRevision, schedulePostDraftRevision, unschedulePostDraftRevision } from "./actions"
 
 // --- Word-level diff (for title) ---
 type DiffToken = { text: string; type: "same" | "added" | "removed" }
@@ -112,8 +113,12 @@ interface RevisionCompareDialogProps {
   draftId: string
   trigger: ReactNode
   onPublished?: () => void
+  onReviewSubmitted?: () => void
   /** Block the dialog from opening (e.g. while an auto-save is in flight) */
   disabled?: boolean
+  scheduledAt?: Date | string | null
+  /** "publish" = admin flow (publish + schedule); "review" = editor flow (submit for review only) */
+  mode?: "publish" | "review"
 }
 
 const HTML_STYLES =
@@ -130,17 +135,37 @@ const HTML_STYLES =
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-muted-foreground " +
   "[&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold"
 
+function formatScheduled(dt: Date | string) {
+  return new Date(dt).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  })
+}
+
 export function RevisionCompareDialog({
   draftId,
   trigger,
   onPublished,
+  onReviewSubmitted,
   disabled = false,
+  scheduledAt,
+  mode = "publish",
 }: RevisionCompareDialogProps) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<ComparisonData | null>(null)
   const [loading, setLoading] = useState(false)
   const [contentDiff, setContentDiff] = useState<BlockDiffRow[] | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+
+  // Schedule state (publish mode only)
+  const [showScheduler, setShowScheduler] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
+  const [selectedTime, setSelectedTime] = useState("09:00")
+  const [isScheduling, setIsScheduling] = useState(false)
+  const [isUnscheduling, setIsUnscheduling] = useState(false)
+  const [currentScheduledAt, setCurrentScheduledAt] = useState<Date | string | null | undefined>(scheduledAt)
 
   useEffect(() => {
     if (!open) return
@@ -212,10 +237,12 @@ export function RevisionCompareDialog({
             <div>
               <DialogTitle className="flex items-center gap-2 text-base">
                 <GitMerge className="size-4 text-primary" />
-                Review Changes Before Publishing
+                {mode === "review" ? "Review Changes Before Submitting" : "Review Changes Before Publishing"}
               </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Right column replaces the live post on publish.
+                {mode === "review"
+                  ? "Your changes will be sent to an admin for review."
+                  : "Right column replaces the live post on publish."}
               </p>
             </div>
           </DialogHeader>
@@ -462,33 +489,171 @@ export function RevisionCompareDialog({
           )}
 
           {/* Footer */}
-          <DialogFooter className="px-6 pb-8  border-t shrink-0 flex-row items-center justify-between gap-4">
-            <p className="text-xs text-muted-foreground flex-1">
-              This cannot be undone — the live post updates immediately.
-            </p>
-            <div className="flex items-center gap-2 shrink-0 mb-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setOpen(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="gap-1.5 px-4"
-                onClick={handlePublish}
-                disabled={isPending || loading || !data}
-              >
-                {isPending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <GitMerge className="size-3.5" />
-                )}
-                Publish Revision
-              </Button>
+          <DialogFooter className="px-6 py-4 border-t shrink-0 flex-col gap-3">
+
+            {/* ── Review mode footer ── */}
+            {mode === "review" && (
+              <div className="flex items-center justify-between gap-3 w-full">
+                <p className="text-xs text-muted-foreground">
+                  Once submitted, an admin will review and publish this revision.
+                </p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isSubmittingReview}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 px-4 bg-primary text-primary-foreground"
+                    disabled={isSubmittingReview || loading || !data}
+                    onClick={async () => {
+                      setIsSubmittingReview(true)
+                      try {
+                        const { submitRevisionForReview } = await import("./actions")
+                        await submitRevisionForReview(draftId)
+                        toast.success("Revision submitted for admin review.")
+                        setOpen(false)
+                        onReviewSubmitted?.()
+                      } catch (err: unknown) {
+                        toast.error((err as Error).message || "Failed to submit.")
+                      } finally {
+                        setIsSubmittingReview(false)
+                      }
+                    }}
+                  >
+                    {isSubmittingReview ? <Loader2 className="size-3.5 animate-spin" /> : <GitMerge className="size-3.5" />}
+                    Submit for Review
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Publish mode footer ── */}
+            {mode === "publish" && <>
+            {/* Scheduled banner */}
+            {currentScheduledAt && (
+              <div className="flex items-center gap-2 rounded-lg border border-sky-500/25 bg-sky-500/8 px-3 py-2 w-full">
+                <CalendarCheck className="size-3.5 text-sky-400 shrink-0" />
+                <span className="text-xs text-foreground font-semibold flex-1">
+                  Scheduled: {formatScheduled(currentScheduledAt)}
+                </span>
+                <button
+                  disabled={isUnscheduling}
+                  onClick={async () => {
+                    setIsUnscheduling(true)
+                    try {
+                      await unschedulePostDraftRevision(draftId)
+                      setCurrentScheduledAt(null)
+                      setShowScheduler(false)
+                      toast.success("Schedule cancelled.")
+                    } catch (err: unknown) {
+                      toast.error((err as Error).message || "Failed to unschedule.")
+                    } finally {
+                      setIsUnscheduling(false)
+                    }
+                  }}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  title="Cancel schedule"
+                >
+                  {isUnscheduling ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+                </button>
+              </div>
+            )}
+
+            {/* Inline scheduler */}
+            {showScheduler && (
+              <div className="w-full rounded-xl border border-border/60 bg-card/50 p-4 space-y-3">
+                <div className="rounded-lg overflow-hidden border border-border/40">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    disabled={(d) => { const t = new Date(); t.setHours(0,0,0,0); return d < t }}
+                    className="mx-auto"
+                  />
+                </div>
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60 pointer-events-none" />
+                  <input
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="h-9 w-full pl-9 pr-3 rounded-md border border-border/60 bg-muted/30 text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setShowScheduler(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 flex-1 border-sky-500/30 text-sky-500 hover:bg-sky-500/10"
+                    variant="outline"
+                    disabled={!selectedDate || isScheduling}
+                    onClick={async () => {
+                      if (!selectedDate) return
+                      const [h, m] = selectedTime.split(":").map(Number)
+                      const dt = new Date(selectedDate)
+                      dt.setHours(h, m, 0, 0)
+                      if (dt <= new Date()) { toast.error("Must be a future date."); return }
+                      setIsScheduling(true)
+                      try {
+                        await schedulePostDraftRevision(draftId, dt)
+                        setCurrentScheduledAt(dt)
+                        setShowScheduler(false)
+                        toast.success(`Revision scheduled for ${formatScheduled(dt)}.`)
+                      } catch (err: unknown) {
+                        toast.error((err as Error).message || "Failed to schedule.")
+                      } finally {
+                        setIsScheduling(false)
+                      }
+                    }}
+                  >
+                    {isScheduling ? <Loader2 className="size-3.5 animate-spin" /> : <CalendarClock className="size-3.5" />}
+                    Confirm Schedule
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 w-full">
+              <p className="text-xs text-muted-foreground">
+                This cannot be undone — the live post updates immediately.
+              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOpen(false)}
+                  disabled={isPending || isScheduling}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-sky-500/30 text-sky-500 hover:bg-sky-500/10"
+                  onClick={() => setShowScheduler((v) => !v)}
+                  disabled={isPending}
+                >
+                  <CalendarClock className="size-3.5" />
+                  Schedule
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 px-4"
+                  onClick={handlePublish}
+                  disabled={isPending || loading || !data}
+                >
+                  {isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <GitMerge className="size-3.5" />
+                  )}
+                  Publish Revision
+                </Button>
+              </div>
             </div>
+            </>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

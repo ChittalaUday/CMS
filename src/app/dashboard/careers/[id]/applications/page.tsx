@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, Briefcase, MapPin } from "lucide-react"
 import { getApplications, getJobPostingById } from "../../actions"
-import { ApplicationsView } from "./ApplicationsView"
+import { ApplicationsWrapper } from "./ApplicationsWrapper"
 import { ExportButton } from "../../ExportButton"
 
 export const dynamic = "force-dynamic"
@@ -104,7 +104,7 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
           </p>
         </div>
       ) : (
-        <ApplicationsView applications={applications} job={job} />
+        <ApplicationsWrapper applications={applications} job={job} />
       )}
     </div>
   )

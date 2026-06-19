@@ -14,7 +14,7 @@ import { BlogsTableClient } from "./BlogsTableClient"
 export const dynamic = "force-dynamic"
 
 interface PageProps {
-  searchParams: Promise<{ search?: string; categoryId?: string; status?: string; page?: string }>
+  searchParams: Promise<{ search?: string; categoryId?: string; status?: string; page?: string; showEditorDrafts?: string }>
 }
 
 export default async function BlogsPage({ searchParams }: PageProps) {
@@ -29,9 +29,10 @@ export default async function BlogsPage({ searchParams }: PageProps) {
   const categoryId = params.categoryId ?? ""
   const status = params.status ?? ""
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
+  const showEditorDrafts = params.showEditorDrafts === "1" && canPublish
 
   const [{ posts, totalCount, totalPages }, categories] = await Promise.all([
-    getPostsPaginated({ search, categoryId, status, page, pageSize: 15 }),
+    getPostsPaginated({ search, categoryId, status, page, pageSize: 15, showEditorDrafts }),
     getCategories(),
   ])
 
@@ -70,6 +71,8 @@ export default async function BlogsPage({ searchParams }: PageProps) {
           search={search}
           categoryId={categoryId}
           status={status}
+          showEditorDrafts={showEditorDrafts}
+          canToggleEditorDrafts={canPublish}
         />
       </Suspense>
 
@@ -99,6 +102,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
           <BlogsTableClient
             posts={posts as any}
             canPublish={canPublish}
+            showEditorDrafts={showEditorDrafts}
             handleDelete={handleDelete}
           />
 

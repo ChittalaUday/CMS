@@ -133,6 +133,7 @@ export async function getPostsPaginated(options: {
   status?: string
   page?: number
   pageSize?: number
+  showEditorDrafts?: boolean
 }) {
   const user = await requireBlogAccess()
 
@@ -147,15 +148,35 @@ export async function getPostsPaginated(options: {
     ...(clientId ? { clientId } : {}),
   }
 
-  // Editors can only see their own posts
+  // Editors see only their own posts; admins hide other editors' unreviewed drafts by default
   if (user.role === Role.EDITOR) {
     where.authorId = user.id
+  } else if ((ADMIN_ROLES as readonly Role[]).includes(user.role) && !options.showEditorDrafts) {
+    // Equivalent to: show (own OR published OR scheduled OR pending-review).
+    // Written as NOT to avoid { not: null } inside OR which Prisma 7 rejects at runtime.
+    where.NOT = {
+      AND: [
+        { published: false },
+        { scheduledAt: null },
+        { reviewRequested: false },
+        { authorId: { not: user.id } },
+      ],
+    }
   }
 
   if (options.status === "published") {
     where.published = true
+    where.scheduledAt = null
   } else if (options.status === "draft") {
     where.published = false
+    where.scheduledAt = null
+  } else if (options.status === "pending_review") {
+    where.published = false
+    where.scheduledAt = null
+    where.reviewRequested = true
+  } else if (options.status === "scheduled") {
+    where.published = false
+    where.scheduledAt = { not: null }
   } else if (options.status === "revision") {
     where.published = true
     where.drafts = { some: {} }
@@ -222,7 +243,7 @@ export async function getPostById(id: string) {
 
   if (!post) return null
 
-  if (user.role !== Role.SUPER_ADMIN && post.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this post.")
   }
 
@@ -376,7 +397,7 @@ export async function togglePublished(id: string) {
     const post = await prisma.post.findUnique({ where: { id }, select: { published: true, clientId: true } })
     if (!post) throw new Error("Post not found")
 
-    if (user.role !== Role.SUPER_ADMIN && post.clientId !== user.clientId) {
+    if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
       throw new Error("Unauthorized: you do not have access to this post.")
     }
 
@@ -403,7 +424,7 @@ export async function toggleFeatured(id: string) {
     const post = await prisma.post.findUnique({ where: { id }, select: { featured: true, clientId: true } })
     if (!post) throw new Error("Post not found")
 
-    if (user.role !== Role.SUPER_ADMIN && post.clientId !== user.clientId) {
+    if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
       throw new Error("Unauthorized: you do not have access to this post.")
     }
 
@@ -430,7 +451,7 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
     include: { drafts: { take: 1, select: { id: true, slug: true } } },
   })
   if (!parent) throw new Error("Post not found.")
-  if (user.role !== Role.SUPER_ADMIN && parent.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && parent.clientId && parent.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this post.")
   }
   if (!parent.published) throw new Error("Draft revisions are only for published posts.")
@@ -441,6 +462,9 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
   }
 
   const existingDraft = parent.drafts[0]
+
+  // Admin-created revisions are immediately visible in the review queue
+  const autoReviewRequested = (ADMIN_ROLES as readonly Role[]).includes(user.role)
 
   try {
     if (existingDraft) {
@@ -456,6 +480,7 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
           featured: data.featured ?? false,
           featuredImageId: data.featuredImageId || null,
           metadata: { ...(data.metadata as Record<string, unknown>), proposedSlug: data.slug },
+          ...(autoReviewRequested ? { reviewRequested: true } : {}),
           categories: data.categoryIds
             ? { create: data.categoryIds.map((catId) => ({ categoryId: catId })) }
             : undefined,
@@ -483,6 +508,8 @@ export async function upsertPostDraftRevision(parentId: string, data: PostInput)
         authorId: parent.authorId,
         featuredImageId: data.featuredImageId || null,
         draftParentId: parentId,
+        clientId: parent.clientId ?? undefined,
+        reviewRequested: autoReviewRequested,
         metadata: { ...(data.metadata as Record<string, unknown>), proposedSlug: data.slug },
         categories: data.categoryIds
           ? { create: data.categoryIds.map((catId) => ({ categoryId: catId })) }
@@ -509,7 +536,7 @@ export async function publishPostDraftRevision(draftId: string) {
     include: { categories: true },
   })
   if (!draft) throw new Error("Draft revision not found.")
-  if (user.role !== Role.SUPER_ADMIN && draft.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId && draft.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this post.")
   }
   if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
@@ -564,7 +591,7 @@ export async function getRevisionComparison(draftId: string) {
     },
   })
   if (!draft || !draft.draftParentId) throw new Error("Draft revision not found.")
-  if (user.role !== Role.SUPER_ADMIN && draft.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId && draft.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this post.")
   }
 
@@ -590,7 +617,7 @@ export async function deletePost(id: string) {
   })
   if (!existing) throw new Error("Post not found.")
 
-  if (user.role !== Role.SUPER_ADMIN && existing.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && existing.clientId && existing.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this post.")
   }
 
@@ -603,6 +630,245 @@ export async function deletePost(id: string) {
     revalidatePath("/dashboard/blogs")
   } catch (err) {
     handlePrismaError(err, "deletePost")
+  }
+}
+
+export async function schedulePost(id: string, scheduledAt: Date) {
+  const user = await requireBlogAccess()
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can schedule posts.")
+  }
+
+  const post = await prisma.post.findUnique({
+    where: { id },
+    select: { published: true, clientId: true, draftParentId: true },
+  })
+  if (!post) throw new Error("Post not found.")
+  if (post.published) throw new Error("Post is already published.")
+  if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+  if (scheduledAt <= new Date()) {
+    throw new Error("Scheduled date must be in the future.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id },
+      data: { scheduledAt },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "schedulePost")
+  }
+}
+
+export async function unschedulePost(id: string) {
+  const user = await requireBlogAccess()
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can unschedule posts.")
+  }
+
+  const post = await prisma.post.findUnique({
+    where: { id },
+    select: { clientId: true },
+  })
+  if (!post) throw new Error("Post not found.")
+  if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id },
+      data: { scheduledAt: null },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "unschedulePost")
+  }
+}
+
+// Schedules a draft revision to be applied at a future date.
+export async function schedulePostDraftRevision(draftId: string, scheduledAt: Date) {
+  const user = await requireBlogAccess()
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can schedule posts.")
+  }
+
+  const draft = await prisma.post.findUnique({
+    where: { id: draftId },
+    select: { clientId: true, draftParentId: true },
+  })
+  if (!draft) throw new Error("Draft revision not found.")
+  if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId && draft.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+  if (scheduledAt <= new Date()) {
+    throw new Error("Scheduled date must be in the future.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id: draftId },
+      data: { scheduledAt },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "schedulePostDraftRevision")
+  }
+}
+
+export async function submitRevisionForReview(draftId: string) {
+  const user = await requireBlogAccess()
+
+  const draft = await prisma.post.findUnique({
+    where: { id: draftId },
+    select: { clientId: true, draftParentId: true, authorId: true },
+  })
+  if (!draft) throw new Error("Draft revision not found.")
+  if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
+
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId && draft.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+  if (user.role === Role.EDITOR && draft.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only submit your own revisions.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id: draftId },
+      data: { reviewRequested: true },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "submitRevisionForReview")
+  }
+}
+
+export async function withdrawRevisionFromReview(draftId: string) {
+  const user = await requireBlogAccess()
+
+  const draft = await prisma.post.findUnique({
+    where: { id: draftId },
+    select: { clientId: true, draftParentId: true, authorId: true },
+  })
+  if (!draft) throw new Error("Draft revision not found.")
+  if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
+
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId && draft.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+  if (user.role === Role.EDITOR && draft.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only withdraw your own revisions.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id: draftId },
+      data: { reviewRequested: false },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "withdrawRevisionFromReview")
+  }
+}
+
+export async function unschedulePostDraftRevision(draftId: string) {
+  const user = await requireBlogAccess()
+
+  if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
+    throw new Error("Unauthorized: only admins can unschedule posts.")
+  }
+
+  const draft = await prisma.post.findUnique({
+    where: { id: draftId },
+    select: { clientId: true, draftParentId: true },
+  })
+  if (!draft) throw new Error("Draft revision not found.")
+  if (!draft.draftParentId) throw new Error("This post is not a draft revision.")
+  if (user.role !== Role.SUPER_ADMIN && draft.clientId && draft.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id: draftId },
+      data: { scheduledAt: null },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "unschedulePostDraftRevision")
+  }
+}
+
+export async function submitPostForReview(postId: string) {
+  const user = await requireBlogAccess()
+
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { clientId: true, draftParentId: true, authorId: true, published: true },
+  })
+  if (!post) throw new Error("Post not found.")
+  if (post.draftParentId) throw new Error("Use submitRevisionForReview for draft revisions.")
+  if (post.published) throw new Error("Published posts cannot be submitted for review.")
+
+  if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+  if (user.role === Role.EDITOR && post.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only submit your own posts for review.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { reviewRequested: true },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "submitPostForReview")
+  }
+}
+
+export async function withdrawPostFromReview(postId: string) {
+  const user = await requireBlogAccess()
+
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { clientId: true, draftParentId: true, authorId: true },
+  })
+  if (!post) throw new Error("Post not found.")
+  if (post.draftParentId) throw new Error("Use withdrawRevisionFromReview for draft revisions.")
+
+  if (user.role !== Role.SUPER_ADMIN && post.clientId && post.clientId !== user.clientId) {
+    throw new Error("Unauthorized: you do not have access to this post.")
+  }
+  if (user.role === Role.EDITOR && post.authorId !== user.id) {
+    throw new Error("Unauthorized: you can only withdraw your own posts from review.")
+  }
+
+  try {
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { reviewRequested: false },
+    })
+    revalidatePath("/dashboard/blogs")
+    return updated
+  } catch (err) {
+    handlePrismaError(err, "withdrawPostFromReview")
   }
 }
 
@@ -640,7 +906,7 @@ export async function deleteCategory(id: string) {
   })
   if (!category) throw new Error("Category not found.")
 
-  if (user.role !== Role.SUPER_ADMIN && category.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && category.clientId && category.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this category.")
   }
 
@@ -763,7 +1029,7 @@ export async function deleteMediaItem(id: string) {
   const media = await prisma.media.findUnique({ where: { id } })
   if (!media) throw new Error("Media item not found")
 
-  if (user.role !== Role.SUPER_ADMIN && media.clientId !== user.clientId) {
+  if (user.role !== Role.SUPER_ADMIN && media.clientId && media.clientId !== user.clientId) {
     throw new Error("Unauthorized: you do not have access to this media item.")
   }
 

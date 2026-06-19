@@ -93,9 +93,21 @@ interface Application {
   answers?: Answer[]
 }
 
+interface JobPosting {
+  id: string
+  title: string
+  department: string
+  location: string
+  description: string | null
+  requirements: string | null
+  responsibilities: string | null
+  keywords: string[]
+}
+
 interface ApplicationsViewProps {
   applications: Application[]
-  job: any
+  job: JobPosting
+  search?: string
 }
 
 const STATUS_CONFIG: Record<
@@ -130,18 +142,18 @@ const STATUS_CONFIG: Record<
 }
 
 
-// Full pipeline order for the dropdown
-const ALL_STATUSES: ApplicationStatus[] = [
-  "NEW",
-  "REVIEWING",
-  "SHORTLISTED",
-  "REJECTED",
-  "HIRED",
-]
+const ALLOWED_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
+  NEW: ["REVIEWING"],
+  REVIEWING: ["NEW", "SHORTLISTED", "REJECTED"],
+  SHORTLISTED: ["REVIEWING", "HIRED"],
+  HIRED: ["SHORTLISTED"],
+  REJECTED: ["REVIEWING"],
+}
 
-export function ApplicationsView({ applications: initial, job }: ApplicationsViewProps) {
+export function ApplicationsView({ applications: initial, job, search: propSearch }: ApplicationsViewProps) {
   const [applications, setApplications] = useState(initial)
-  const [search, setSearch] = useState("")
+  const [localSearch, setLocalSearch] = useState("")
+  const search = propSearch !== undefined ? propSearch : localSearch
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "ALL">("ALL")
   const [selected, setSelected] = useState<Application | null>(null)
   const [notes, setNotes] = useState("")
@@ -220,6 +232,7 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
   const [activeTab, setActiveTab] = useState<"ai" | "pdf">("ai")
   const [ollamaModels, setOllamaModels] = useState<{ name: string; model: string }[]>([])
   const [selectedModel, setSelectedModel] = useState<string>("")
+  const pollCancelledRef = useRef(false)
 
   // Fetch available Ollama models once on mount
   useEffect(() => {
@@ -228,16 +241,21 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
       .then((data) => {
         const models: { name: string; model: string }[] = data.models || []
         setOllamaModels(models)
-        // Default to the first available model if none selected
-        if (models.length > 0 && !selectedModel) {
-          setSelectedModel(models[0].name)
+        if (models.length > 0) {
+          setSelectedModel((prev) => prev || models[0].name)
         }
       })
-      .catch(() => {
-        // Ollama offline — no models to show
-      })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch(() => {})
   }, [])
+
+  // Cancel any in-flight poll when the drawer closes
+  useEffect(() => {
+    if (!selected) {
+      pollCancelledRef.current = true
+    } else {
+      pollCancelledRef.current = false
+    }
+  }, [selected])
 
   function openDrawer(app: Application) {
     setSelected(app)
@@ -255,17 +273,17 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
     setAtsScore(null)
     setAtsConfidence(null)
     setAtsJustification(null)
+    pollCancelledRef.current = false
 
     try {
-      // Fire-and-forget: enqueues the job and returns immediately (won't be cancelled on browser disconnect)
       await getAtsScore(selected.id, selectedModel || undefined)
       toast.info("Analysis queued — processing in the background...")
 
-      // Poll until the queue worker marks it COMPLETED or FAILED
       const poll = async () => {
+        if (pollCancelledRef.current) return
         try {
           const app = await getApplicationById(selected.id)
-          if (!app) return
+          if (pollCancelledRef.current || !app) return
 
           if (app.atsStatus === "COMPLETED") {
             setAtsScore(app.atsScore)
@@ -294,19 +312,20 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
             setIsAtsLoading(false)
             toast.error(app.atsJustification || "Analysis failed — please try again.")
           } else {
-            // Still PENDING or PROCESSING — keep polling
             setTimeout(poll, 2000)
           }
         } catch {
-          setIsAtsLoading(false)
-          toast.error("Failed to fetch analysis result.")
+          if (!pollCancelledRef.current) {
+            setIsAtsLoading(false)
+            toast.error("Failed to fetch analysis result.")
+          }
         }
       }
 
       setTimeout(poll, 2000)
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsAtsLoading(false)
-      toast.error(err.message || "Failed to queue ATS analysis.")
+      toast.error((err as Error).message || "Failed to queue ATS analysis.")
     }
   }
 
@@ -356,15 +375,19 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
 
       {/* Search + count row */}
       <div className="flex items-center gap-3 justify-between">
-        <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search applicants…"
-            className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
-          />
-        </div>
+        {propSearch === undefined ? (
+          <div className="relative max-w-xs flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              placeholder="Search applicants…"
+              className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
+            />
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         <p className="text-xs text-muted-foreground shrink-0">
           {filtered.length} of {applications.length} shown
         </p>
@@ -567,19 +590,23 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
                                       <Eye className="size-3.5 text-muted-foreground mr-2" />
                                       View Application
                                     </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    {ALL_STATUSES.filter((s) => s !== app.status).map((s) => {
-                                      const c = STATUS_CONFIG[s]
-                                      return (
-                                        <DropdownMenuItem
-                                          key={s}
-                                          onClick={() => handleUpdateStatus(app.id, s)}
-                                        >
-                                          <span className={`size-2 rounded-full ${c.dotColor} mr-2`} />
-                                          Move to {c.label}
-                                        </DropdownMenuItem>
-                                      )
-                                    })}
+                                    {ALLOWED_TRANSITIONS[app.status].length > 0 && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        {ALLOWED_TRANSITIONS[app.status].map((s) => {
+                                          const c = STATUS_CONFIG[s]
+                                          return (
+                                            <DropdownMenuItem
+                                              key={s}
+                                              onClick={() => handleUpdateStatus(app.id, s)}
+                                            >
+                                              <span className={`size-2 rounded-full ${c.dotColor} mr-2`} />
+                                              Move to {c.label}
+                                            </DropdownMenuItem>
+                                          )
+                                        })}
+                                      </>
+                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TooltipTrigger>
@@ -634,7 +661,7 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
 
                 <div className="flex items-center gap-3 flex-wrap sm:ml-auto">
                   {/* Status update control */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span
                       className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
                         STATUS_CONFIG[selected.status].classes
@@ -646,23 +673,26 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
                       {STATUS_CONFIG[selected.status].label}
                     </span>
 
-                    <Select
-                      value={selected.status}
-                      onValueChange={(v) =>
-                        handleUpdateStatus(selected.id, v as ApplicationStatus, notes)
-                      }
-                    >
-                      <SelectTrigger className="h-8 text-xs w-36 bg-muted/30 border-border/60">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ALL_STATUSES.map((s) => (
-                          <SelectItem key={s} value={s} className="text-xs">
-                            {STATUS_CONFIG[s].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {ALLOWED_TRANSITIONS[selected.status].map((s) => {
+                      const cfg = STATUS_CONFIG[s]
+                      return (
+                        <Button
+                          key={s}
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px] px-2.5 gap-1.5 font-bold uppercase tracking-wider border-border/60 hover:bg-muted"
+                          disabled={updatingId === selected.id}
+                          onClick={() => handleUpdateStatus(selected.id, s, notes)}
+                        >
+                          {updatingId === selected.id ? (
+                            <Loader2 className="size-2.5 animate-spin" />
+                          ) : (
+                            <span className={`size-1.5 rounded-full ${cfg.dotColor}`} />
+                          )}
+                          {cfg.label}
+                        </Button>
+                      )
+                    })}
                   </div>
 
                   <Separator orientation="vertical" className="h-6 bg-border/60 hidden sm:block" />
@@ -829,7 +859,6 @@ export function ApplicationsView({ applications: initial, job }: ApplicationsVie
                   </div>
                 </div>
 
-                { }
                 <div className="flex flex-col h-full overflow-hidden border border-border/60 rounded-xl bg-card/25 p-4 space-y-4">
                   {/* Tabs header */}
                   <div className="shrink-0 pb-2 border-b border-border/40 flex items-center justify-between">

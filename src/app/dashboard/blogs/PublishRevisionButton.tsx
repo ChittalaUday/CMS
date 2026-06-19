@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { GitMerge } from "lucide-react"
 import { RevisionCompareDialog } from "./RevisionCompareDialog"
 import {
@@ -12,13 +13,15 @@ import {
 interface PublishRevisionButtonProps {
   draftId: string
   parentTitle: string
+  scheduledAt?: Date | string | null
 }
 
-export function PublishRevisionButton({ draftId, parentTitle }: PublishRevisionButtonProps) {
+export function PublishRevisionButton({ draftId, parentTitle, scheduledAt }: PublishRevisionButtonProps) {
   return (
     <TooltipProvider>
       <RevisionCompareDialog
         draftId={draftId}
+        scheduledAt={scheduledAt}
         trigger={
           <Tooltip>
             <TooltipTrigger asChild>
