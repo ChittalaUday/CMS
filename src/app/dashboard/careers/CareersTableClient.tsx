@@ -17,7 +17,7 @@ import {
   Building2,
   MapPin,
   Calendar,
-  DollarSign,
+  IndianRupee,
   Loader2,
   Plus,
   Sparkles,
@@ -227,10 +227,10 @@ export function CareersTableClient({
                       </span>
                       {(job.salaryMin || job.salaryMax) && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <DollarSign className="size-3 shrink-0" />
+                          <IndianRupee className="size-3 shrink-0" />
                           {job.currency}{" "}
-                          {job.salaryMin?.toLocaleString()}
-                          {job.salaryMax ? ` – ${job.salaryMax.toLocaleString()}` : "+"}
+                          {job.salaryMin?.toLocaleString("en-IN")}
+                          {job.salaryMax ? ` – ${job.salaryMax.toLocaleString("en-IN")}` : "+"}
                         </span>
                       )}
                     </div>

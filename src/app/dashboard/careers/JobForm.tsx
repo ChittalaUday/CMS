@@ -216,7 +216,6 @@ export function JobForm({ job }: JobFormProps) {
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [isDiscarding, setIsDiscarding] = useState(false)
   const [step, setStep] = useState<Step>(1)
-  const [publishNow, setPublishNow] = useState(job?.status === "PUBLISHED")
   const [errors, setErrors] = useState<Record<string, string>>({})
   const slugEditedRef = useRef(false)
 
@@ -248,7 +247,20 @@ export function JobForm({ job }: JobFormProps) {
 
   // --- Step 3 state ---
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
-    if (!job?.questions?.length) return []
+    if (!job) {
+      return [
+        {
+          tempId: Date.now().toString(),
+          question: "Resume / CV",
+          type: "FILE",
+          required: true,
+          order: 0,
+          options: [],
+          newOption: "",
+        },
+      ]
+    }
+    if (!job.questions?.length) return []
     return job.questions.map((q) => ({
       tempId: q.id,
       question: q.question,
@@ -470,33 +482,33 @@ export function JobForm({ job }: JobFormProps) {
   }
 
   // --- Final Submit (Publish / Save) ---
-  function handleSubmit() {
+  function handleSubmit(targetStatus: "DRAFT" | "PUBLISHED") {
     if (!validateStep3()) return
 
     startTransition(async () => {
       const toastId = toast.loading("Saving…")
       try {
         const payload = buildPayload()
+        const isPublishing = targetStatus === "PUBLISHED"
 
         if (isEdit && job) {
-          if (isDraft && publishNow) {
+          if (isDraft && isPublishing) {
             await updateJobPosting(job.id, payload)
             await publishDraft(job.id)
             toast.success("Job posting published!", { id: toastId })
           } else {
             await updateJobPosting(job.id, payload)
-            const targetStatus = publishNow ? "PUBLISHED" : "DRAFT"
             if (job.status !== targetStatus) {
               await updateJobStatus(job.id, targetStatus)
             }
-            toast.success(publishNow ? "Job posting published!" : "Changes saved.", { id: toastId })
+            toast.success(isPublishing ? "Job posting published!" : "Changes saved.", { id: toastId })
           }
         } else {
           const created = await createJobPosting(payload)
-          if (publishNow && created?.id) {
+          if (isPublishing && created?.id) {
             await updateJobStatus(created.id, "PUBLISHED")
           }
-          toast.success(publishNow ? "Job posting published!" : "Draft saved.", { id: toastId })
+          toast.success(isPublishing ? "Job posting published!" : "Draft saved.", { id: toastId })
         }
 
         router.push("/dashboard/careers")
@@ -1136,19 +1148,6 @@ export function JobForm({ job }: JobFormProps) {
               </div>
             </div>
           </div>
-
-          {/* Publish toggle */}
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <p className="text-sm font-semibold">{publishNow ? "Publish immediately" : "Save as draft"}</p>
-              <p className="text-xs text-muted-foreground">
-                {publishNow
-                  ? "The job will go live and accept applications right away."
-                  : "The job will be saved privately. Publish it when you're ready."}
-              </p>
-            </div>
-            <Switch checked={publishNow} onCheckedChange={setPublishNow} />
-          </div>
         </div>
       )}
 
@@ -1166,40 +1165,52 @@ export function JobForm({ job }: JobFormProps) {
 
         <div className="flex items-center gap-2">
           {/* Save Draft — always available */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 text-xs gap-1.5 border-border/60"
-            onClick={handleSaveDraft}
-            disabled={isPending || isSavingDraft}
-            title="Save current progress as draft"
-          >
-            {isSavingDraft && isPending ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <SaveIcon className="size-3.5" />
-            )}
-            Save Draft
-          </Button>
+          {step < 4 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 text-xs gap-1.5 border-border/60"
+              onClick={handleSaveDraft}
+              disabled={isPending || isSavingDraft}
+              title="Save current progress as draft"
+            >
+              {isSavingDraft && isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <SaveIcon className="size-3.5" />
+              )}
+              Save Draft
+            </Button>
+          )}
 
           {step < 4 ? (
             <Button onClick={goNext} className="h-9 text-sm gap-1.5 font-semibold shadow-sm" disabled={isPending}>
               Continue <ChevronRight className="size-4" />
             </Button>
           ) : (
-            <Button
-              onClick={handleSubmit}
-              className="h-9 text-sm gap-1.5 font-semibold shadow-sm min-w-35"
-              disabled={isPending}
-            >
-              {isPending && !isSavingDraft ? (
-                <><Loader2 className="size-4 animate-spin" />Saving…</>
-              ) : publishNow ? (
-                <><FileText className="size-4" />{isEdit ? "Save & Publish" : "Publish Job"}</>
-              ) : (
-                <><FileText className="size-4" />{isEdit ? "Save Changes" : "Save Draft"}</>
+            <>
+              {(!isEdit || job?.status !== "PUBLISHED") && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit("DRAFT")}
+                  className="h-9 text-sm gap-1.5 font-semibold shadow-sm"
+                  disabled={isPending}
+                >
+                  <SaveIcon className="size-4" /> Save Draft
+                </Button>
               )}
-            </Button>
+              <Button
+                onClick={() => handleSubmit("PUBLISHED")}
+                className="h-9 text-sm gap-1.5 font-semibold shadow-sm min-w-35"
+                disabled={isPending}
+              >
+                {isPending && !isSavingDraft ? (
+                  <><Loader2 className="size-4 animate-spin" />Saving…</>
+                ) : (
+                  <><FileText className="size-4" />{isEdit && job?.status === "PUBLISHED" ? "Save Changes" : "Publish Job"}</>
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>

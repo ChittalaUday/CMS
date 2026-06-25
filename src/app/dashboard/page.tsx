@@ -17,8 +17,6 @@ import {
 import { WidgetGrid, WidgetSlot } from "./_widgets/WidgetGrid"
 import { StatCard } from "./_widgets/StatCard"
 import { ActiveCareersWidget } from "./_widgets/ActiveCareersWidget"
-import { ApplicationsPerJobWidget } from "./_widgets/ApplicationsPerJobWidget"
-import { ApplicationsTimelineWidget } from "./_widgets/ApplicationsTimelineWidget"
 import { TopPostsWidget } from "./_widgets/TopPostsWidget"
 import { TimeRangeSelector } from "./_widgets/TimeRangeSelector"
 import { fetchBlogStats, fetchCareersStats } from "./_data/dashboard-queries"
@@ -110,21 +108,16 @@ export default async function Page({
               />
             </WidgetSlot>
 
+
+            {/* Blog widget */}
+            <WidgetSlot size="md">
+              <TopPostsWidget posts={blog.topPosts} />
+            </WidgetSlot>
             {/* Careers charts */}
             <WidgetSlot size="md">
               <ActiveCareersWidget jobs={careers.activeJobs} />
             </WidgetSlot>
-            <WidgetSlot size="md">
-              <ApplicationsPerJobWidget data={careers.appsPerJob} />
-            </WidgetSlot>
-            <WidgetSlot size="full">
-              <ApplicationsTimelineWidget data={careers.appsPerDay} days={days} />
-            </WidgetSlot>
 
-            {/* Blog widget */}
-            <WidgetSlot size="full">
-              <TopPostsWidget posts={blog.topPosts} />
-            </WidgetSlot>
           </>
         )}
 
@@ -172,12 +165,7 @@ export default async function Page({
             <WidgetSlot size="md">
               <ActiveCareersWidget jobs={careers.activeJobs} />
             </WidgetSlot>
-            <WidgetSlot size="md">
-              <ApplicationsPerJobWidget data={careers.appsPerJob} />
-            </WidgetSlot>
-            <WidgetSlot size="full">
-              <ApplicationsTimelineWidget data={careers.appsPerDay} days={days} />
-            </WidgetSlot>
+
           </>
         )}
 

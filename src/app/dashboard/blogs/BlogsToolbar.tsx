@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useCallback, useTransition, useState, useEffect } from "react"
-import { Search, X, Filter, GitBranch } from "lucide-react"
+import { Search, X, Filter, GitBranch, Info } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -126,12 +126,12 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId, statu
         </select>
       </div>
 
-      {/* Editor drafts toggle — admins only */}
+      {/* Editor drafts toggle */}
       {canToggleEditorDrafts && (
         <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border/60 bg-muted/30 shrink-0">
-          <GitBranch className="size-3.5 text-muted-foreground/60" />
+          <Info className="size-3.5 text-muted-foreground/60" />
           <label htmlFor="editor-drafts-toggle" className="text-xs font-medium text-muted-foreground cursor-pointer select-none whitespace-nowrap">
-            Editor drafts
+            Pending Admin Review
           </label>
           <Switch
             id="editor-drafts-toggle"

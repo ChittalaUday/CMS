@@ -54,6 +54,7 @@ import { PublishRevisionButton } from "./PublishRevisionButton"
 import { Role } from "@/lib/auth/roles"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface Author {
   id: string
@@ -108,14 +109,16 @@ interface BlogsTableClientProps {
   posts: Post[]
   canPublish: boolean
   showEditorDrafts: boolean
+  currentUserId: string
   handleDelete: (formData: FormData) => Promise<void>
 }
 
-export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDelete }: BlogsTableClientProps) {
+export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentUserId, handleDelete }: BlogsTableClientProps) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isReviewPending, startReviewTransition] = useTransition()
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, type: "draft" | "post" } | null>(null)
   const router = useRouter()
 
   const handleToggleFeatured = (postId: string, postTitle: string, currentFeatured: boolean) => {
@@ -200,10 +203,10 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDe
                 const seoDesc = (post.metadata as any)?.seoDescription || ""
                 const tags: string[] = (post.metadata as any)?.tags || []
                 const draft = post.drafts?.[0]
-                // Show draft row only when: admin toggled "show editor drafts" OR editor has submitted for review
+                // Show draft row only when toggled via toolbar OR if the current user authored the draft OR if it's pending review or scheduled
                 const hasDraft = post.published &&
                   !!draft &&
-                  (showEditorDrafts || draft.reviewRequested === true)
+                  (showEditorDrafts || draft.author?.id === currentUserId || draft.reviewRequested === true || !!draft.scheduledAt)
 
                 return (
                   <Fragment key={post.id}>
@@ -396,6 +399,24 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDe
                                   </TooltipContent>
                                 </Tooltip>
                               )}
+                              {!post.published && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setDeleteConfirm({ id: post.id, type: "draft" })
+                                      }}
+                                      className="size-8 rounded-lg hover:bg-destructive/10 text-destructive"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">Discard draft</TooltipContent>
+                                </Tooltip>
+                              )}
                             </div>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -442,17 +463,15 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDe
                                       </>
                                     )}
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild>
-                                      <form action={handleDelete} className="w-full">
-                                        <input type="hidden" name="id" value={post.id} />
-                                        <button
-                                          type="submit"
-                                          className="w-full flex items-center gap-2 text-destructive cursor-pointer"
-                                        >
-                                          <Trash2 className="size-3.5" />
-                                          Delete
-                                        </button>
-                                      </form>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setDeleteConfirm({ id: post.id, type: "post" })
+                                      }}
+                                      className="flex items-center gap-2 text-destructive cursor-pointer"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                      Delete
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -485,15 +504,29 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDe
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {draft.reviewRequested ? (
-                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                              <AlertTriangle className="size-3" /> Pending Review
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-muted text-muted-foreground border-border/60">
-                              <GitBranch className="size-3" /> Editor Draft
-                            </span>
-                          )}
+                          <div className="flex flex-col gap-1">
+                            {draft.scheduledAt ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit bg-sky-500/10 text-sky-500 border-sky-500/20">
+                                <Clock className="size-3" /> Scheduled
+                              </span>
+                            ) : draft.reviewRequested ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                                <AlertTriangle className="size-3" /> Pending Review
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border w-fit bg-muted text-muted-foreground border-border/60">
+                                <GitBranch className="size-3" /> Editor Draft
+                              </span>
+                            )}
+                            {draft.scheduledAt && (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {new Date(draft.scheduledAt).toLocaleString("en-GB", {
+                                  day: "2-digit", month: "short", year: "numeric",
+                                  hour: "2-digit", minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3" />
                         <td className="px-4 py-3 hidden md:table-cell" />
@@ -525,6 +558,23 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDe
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">Edit revision</TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setDeleteConfirm({ id: draft.id, type: "draft" })
+                                    }}
+                                    className="size-8 rounded-lg hover:bg-destructive/10 text-destructive"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Discard revision</TooltipContent>
                               </Tooltip>
                             </div>
                           </TooltipProvider>
@@ -757,6 +807,29 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, handleDe
           )}
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (deleteConfirm) {
+            const formData = new FormData()
+            formData.append("id", deleteConfirm.id)
+            startTransition(() => {
+              handleDelete(formData)
+            })
+            setDeleteConfirm(null)
+          }
+        }}
+        title={deleteConfirm?.type === "draft" ? "Discard Draft" : "Delete Post"}
+        description={
+          deleteConfirm?.type === "draft"
+            ? "Are you sure you want to discard this draft? This action cannot be undone."
+            : "Are you sure you want to delete this post? This action cannot be undone."
+        }
+        confirmText={deleteConfirm?.type === "draft" ? "Discard" : "Delete"}
+        variant="destructive"
+      />
     </>
   )
 }

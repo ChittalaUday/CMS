@@ -48,6 +48,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 import { RevisionCompareDialog } from '@/app/dashboard/blogs/RevisionCompareDialog'
+import { PublishSheet } from '@/app/dashboard/blogs/PublishSheet'
 import {
   BoldIcon,
   ItalicIcon,
@@ -231,6 +232,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
   // Auto save and publishing states
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<Date | string | null>(null);
+  const [isPublishSheetOpen, setIsPublishSheetOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initialLoadDone = useRef(false);
@@ -561,6 +564,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               setSlug(post.slug || "");
               setContent(post.content || "");
               setPublished(post.published);
+              setScheduledAt(post.scheduledAt || null);
               setFeatured(post.featured || false);
               setFeaturedImageId(post.featuredImageId || null);
               setFeaturedImageUrl(post.featuredImage?.url || null);
@@ -1667,25 +1671,28 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             ) : isAdmin ? (
               /* ── Fresh draft, admin only ── */
               <Button
+                variant={published ? 'destructive' : 'default'}
                 size="sm"
-                className={cn(
-                  "h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm",
-                  parentPostId
-                    ? "bg-emerald-600/50 text-white opacity-60 cursor-not-allowed"
-                    : published
-                      ? "bg-amber-700 hover:bg-amber-600 text-white"
-                      : "bg-primary text-primary-foreground hover:bg-primary/95"
-                )}
-                onClick={parentPostId ? undefined : handlePublishToggle}
+                className={cn('gap-2 font-semibold shadow-sm px-3 py-2')}
+                onClick={() => {
+                  if (parentPostId) {
+                    // Nothing, disabled below or handled if needed
+                  } else if (published) {
+                    handlePublishToggle();
+                  } else {
+                    setIsPublishSheetOpen(true);
+                  }
+                }}
                 disabled={isPublishing || !!parentPostId}
-                title={parentPostId ? "Make some changes first to create a revision" : undefined}
               >
                 {isPublishing ? (
                   <Loader2 className="size-3.5 animate-spin" />
+                ) : published ? (
+                  <BotOff className="size-3.5" />
                 ) : (
                   <Rocket className="size-3.5" />
                 )}
-                {parentPostId ? 'Publish Revision' : published ? 'Unpublish Post' : 'Publish Post'}
+                {parentPostId ? 'Publish Revision' : published ? 'Unpublish Post' : 'Publish / Schedule'}
               </Button>
             ) : null /* Editor on fresh draft: no publish button */}
           </div>
@@ -2028,6 +2035,17 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Publish / Schedule Sheet */}
+      {id && !parentPostId && (
+        <PublishSheet
+          open={isPublishSheetOpen}
+          onOpenChange={setIsPublishSheetOpen}
+          postId={id}
+          postTitle={title || "Untitled Post"}
+          isPublished={published}
+          scheduledAt={scheduledAt}
+        />
+      )}
     </Plate>
   );
 }

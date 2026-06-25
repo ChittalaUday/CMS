@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useTransition, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
-import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus, CalendarClock, Clock, X, CalendarCheck } from "lucide-react"
+import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus, CalendarClock, Clock, X, CalendarCheck, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils/utils"
 import { getRevisionComparison, publishPostDraftRevision, schedulePostDraftRevision, unschedulePostDraftRevision } from "./actions"
@@ -156,16 +157,11 @@ export function RevisionCompareDialog({
   const [loading, setLoading] = useState(false)
   const [contentDiff, setContentDiff] = useState<BlockDiffRow[] | null>(null)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
 
-  // Schedule state (publish mode only)
-  const [showScheduler, setShowScheduler] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
-  const [selectedTime, setSelectedTime] = useState("09:00")
-  const [isScheduling, setIsScheduling] = useState(false)
-  const [isUnscheduling, setIsUnscheduling] = useState(false)
-  const [currentScheduledAt, setCurrentScheduledAt] = useState<Date | string | null | undefined>(scheduledAt)
+
 
   useEffect(() => {
     if (!open) return
@@ -489,14 +485,38 @@ export function RevisionCompareDialog({
           )}
 
           {/* Footer */}
-          <DialogFooter className="px-6 py-4 border-t shrink-0 flex-col gap-3">
+          <DialogFooter className="px-6 py-4 mb-0 border-t shrink-0 flex-col gap-3">
 
             {/* ── Review mode footer ── */}
             {mode === "review" && (
               <div className="flex items-center justify-between gap-3 w-full">
-                <p className="text-xs text-muted-foreground">
-                  Once submitted, an admin will review and publish this revision.
-                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 px-2"
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to discard this revision?")) {
+                        try {
+                          const { deletePost } = await import("./actions");
+                          await deletePost(draftId);
+                          toast.success("Revision discarded.");
+                          setOpen(false);
+                          router.refresh();
+                        } catch (err: any) {
+                          toast.error(err.message || "Failed to discard revision.");
+                        }
+                      }
+                    }}
+                    disabled={isSubmittingReview || loading}
+                  >
+                    <Trash2 className="size-3.5 mr-1" />
+                    Discard
+                  </Button>
+                  <p className="text-xs text-muted-foreground hidden sm:block">
+                    Once submitted, an admin will review and publish this revision.
+                  </p>
+                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isSubmittingReview}>
                     Cancel
@@ -528,115 +548,43 @@ export function RevisionCompareDialog({
             )}
 
             {/* ── Publish mode footer ── */}
-            {mode === "publish" && <>
-            {/* Scheduled banner */}
-            {currentScheduledAt && (
-              <div className="flex items-center gap-2 rounded-lg border border-sky-500/25 bg-sky-500/8 px-3 py-2 w-full">
-                <CalendarCheck className="size-3.5 text-sky-400 shrink-0" />
-                <span className="text-xs text-foreground font-semibold flex-1">
-                  Scheduled: {formatScheduled(currentScheduledAt)}
-                </span>
-                <button
-                  disabled={isUnscheduling}
+            {mode === "publish" && (
+            <div className="flex items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 px-2"
                   onClick={async () => {
-                    setIsUnscheduling(true)
-                    try {
-                      await unschedulePostDraftRevision(draftId)
-                      setCurrentScheduledAt(null)
-                      setShowScheduler(false)
-                      toast.success("Schedule cancelled.")
-                    } catch (err: unknown) {
-                      toast.error((err as Error).message || "Failed to unschedule.")
-                    } finally {
-                      setIsUnscheduling(false)
+                    if (confirm("Are you sure you want to discard this revision?")) {
+                      try {
+                        const { deletePost } = await import("./actions");
+                        await deletePost(draftId);
+                        toast.success("Revision discarded.");
+                        setOpen(false);
+                        router.refresh();
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to discard revision.");
+                      }
                     }
                   }}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                  title="Cancel schedule"
+                  disabled={isPending || loading}
                 >
-                  {isUnscheduling ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
-                </button>
+                  <Trash2 className="size-3.5 mr-1" />
+                  Discard
+                </Button>
+                <p className="text-xs text-muted-foreground hidden sm:block">
+                  This cannot be undone — the live post updates immediately.
+                </p>
               </div>
-            )}
-
-            {/* Inline scheduler */}
-            {showScheduler && (
-              <div className="w-full rounded-xl border border-border/60 bg-card/50 p-4 space-y-3">
-                <div className="rounded-lg overflow-hidden border border-border/40">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    disabled={(d) => { const t = new Date(); t.setHours(0,0,0,0); return d < t }}
-                    className="mx-auto"
-                  />
-                </div>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60 pointer-events-none" />
-                  <input
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
-                    className="h-9 w-full pl-9 pr-3 rounded-md border border-border/60 bg-muted/30 text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setShowScheduler(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs gap-1.5 flex-1 border-sky-500/30 text-sky-500 hover:bg-sky-500/10"
-                    variant="outline"
-                    disabled={!selectedDate || isScheduling}
-                    onClick={async () => {
-                      if (!selectedDate) return
-                      const [h, m] = selectedTime.split(":").map(Number)
-                      const dt = new Date(selectedDate)
-                      dt.setHours(h, m, 0, 0)
-                      if (dt <= new Date()) { toast.error("Must be a future date."); return }
-                      setIsScheduling(true)
-                      try {
-                        await schedulePostDraftRevision(draftId, dt)
-                        setCurrentScheduledAt(dt)
-                        setShowScheduler(false)
-                        toast.success(`Revision scheduled for ${formatScheduled(dt)}.`)
-                      } catch (err: unknown) {
-                        toast.error((err as Error).message || "Failed to schedule.")
-                      } finally {
-                        setIsScheduling(false)
-                      }
-                    }}
-                  >
-                    {isScheduling ? <Loader2 className="size-3.5 animate-spin" /> : <CalendarClock className="size-3.5" />}
-                    Confirm Schedule
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-3 w-full">
-              <p className="text-xs text-muted-foreground">
-                This cannot be undone — the live post updates immediately.
-              </p>
               <div className="flex items-center gap-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setOpen(false)}
-                  disabled={isPending || isScheduling}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 border-sky-500/30 text-sky-500 hover:bg-sky-500/10"
-                  onClick={() => setShowScheduler((v) => !v)}
                   disabled={isPending}
                 >
-                  <CalendarClock className="size-3.5" />
-                  Schedule
+                  Cancel
                 </Button>
                 <Button
                   size="sm"
@@ -653,7 +601,7 @@ export function RevisionCompareDialog({
                 </Button>
               </div>
             </div>
-            </>}
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

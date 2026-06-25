@@ -103,6 +103,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
             posts={posts as any}
             canPublish={canPublish}
             showEditorDrafts={showEditorDrafts}
+            currentUserId={user.id}
             handleDelete={handleDelete}
           />
 
