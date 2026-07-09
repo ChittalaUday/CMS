@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: cms
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -29,20 +29,11 @@ services:
     restart: always
     ports:
       - "3010:3010"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/cms?schema=public
       REDIS_URL: redis://redis:6379
-      CLOUDFLARE_R2_ACCESS_KEY_ID: ${CLOUDFLARE_R2_ACCESS_KEY_ID}
-      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
-      CLOUDFLARE_R2_Token: ${CLOUDFLARE_R2_Token}
-      CLOUDFLARE_R2_ENDPOINT: ${CLOUDFLARE_R2_ENDPOINT}
-      CLOUDFLARE_R2_BUCKET: ${CLOUDFLARE_R2_BUCKET}
-      CLOUDFLARE_R2_PUBLIC_URL: ${CLOUDFLARE_R2_PUBLIC_URL}
-      UPLOADTHING_TOKEN: ${UPLOADTHING_TOKEN}
-      ENABLE_AI: ${ENABLE_AI}
-      OLLAMA_API_URL: ${OLLAMA_API_URL}
-      OLLAMA_MODEL: ${OLLAMA_MODEL}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL}
     depends_on:
       - db
       - redis
