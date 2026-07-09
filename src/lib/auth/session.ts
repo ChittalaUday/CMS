@@ -1,5 +1,5 @@
 import "server-only"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { cache } from "react"
 import { randomBytes } from "crypto"
 import { prisma } from "@/lib/db/prisma"
@@ -13,10 +13,15 @@ export async function createSession(userId: string) {
 
   await prisma.session.create({ data: { id: token, userId, expiresAt } })
 
+  const headersList = await headers()
+  const proto = headersList.get("x-forwarded-proto")
+  const referer = headersList.get("referer")
+  const isHttps = proto === "https" || (referer ? referer.startsWith("https://") : (process.env.NODE_ENV === "production" && false))
+
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     expires: expiresAt,
     sameSite: "lax",
     path: "/",
