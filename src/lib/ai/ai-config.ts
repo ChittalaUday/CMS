@@ -4,6 +4,10 @@
  * Call this in Server Components / route handlers only — never import in client bundles.
  */
 export function isAIConfigured(): boolean {
+  if (process.env.ENABLE_AI !== undefined) {
+    return process.env.ENABLE_AI === "true"
+  }
+
   const hasGateway = Boolean(process.env.AI_GATEWAY_API_KEY?.trim())
   const hasOllama = Boolean(
     process.env.OLLAMA_API_URL?.trim() &&
