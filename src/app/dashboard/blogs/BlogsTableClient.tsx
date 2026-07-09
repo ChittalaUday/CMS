@@ -286,7 +286,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                             </span>
                           )}
                           {post.scheduledAt && !post.published && (
-                            <span className="text-[10px] text-muted-foreground font-mono">
+                            <span suppressHydrationWarning className="text-[10px] text-muted-foreground font-mono">
                               {new Date(post.scheduledAt).toLocaleString("en-GB", {
                                 day: "2-digit", month: "short", year: "numeric",
                                 hour: "2-digit", minute: "2-digit",
@@ -317,7 +317,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
 
                       {/* Date */}
                       <td className="px-4 py-4 hidden lg:table-cell">
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+                        <span suppressHydrationWarning className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                           <Calendar className="size-3 text-muted-foreground/60" />
                           {new Date(post.createdAt).toLocaleDateString("en-GB", {
                             day: "2-digit",
@@ -497,7 +497,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                               <p className="text-xs font-semibold text-foreground/80 line-clamp-1">
                                 {draft.title}
                               </p>
-                              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                              <p suppressHydrationWarning className="text-[10px] text-muted-foreground font-mono mt-0.5">
                                 Draft revision · last updated {new Date(draft.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                               </p>
                             </div>
@@ -519,7 +519,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                               </span>
                             )}
                             {draft.scheduledAt && (
-                              <span className="text-[10px] text-muted-foreground font-mono">
+                              <span suppressHydrationWarning className="text-[10px] text-muted-foreground font-mono">
                                 {new Date(draft.scheduledAt).toLocaleString("en-GB", {
                                   day: "2-digit", month: "short", year: "numeric",
                                   hour: "2-digit", minute: "2-digit",
@@ -611,7 +611,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                         <Star className="size-2.5 fill-amber-500 text-amber-500" /> Featured
                       </span>
                     )}
-                    <span className="text-xs text-muted-foreground font-mono">
+                    <span suppressHydrationWarning className="text-xs text-muted-foreground font-mono">
                       {new Date(selectedPost.createdAt).toLocaleDateString("en-GB", {
                         day: "2-digit",
                         month: "short",
@@ -764,7 +764,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                       </div>
                       <div className="flex justify-between py-1 border-b border-border/30">
                         <span className="text-muted-foreground">Created</span>
-                        <span className="font-medium">
+                        <span suppressHydrationWarning className="font-medium">
                           {new Date(selectedPost.createdAt).toLocaleDateString("en-GB", {
                             day: "2-digit",
                             month: "short",
@@ -774,7 +774,7 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                       </div>
                       <div className="flex justify-between py-1 border-b border-border/30">
                         <span className="text-muted-foreground">Updated</span>
-                        <span className="font-medium">
+                        <span suppressHydrationWarning className="font-medium">
                           {new Date(selectedPost.updatedAt).toLocaleDateString("en-GB", {
                             day: "2-digit",
                             month: "short",
