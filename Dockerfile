@@ -42,8 +42,11 @@ RUN chown nextjs:nodejs .next
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-# Copy Prisma schema/migrations for reference or migrations run on startup if needed
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+# Copy the custom generated Prisma Client directory containing the engines
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated/prisma ./src/generated/prisma
+# Copy prisma config for runtime CLI commands
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./
 
 USER nextjs
 
