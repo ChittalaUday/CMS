@@ -18,10 +18,10 @@ const users = [
     role: "SUPER_ADMIN" as const,
   },
   {
-    email: "admin@cms.local",
+    email: "admin@niruthi.com",
     username: "admin",
     name: "Admin User",
-    password: "Admin@123",
+    password: "Niruthi@123",
     role: "ADMIN" as const,
   },
   {
@@ -47,8 +47,8 @@ async function main() {
     const hashed = await bcrypt.hash(user.password, SALT_ROUNDS)
 
     const created = await prisma.user.upsert({
-      where: { email: user.email },
-      update: { password: hashed, name: user.name, role: user.role },
+      where: { username: user.username },
+      update: { email: user.email, password: hashed, name: user.name, role: user.role },
       create: {
         email: user.email,
         username: user.username,
