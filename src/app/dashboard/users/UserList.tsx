@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useDebounce } from "@/hooks/use-debounce"
 import { BlogsPagination } from "@/app/dashboard/blogs/BlogsPagination"
+import { copyToClipboard } from "@/lib/utils/utils"
 
 const ROLE_BADGE: Record<Role, { label: string; className: string }> = {
   [Role.SUPER_ADMIN]: { label: "Super Admin", className: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
@@ -106,10 +107,15 @@ function InviteDialog({
   const inviteLink = `${origin}/invite/${info.token}`
   const formattedCode = info.code.slice(0, 4) + "-" + info.code.slice(4)
 
-  function copy(text: string, setCopied: (v: boolean) => void) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+  function copy(text: string, setCopied: (v: boolean) => void, typeLabel: string) {
+    copyToClipboard(text).then((success) => {
+      if (success) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        toast.success(`${typeLabel} copied to clipboard`)
+      } else {
+        toast.error(`Failed to copy ${typeLabel}`)
+      }
     })
   }
 
@@ -143,7 +149,7 @@ function InviteDialog({
                 variant="ghost"
                 size="icon"
                 className="size-7 shrink-0 rounded-md hover:bg-muted"
-                onClick={() => copy(inviteLink, setCopiedLink)}
+                onClick={() => copy(inviteLink, setCopiedLink, "Invite link")}
                 title="Copy link"
               >
                 {copiedLink ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5 text-muted-foreground" />}
@@ -164,7 +170,7 @@ function InviteDialog({
                 variant="ghost"
                 size="icon"
                 className="size-7 shrink-0 rounded-md hover:bg-muted"
-                onClick={() => copy(formattedCode, setCopiedCode)}
+                onClick={() => copy(formattedCode, setCopiedCode, "Access code")}
                 title="Copy code"
               >
                 {copiedCode ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5 text-muted-foreground" />}
@@ -402,8 +408,13 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
   function copyInviteLink(editor: EditorUser) {
     if (!editor.invite) return
     const origin = window.location.origin
-    navigator.clipboard.writeText(`${origin}/invite/${editor.invite.token}`)
-    toast.success("Invite link copied!")
+    copyToClipboard(`${origin}/invite/${editor.invite.token}`).then((success) => {
+      if (success) {
+        toast.success("Invite link copied!")
+      } else {
+        toast.error("Failed to copy invite link")
+      }
+    })
   }
 
   return (

@@ -164,6 +164,10 @@ export const createEditor = actionClient
       ? (sessionUser.clientId ?? clientId)
       : sessionUser.clientId
 
+    if (targetRole !== Role.SUPER_ADMIN && !assignedClientId) {
+      throw new Error("Please select an active client from the header before inviting a user.")
+    }
+
     const user = await prisma.user.create({
       data: {
         email: data.email,

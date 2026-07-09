@@ -4,6 +4,8 @@ import { useState } from "react"
 import { type ApiCategory, type ApiEndpoint } from "@/lib/utils/api-registry"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/utils/utils"
 import {
   ChevronDownIcon, ChevronRightIcon, CopyIcon, CheckIcon,
   KeyRoundIcon, ShieldIcon, BookOpenIcon, CodeIcon,
@@ -30,9 +32,20 @@ function MethodBadge({ method }: { method: string }) {
 
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    copyToClipboard(text).then((success) => {
+      if (success) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        toast.success("Copied to clipboard")
+      } else {
+        toast.error("Failed to copy")
+      }
+    })
+  }
   return (
     <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      onClick={handleCopy}
       className="p-1 rounded hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
     >
       {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}

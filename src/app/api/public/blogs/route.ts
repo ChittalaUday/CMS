@@ -21,10 +21,45 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  const { searchParams } = new URL(request.url)
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10))
+  const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") ?? "10", 10)))
+  const skip = (page - 1) * limit
+
+  const sortByParam = searchParams.get("sortBy") ?? "createdAt"
+  const sortOrderParam = searchParams.get("sortOrder") ?? "desc"
+
+  const allowedSortFields = ["createdAt", "updatedAt", "title"]
+  const sortBy = allowedSortFields.includes(sortByParam) ? sortByParam : "createdAt"
+  const sortOrder = sortOrderParam.toLowerCase() === "asc" ? "asc" : "desc"
+
+  const category = searchParams.get("category") ?? undefined
+
   try {
+    const whereClause: any = {
+      published: true,
+      clientId: auth.clientId,
+    }
+
+    if (category) {
+      whereClause.categories = {
+        some: {
+          category: {
+            slug: category,
+          },
+        },
+      }
+    }
+
+    const total = await prisma.post.count({
+      where: whereClause,
+    })
+
     const posts = await prisma.post.findMany({
-      where: { published: true, clientId: auth.clientId },
-      orderBy: { createdAt: "desc" },
+      where: whereClause,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
       select: {
         id: true,
         title: true,
@@ -46,9 +81,20 @@ export async function GET(request: NextRequest) {
 
     const allowedOrigins = await getAllowedOrigins(auth.clientId)
     const origin = resolveOrigin(request.headers.get("origin"), allowedOrigins)
-    return new NextResponse(JSON.stringify({ posts: formattedPosts }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
-    })
+    return new NextResponse(
+      JSON.stringify({
+        posts: formattedPosts,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      }),
+      {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
+      }
+    )
   } catch (err) {
     logger.error({ err }, "api/public/blogs GET failed")
     return NextResponse.json({ error: "Failed to fetch blog posts" }, { status: 500 })

@@ -565,6 +565,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               setContent(post.content || "");
               setPublished(post.published);
               setScheduledAt(post.scheduledAt || null);
+              setReviewRequested(!!(post as any).reviewRequested);
               setFeatured(post.featured || false);
               setFeaturedImageId(post.featuredImageId || null);
               setFeaturedImageUrl(post.featuredImage?.url || null);
@@ -747,6 +748,9 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       if (updated) {
         setPublished(updated.published);
         toast.success(updated.published ? "Post published successfully!" : "Post reverted to draft.");
+        if (updated.published) {
+          router.push('/dashboard/blogs');
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -1665,7 +1669,10 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                       Submit for Review
                     </Button>
                   }
-                  onReviewSubmitted={() => setReviewRequested(true)}
+                  onReviewSubmitted={() => {
+                    setReviewRequested(true);
+                    router.push('/dashboard/blogs');
+                  }}
                 />
               )
             ) : isAdmin ? (
@@ -1694,7 +1701,58 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                 )}
                 {parentPostId ? 'Publish Revision' : published ? 'Unpublish Post' : 'Publish / Schedule'}
               </Button>
-            ) : null /* Editor on fresh draft: no publish button */}
+            ) : (
+              /* Editor on fresh draft: show Send for Review or Withdraw Review button */
+              reviewRequested ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8.5 gap-1.5 text-xs font-semibold border-sky-500/40 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                  disabled={isSubmittingReview || !id}
+                  onClick={async () => {
+                    if (!id) return;
+                    try {
+                      setIsSubmittingReview(true);
+                      const { withdrawPostFromReview } = await import('@/app/dashboard/blogs/actions');
+                      await withdrawPostFromReview(id);
+                      setReviewRequested(false);
+                      toast.success('Review request withdrawn.');
+                    } catch (err: any) {
+                      toast.error(err.message || 'Failed to withdraw.');
+                    } finally {
+                      setIsSubmittingReview(false);
+                    }
+                  }}
+                >
+                  {isSubmittingReview ? <Loader2 className="size-3.5 animate-spin" /> : <ClipboardCheck className="size-3.5" />}
+                  Submitted for Review
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-8.5 gap-1.5 text-xs font-bold transition-all shadow-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={saveStatus === 'saving' || !id}
+                  onClick={async () => {
+                    if (!id) return;
+                    try {
+                      setIsSubmittingReview(true);
+                      const { submitPostForReview } = await import('@/app/dashboard/blogs/actions');
+                      await submitPostForReview(id);
+                      setReviewRequested(true);
+                      toast.success('Submitted for admin review.');
+                      router.push('/dashboard/blogs');
+                    } catch (err: any) {
+                      toast.error(err.message || 'Failed to submit.');
+                    } finally {
+                      setIsSubmittingReview(false);
+                    }
+                  }}
+                >
+                  <SendHorizonal className="size-3.5" />
+                  Submit for Review
+                </Button>
+              )
+            )}
           </div>
         </header>
 
@@ -2035,6 +2093,51 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add Category Dialog */}
+      <Dialog open={isAddCatDialogOpen} onOpenChange={setIsAddCatDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-background border border-border">
+          <DialogHeader>
+            <DialogTitle>Add New Category</DialogTitle>
+            <DialogDescription>
+              Create a new category for your blog posts.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddCategory} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="category-name" className="text-xs font-semibold text-muted-foreground">Category Name</Label>
+              <Input
+                id="category-name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="e.g. Technology"
+                className="rounded-lg h-9 text-sm"
+                autoFocus
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddCatDialogOpen(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCreatingCategory || !newCategoryName.trim()}
+                className="text-xs font-semibold bg-primary text-primary-foreground"
+              >
+                {isCreatingCategory ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : null}
+                Create Category
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       {/* Publish / Schedule Sheet */}
       {id && !parentPostId && (
         <PublishSheet
@@ -2044,6 +2147,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           postTitle={title || "Untitled Post"}
           isPublished={published}
           scheduledAt={scheduledAt}
+          onPublished={() => router.push('/dashboard/blogs')}
         />
       )}
     </Plate>

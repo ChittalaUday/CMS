@@ -43,7 +43,8 @@ export function PublishButton({ postId, postTitle, isPublished, scheduledAt }: P
         <TooltipTrigger asChild>
           <button
             disabled={isPending}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation()
               if (isPublished) {
                 handleUnpublish()
               } else {
@@ -75,14 +76,16 @@ export function PublishButton({ postId, postTitle, isPublished, scheduledAt }: P
       </Tooltip>
 
       {!isPublished && (
-        <PublishSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          postId={postId}
-          postTitle={postTitle}
-          isPublished={isPublished}
-          scheduledAt={scheduledAt}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <PublishSheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+            postId={postId}
+            postTitle={postTitle}
+            isPublished={isPublished}
+            scheduledAt={scheduledAt}
+          />
+        </div>
       )}
     </TooltipProvider>
   )

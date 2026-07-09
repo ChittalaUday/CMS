@@ -5,6 +5,26 @@
 		"description": "Postman Collection for the CMS Public API endpoints including Blogs, Careers Application, and Health Check.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
+	"auth": {
+		"type": "apikey",
+		"apikey": [
+			{
+				"key": "value",
+				"value": "{{api_key}}",
+				"type": "string"
+			},
+			{
+				"key": "key",
+				"value": "x-api-key",
+				"type": "string"
+			},
+			{
+				"key": "in",
+				"value": "header",
+				"type": "string"
+			}
+		]
+	},
 	"item": [
 		{
 			"name": "Health Check",
@@ -12,9 +32,9 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "{{base_url}}/api/health",
+					"raw": "{{cms_url}}/api/health",
 					"host": [
-						"{{base_url}}"
+						"{{cms_url}}"
 					],
 					"path": [
 						"api",
@@ -34,9 +54,9 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/public/blogs",
+							"raw": "{{cms_url}}/api/public/blogs",
 							"host": [
-								"{{base_url}}"
+								"{{cms_url}}"
 							],
 							"path": [
 								"api",
@@ -54,9 +74,9 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/public/blogs/:slug",
+							"raw": "{{cms_url}}/api/public/blogs/:slug",
 							"host": [
-								"{{base_url}}"
+								"{{cms_url}}"
 							],
 							"path": [
 								"api",
@@ -97,9 +117,9 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/public/blogs/view",
+							"raw": "{{cms_url}}/api/public/blogs/view",
 							"host": [
-								"{{base_url}}"
+								"{{cms_url}}"
 							],
 							"path": [
 								"api",
@@ -174,9 +194,9 @@
 							]
 						},
 						"url": {
-							"raw": "{{base_url}}/api/public/careers/apply",
+							"raw": "{{cms_url}}/api/public/careers/apply",
 							"host": [
-								"{{base_url}}"
+								"{{cms_url}}"
 							],
 							"path": [
 								"api",
@@ -194,8 +214,13 @@
 	],
 	"variable": [
 		{
-			"key": "base_url",
+			"key": "cms_url",
 			"value": "http://localhost:3010",
+			"type": "string"
+		},
+		{
+			"key": "api_key",
+			"value": "your-api-key-here",
 			"type": "string"
 		}
 	]

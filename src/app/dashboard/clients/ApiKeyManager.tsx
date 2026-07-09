@@ -29,6 +29,7 @@ import { API_REGISTRY, type ApiCategory } from "@/lib/utils/api-registry"
 import { toast } from "sonner"
 import { Copy, Check, KeyRound, Plus, Loader2, AlertTriangle, Shield } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { copyToClipboard } from "@/lib/utils/utils"
 
 type ApiKey = {
   id: string
@@ -167,10 +168,15 @@ export function ApiKeyManager({ clientId, initialKeys }: Props) {
 
   function handleCopy() {
     if (!generatedKey) return
-    navigator.clipboard.writeText(generatedKey)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-    toast.success("API key copied")
+    copyToClipboard(generatedKey).then((success) => {
+      if (success) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        toast.success("API key copied")
+      } else {
+        toast.error("Failed to copy API key")
+      }
+    })
   }
 
   function closeGenerateDialog() {

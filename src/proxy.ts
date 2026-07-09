@@ -36,7 +36,7 @@ export default async function proxy(req: NextRequest) {
     const response = new NextResponse(null, { status: 204 })
     response.headers.set("Access-Control-Allow-Origin", "*")
     response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
     return response
   }
 
@@ -102,7 +102,7 @@ export default async function proxy(req: NextRequest) {
   if (isPublicApi) {
     res.headers.set("Access-Control-Allow-Origin", "*")
     res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
   }
 
   // 3. Security headers

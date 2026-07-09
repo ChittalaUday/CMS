@@ -39,27 +39,56 @@ export const API_REGISTRY: ApiCategory[] = [
         endpoints: [
           {
             method: "GET",
+            path: "/api/public/categories",
+            summary: "List all categories that have published posts for the authenticated client",
+            responseExample: {
+              categories: [
+                { id: "cmrde6rmv000801rzpwrvvyst", name: "News", slug: "news" }
+              ]
+            }
+          },
+          {
+            method: "GET",
             path: "/api/public/blogs",
             summary: "List all published blog posts for the authenticated client",
             queryParams: [
-              { name: "limit", type: "number", required: false, description: "Max results to return" },
-              { name: "offset", type: "number", required: false, description: "Pagination offset" },
+              { name: "page", type: "number", required: false, description: "Page number for pagination (defaults to 1)" },
+              { name: "limit", type: "number", required: false, description: "Max results to return per page (defaults to 10, max 100)" },
+              { name: "category", type: "string", required: false, description: "Filter posts by category slug" },
+              { name: "sortBy", type: "string", required: false, description: "Field to sort by: createdAt, updatedAt, or title (defaults to createdAt)" },
+              { name: "sortOrder", type: "string", required: false, description: "Sort direction: asc or desc (defaults to desc)" },
             ],
             responseExample: {
               posts: [
                 {
-                  id: "cuid",
-                  title: "Getting Started",
-                  slug: "getting-started",
-                  content: "<p>…</p>",
+                  id: "cmrde6rmv000801rzpwrvvyst",
+                  title: "test 2",
+                  slug: "test-2",
+                  content: "<div class=\"slate-editor\"><div class=\"slate-p\"><span>this is a test </span></div></div>",
                   featured: false,
-                  createdAt: "2026-01-01T00:00:00.000Z",
-                  updatedAt: "2026-01-01T00:00:00.000Z",
-                  author: { id: "cuid", name: "Jane Doe", avatarUrl: null },
-                  featuredImage: null,
-                  categories: [{ id: "cuid", name: "News", slug: "news" }],
-                },
+                  createdAt: "2026-07-09T10:57:03.847Z",
+                  updatedAt: "2026-07-09T11:05:50.889Z",
+                  author: {
+                    id: "cmrdduidd000301rzvjk5u9is",
+                    name: "editor",
+                    avatarUrl: null
+                  },
+                  featuredImage: {
+                    id: "cmrdehvm40001kopdg8ekvl4v",
+                    filename: "Screenshot 2026-07-01 at 12.00.10 PM.png",
+                    url: "https://pub-dc5b8bb0f2c2484699b3584b752ff721.r2.dev/uploads/1783595141567_Screenshot_2026-07-01_at_12.00.10_PM.png",
+                    mimeType: "image/png",
+                    size: 110923
+                  },
+                  categories: []
+                }
               ],
+              pagination: {
+                total: 2,
+                page: 1,
+                limit: 10,
+                totalPages: 1
+              }
             },
           },
           {
@@ -68,12 +97,13 @@ export const API_REGISTRY: ApiCategory[] = [
             summary: "Fetch a single published post by slug",
             responseExample: {
               post: {
-                id: "cuid",
+                id: "cmrdduidd000301rzvjk5u9is",
                 title: "Getting Started",
                 slug: "getting-started",
                 content: "<p>…</p>",
                 contentJson: {},
                 createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
                 author: { id: "cuid", name: "Jane Doe", avatarUrl: null },
                 featuredImage: null,
                 categories: [{ id: "cuid", name: "News", slug: "news" }],

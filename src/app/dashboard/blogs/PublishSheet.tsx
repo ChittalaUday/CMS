@@ -39,6 +39,7 @@ interface PublishSheetProps {
   scheduledAt?: Date | string | null
   /** When true, postId is the draft revision ID — publishing applies it to the parent post. */
   isRevision?: boolean
+  onPublished?: () => void
 }
 
 function formatScheduled(dt: Date | string) {
@@ -60,6 +61,7 @@ export function PublishSheet({
   isPublished,
   scheduledAt,
   isRevision = false,
+  onPublished,
 }: PublishSheetProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [selectedTime, setSelectedTime] = useState("09:00")
@@ -81,6 +83,7 @@ export function PublishSheet({
           toast.success(`"${postTitle}" is now live.`)
         }
         onOpenChange(false)
+        onPublished?.()
       } catch (err: unknown) {
         toast.error((err as Error).message || "Failed to publish.")
       }
@@ -141,6 +144,7 @@ export function PublishSheet({
       <SheetContent
         side="right"
         className="w-full sm:max-w-md flex flex-col gap-0 p-0 overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
       >
         <SheetHeader className="px-6 py-5 border-b border-border/60 shrink-0">
           <div className="flex items-center gap-2">

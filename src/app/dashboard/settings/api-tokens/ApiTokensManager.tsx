@@ -19,6 +19,7 @@ import {
   ClockIcon, AlertTriangleIcon, Loader2Icon, ShieldCheckIcon,
   EyeOffIcon, BookOpenIcon, ArrowRightIcon,
 } from "lucide-react"
+import { copyToClipboard } from "@/lib/utils/utils"
 
 type Token = {
   id: string
@@ -70,9 +71,15 @@ function ScopeBadge({ scopeId }: { scopeId: string }) {
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
   const copy = () => {
-    navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    copyToClipboard(value).then((success) => {
+      if (success) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        toast.success("Copied to clipboard")
+      } else {
+        toast.error("Failed to copy")
+      }
+    })
   }
   return (
     <button onClick={copy} className="p-1 rounded hover:bg-muted transition-colors">
@@ -184,10 +191,15 @@ function CreateTokenDialog({ registry }: { registry: ApiCategory[] }) {
 
   const copyKey = () => {
     if (!createdKey) return
-    navigator.clipboard.writeText(createdKey)
-    setKeyCopied(true)
-    setTimeout(() => setKeyCopied(false), 2000)
-    toast.success("Token copied to clipboard")
+    copyToClipboard(createdKey).then((success) => {
+      if (success) {
+        setKeyCopied(true)
+        setTimeout(() => setKeyCopied(false), 2000)
+        toast.success("Token copied to clipboard")
+      } else {
+        toast.error("Failed to copy token")
+      }
+    })
   }
 
   const handleClose = () => {

@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { copyToClipboard as utilCopyToClipboard } from "@/lib/utils/utils"
 
 interface MediaItem {
   id: string
@@ -110,10 +111,15 @@ export default function MediaLibraryPage() {
     const fullUrl = url.startsWith("http://") || url.startsWith("https://") 
       ? url 
       : `${window.location.origin}${url}`
-    navigator.clipboard.writeText(fullUrl)
-    setCopiedId(id)
-    toast.success("Copied file URL to clipboard")
-    setTimeout(() => setCopiedId(null), 2000)
+    utilCopyToClipboard(fullUrl).then((success) => {
+      if (success) {
+        setCopiedId(id)
+        toast.success("Copied file URL to clipboard")
+        setTimeout(() => setCopiedId(null), 2000)
+      } else {
+        toast.error("Failed to copy URL")
+      }
+    })
   }
 
   const formatSize = (bytes: number) => {
