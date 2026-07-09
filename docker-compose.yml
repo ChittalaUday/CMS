@@ -31,9 +31,6 @@ services:
       - "3010:3010"
     env_file:
       - .env
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/cms?schema=public
-      REDIS_URL: redis://redis:6379
     depends_on:
       - db
       - redis
