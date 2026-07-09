@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   /* config options here
   reactCompiler: true,*/
   allowedDevOrigins: ["*"],
+  output: "standalone",
 };
 
 export default withBundleAnalyzer(nextConfig);
