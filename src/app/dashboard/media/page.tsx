@@ -40,6 +40,20 @@ export default function MediaLibraryPage() {
   const [totalPages, setTotalPages] = useState(1)
   const pageSize = 24
 
+  const [compressionDialog, setCompressionDialog] = useState<{
+    isOpen: boolean
+    fileName: string
+    fileSizeMB: string
+    onConfirm: () => void
+    onCancel: () => void
+  }>({
+    isOpen: false,
+    fileName: "",
+    fileSizeMB: "0",
+    onConfirm: () => {},
+    onCancel: () => {},
+  })
+
   useEffect(() => {
     loadMedia()
   }, [search, type, page])
@@ -67,10 +81,39 @@ export default function MediaLibraryPage() {
     if (!files || files.length === 0) return
 
     try {
-      setIsUploading(true)
       for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        let fileToUpload = file
+
+        if (file.size > 10 * 1024 * 1024 && file.type.startsWith("image/")) {
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1)
+          const userConfirmed = await new Promise<boolean>((resolve) => {
+            setCompressionDialog({
+              isOpen: true,
+              fileName: file.name,
+              fileSizeMB,
+              onConfirm: () => resolve(true),
+              onCancel: () => resolve(false),
+            })
+          })
+
+          setCompressionDialog(prev => ({ ...prev, isOpen: false }))
+
+          if (userConfirmed) {
+            try {
+              const { compressImageIfNeeded } = await import("@/lib/utils/image-compression")
+              fileToUpload = await compressImageIfNeeded(file, 10)
+            } catch (compErr) {
+              console.error("Compression failed, trying original file:", compErr)
+            }
+          } else {
+            continue
+          }
+        }
+
+        setIsUploading(true)
         const formData = new FormData()
-        formData.append("file", files[i])
+        formData.append("file", fileToUpload)
         const newMedia = await uploadMediaItem(formData)
         setMediaItems((prev) => {
           if (prev.some((item) => item.id === newMedia.id)) {
@@ -85,6 +128,7 @@ export default function MediaLibraryPage() {
       toast.error(err.message || "Upload failed")
     } finally {
       setIsUploading(false)
+      e.target.value = ""
     }
   }
 
@@ -401,6 +445,15 @@ export default function MediaLibraryPage() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={compressionDialog.isOpen}
+        title="Compress Image?"
+        description={`The image "${compressionDialog.fileName}" is very large (${compressionDialog.fileSizeMB} MB). Next.js limits server action uploads to 10MB. Would you like to compress it to under 10MB to ensure it uploads successfully?`}
+        confirmText="Compress & Upload"
+        cancelText="Cancel Upload"
+        onConfirm={compressionDialog.onConfirm}
+        onClose={compressionDialog.onCancel}
+      />
     </div>
   )
 }

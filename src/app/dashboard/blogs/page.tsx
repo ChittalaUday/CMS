@@ -64,7 +64,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
       </div>
 
       {/* Toolbar */}
-      <Suspense>
+      <Suspense fallback={null}>
         <BlogsToolbar
           categories={categories ?? []}
           totalCount={totalCount}
@@ -108,7 +108,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
           />
 
           {/* Pagination */}
-          <Suspense>
+          <Suspense fallback={null}>
             <BlogsPagination page={page} totalPages={totalPages} pageSize={15} />
           </Suspense>
         </>

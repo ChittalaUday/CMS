@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   reactCompiler: true,*/
   allowedDevOrigins: ["*"],
   output: "standalone",
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
 };
 
 export default withBundleAnalyzer(nextConfig);

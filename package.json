@@ -39,6 +39,7 @@
     "@uploadthing/react": "^7.3.3",
     "ai": "^6.0.205",
     "bcryptjs": "^3.0.3",
+    "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

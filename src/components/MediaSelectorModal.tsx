@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Image, Upload, Check, Loader2 } from "lucide-react"
 import { getMediaItems, uploadMediaItem } from "@/app/dashboard/blogs/actions"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface MediaItem {
   id: string
@@ -28,6 +29,19 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [compressionDialog, setCompressionDialog] = useState<{
+    isOpen: boolean
+    fileName: string
+    fileSizeMB: string
+    onConfirm: () => void
+    onCancel: () => void
+  }>({
+    isOpen: false,
+    fileName: "",
+    fileSizeMB: "0",
+    onConfirm: () => {},
+    onCancel: () => {},
+  })
 
   useEffect(() => {
     if (isOpen) {
@@ -51,10 +65,39 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
     const file = e.target.files?.[0]
     if (!file) return
 
+    e.target.value = ""
+
     try {
+      let fileToUpload = file
+      if (file.size > 10 * 1024 * 1024 && file.type.startsWith("image/")) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1)
+        const userConfirmed = await new Promise<boolean>((resolve) => {
+          setCompressionDialog({
+            isOpen: true,
+            fileName: file.name,
+            fileSizeMB,
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+
+        setCompressionDialog(prev => ({ ...prev, isOpen: false }))
+
+        if (userConfirmed) {
+          try {
+            const { compressImageIfNeeded } = await import("@/lib/utils/image-compression")
+            fileToUpload = await compressImageIfNeeded(file, 10)
+          } catch (compErr) {
+            console.error("Compression failed, trying original file:", compErr)
+          }
+        } else {
+          return
+        }
+      }
+
       setIsUploading(true)
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append("file", fileToUpload)
       
       const newMedia = await uploadMediaItem(formData)
       setMediaItems((prev) => {
@@ -179,6 +222,15 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
           )}
         </div>
       </SheetContent>
+      <ConfirmDialog
+        isOpen={compressionDialog.isOpen}
+        title="Compress Image?"
+        description={`The image "${compressionDialog.fileName}" is very large (${compressionDialog.fileSizeMB} MB). Next.js limits server action uploads to 10MB. Would you like to compress it to under 10MB to ensure it uploads successfully?`}
+        confirmText="Compress & Upload"
+        cancelText="Cancel Upload"
+        onConfirm={compressionDialog.onConfirm}
+        onClose={compressionDialog.onCancel}
+      />
     </Sheet>
   )
 }

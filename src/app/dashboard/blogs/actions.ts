@@ -1001,7 +1001,7 @@ export async function uploadMediaItem(formData: FormData) {
     if (existing) return existing
 
     const dimensions = getImageDimensions(buffer, file.type)
-    const clientId = await requireClientScope()
+    const clientId = await getClientScope()
 
     const media = await prisma.media.create({
       data: {

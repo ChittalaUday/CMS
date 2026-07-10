@@ -56,6 +56,7 @@ import { BaseBoldPlugin, BaseItalicPlugin, BaseUnderlinePlugin, BaseStrikethroug
 import { ListElement, ListItemElement } from '@/components/ui/list-node';
 import { TableElement, TableRowElement, TableCellElement, TableCellHeaderElement } from '@/components/ui/table-element';
 import { ImageElement } from '@/components/ui/image-element';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface PlateEditorProps {
   initialValue?: any[];
@@ -136,6 +137,19 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [compressionDialog, setCompressionDialog] = useState<{
+    isOpen: boolean;
+    fileName: string;
+    fileSizeMB: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  }>({
+    isOpen: false,
+    fileName: '',
+    fileSizeMB: '0',
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
 
   const editor = usePlateEditor({
     plugins: [
@@ -174,6 +188,37 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
       return next.value ? next.value[1] : null;
     };
 
+    let fileToUpload = file;
+    if (file.size > 10 * 1024 * 1024 && file.type.startsWith('image/')) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      const userConfirmed = await new Promise<boolean>((resolve) => {
+        setCompressionDialog({
+          isOpen: true,
+          fileName: file.name,
+          fileSizeMB,
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+
+      setCompressionDialog(prev => ({ ...prev, isOpen: false }));
+
+      if (userConfirmed) {
+        try {
+          const { compressImageIfNeeded } = await import('@/lib/utils/image-compression');
+          fileToUpload = await compressImageIfNeeded(file, 10);
+        } catch (compErr) {
+          console.error('Compression failed, trying original file:', compErr);
+        }
+      } else {
+        const path = findNodePath();
+        if (path) {
+          editor.tf.removeNodes({ at: path });
+        }
+        return;
+      }
+    }
+
     const initialPath = findNodePath();
     if (initialPath) {
       editor.tf.setNodes(
@@ -200,7 +245,7 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
     }, 150);
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileToUpload);
 
     try {
       const { uploadImageAction } = await import('./actions');
@@ -488,6 +533,15 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
         </FixedToolbar>
         <Editor variant="demo" placeholder="Type..." />
       </EditorContainer>
+      <ConfirmDialog
+        isOpen={compressionDialog.isOpen}
+        title="Compress Image?"
+        description={`The image "${compressionDialog.fileName}" is very large (${compressionDialog.fileSizeMB} MB). Next.js limits server action uploads to 10MB. Would you like to compress it to under 10MB to ensure it uploads successfully?`}
+        confirmText="Compress & Upload"
+        cancelText="Cancel Upload"
+        onConfirm={compressionDialog.onConfirm}
+        onClose={compressionDialog.onCancel}
+      />
     </Plate>
   );
 }
