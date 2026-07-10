@@ -977,6 +977,76 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     }
   };
 
+  const setBlockType = (type: string) => {
+    editor.tf.withoutNormalizing(() => {
+      const blockEntries = Array.from(
+        editor.api.nodes({
+          match: (n: any) => editor.api.isBlock(n),
+          mode: 'lowest',
+        })
+      );
+
+      for (const [node, path] of blockEntries) {
+        const text = editor.api.string(path);
+        if (text.includes('\n')) {
+          const lines = text.split('\n');
+          const sel = editor.selection;
+          if (sel) {
+            // Compute character offset inside the block
+            let offset = 0;
+            const children = (node as any).children || [];
+            const targetPathIndex = sel.anchor.path[sel.anchor.path.length - 1];
+            
+            if (Array.isArray(children) && typeof targetPathIndex === 'number' && targetPathIndex < children.length) {
+              for (let i = 0; i < targetPathIndex; i++) {
+                offset += (children[i]?.text || '').length;
+              }
+              offset += sel.anchor.offset;
+
+              // Find the newlines directly before and after the offset
+              const prevNewlineIndex = text.lastIndexOf('\n', offset - 1);
+              const nextNewlineIndex = text.indexOf('\n', offset);
+
+              const beforeText = prevNewlineIndex === -1 ? '' : text.substring(0, prevNewlineIndex);
+              const activeLineText = text.substring(
+                prevNewlineIndex === -1 ? 0 : prevNewlineIndex + 1,
+                nextNewlineIndex === -1 ? text.length : nextNewlineIndex
+              );
+              const afterText = nextNewlineIndex === -1 ? '' : text.substring(nextNewlineIndex + 1);
+
+              const newNodes: any[] = [];
+              if (beforeText) {
+                newNodes.push({ type: 'p', children: [{ text: beforeText }] });
+              }
+              newNodes.push({ type, children: [{ text: activeLineText }] });
+              if (afterText) {
+                newNodes.push({ type: 'p', children: [{ text: afterText }] });
+              }
+
+              // Replace the node at path
+              editor.tf.removeNodes({ at: path });
+              editor.tf.insertNodes(newNodes, { at: path });
+
+              // Explicitly position the cursor inside the new active line block
+              const activeNodePath = [beforeText ? path[0] + 1 : path[0]];
+              const activeTextPath = [...activeNodePath, 0];
+              const relativeOffset = offset - (prevNewlineIndex === -1 ? 0 : prevNewlineIndex + 1);
+
+              editor.tf.select({
+                anchor: { path: activeTextPath, offset: relativeOffset },
+                focus: { path: activeTextPath, offset: relativeOffset },
+              });
+              continue;
+            }
+          }
+        }
+
+        // Default fallback behavior
+        editor.tf.setNodes({ type }, { at: path });
+      }
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Cmd+: or Ctrl+: → focus editor and insert ':' to trigger emoji combobox
     if ((e.metaKey || e.ctrlKey) && e.key === ':') {
@@ -1774,13 +1844,13 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           >
 
             {/* Headers */}
-            <ToolbarButton size="sm" tooltip="Heading 1" tooltipContentProps={SIDE_RIGHT} onClick={() => editor.tf.setNodes({ type: BaseH1Plugin.key })}>
+            <ToolbarButton size="sm" tooltip="Heading 1" tooltipContentProps={SIDE_RIGHT} onClick={() => setBlockType(BaseH1Plugin.key)}>
               <Heading1Icon className="size-4 text-foreground/80" />
             </ToolbarButton>
-            <ToolbarButton size="sm" tooltip="Heading 2" tooltipContentProps={SIDE_RIGHT} onClick={() => editor.tf.setNodes({ type: BaseH2Plugin.key })}>
+            <ToolbarButton size="sm" tooltip="Heading 2" tooltipContentProps={SIDE_RIGHT} onClick={() => setBlockType(BaseH2Plugin.key)}>
               <Heading2Icon className="size-4 text-foreground/80" />
             </ToolbarButton>
-            <ToolbarButton size="sm" tooltip="Paragraph" tooltipContentProps={SIDE_RIGHT} onClick={() => editor.tf.setNodes({ type: ParagraphPlugin.key })}>
+            <ToolbarButton size="sm" tooltip="Paragraph" tooltipContentProps={SIDE_RIGHT} onClick={() => setBlockType(ParagraphPlugin.key)}>
               <span className="text-sm font-extrabold text-foreground/85 select-none font-serif">P</span>
             </ToolbarButton>
 
