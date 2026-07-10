@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Plate, usePlateEditor, PlateElement, PlateElementProps } from 'platejs/react';
+import { Plate, usePlateEditor, PlateElement, PlateElementProps, ParagraphPlugin } from 'platejs/react';
 import { LinkPlugin } from '@platejs/link/react';
 import { serializeMd } from '@platejs/markdown';
 import { serializeHtml } from '@platejs/core/static';
@@ -1779,6 +1779,9 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             </ToolbarButton>
             <ToolbarButton size="sm" tooltip="Heading 2" tooltipContentProps={SIDE_RIGHT} onClick={() => editor.tf.setNodes({ type: BaseH2Plugin.key })}>
               <Heading2Icon className="size-4 text-foreground/80" />
+            </ToolbarButton>
+            <ToolbarButton size="sm" tooltip="Paragraph" tooltipContentProps={SIDE_RIGHT} onClick={() => editor.tf.setNodes({ type: ParagraphPlugin.key })}>
+              <span className="text-sm font-extrabold text-foreground/85 select-none font-serif">P</span>
             </ToolbarButton>
 
             <Separator className="md:w-6 md:h-px h-6 w-px my-1.5 md:my-1.5 bg-border/60 mx-1 md:mx-0" />

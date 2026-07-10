@@ -9,7 +9,7 @@ export function ListElement({ className, variant, ...props }: PlateElementProps 
   return (
     <PlateElement
       as={Component}
-      className={cn(className, 'my-2 ml-8 pl-2', variant === 'ol' ? 'list-decimal' : 'list-disc')}
+      className={cn(className, 'my-1 ml-8 pl-2', variant === 'ol' ? 'list-decimal' : 'list-disc')}
       {...props}
     >
       {props.children}
@@ -21,7 +21,7 @@ export function ListItemElement({ className, ...props }: PlateElementProps) {
   return (
     <PlateElement
       as="li"
-      className={cn(className, 'my-1')}
+      className={cn(className, 'my-0')}
       {...props}
     >
       {props.children}
