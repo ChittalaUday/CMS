@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db/prisma"
 import { validateApiKey } from "@/lib/auth/api-auth"
 import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/utils/rate-limit"
 import logger from "@/lib/utils/logger"
+import { JobType } from "@/generated/prisma/client"
 
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request)
   if (!auth) {
     return NextResponse.json({ error: "Missing or invalid API key" }, { status: 401 })
   }
-  if (!auth.scopes.includes("read:blogs")) {
+  if (!auth.scopes.includes("read:careers")) {
     return NextResponse.json({ error: "Insufficient scope" }, { status: 403 })
   }
 
@@ -33,57 +34,93 @@ export async function GET(request: NextRequest) {
   const sortBy = allowedSortFields.includes(sortByParam) ? sortByParam : "createdAt"
   const sortOrder = sortOrderParam.toLowerCase() === "asc" ? "asc" : "desc"
 
-  const category = searchParams.get("category") ?? undefined
+  const department = searchParams.get("department") ?? undefined
+  const location = searchParams.get("location") ?? undefined
+  const jobTypeParam = searchParams.get("jobType")?.toUpperCase() ?? undefined
+  const search = searchParams.get("search") ?? undefined
 
   try {
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - 5)
+
     const whereClause: any = {
-      published: true,
+      status: "PUBLISHED",
       clientId: auth.clientId,
+      AND: [
+        {
+          OR: [
+            { closingDate: null },
+            { closingDate: { gte: cutoffDate } }
+          ]
+        }
+      ]
     }
 
-    if (category) {
-      whereClause.categories = {
-        some: {
-          category: {
-            slug: category,
-          },
-        },
+    if (search?.trim()) {
+      whereClause.AND.push({
+        OR: [
+          { title: { contains: search.trim(), mode: "insensitive" } },
+          { description: { contains: search.trim(), mode: "insensitive" } },
+          { department: { contains: search.trim(), mode: "insensitive" } },
+        ]
+      })
+    }
+
+    if (department?.trim()) {
+      whereClause.department = {
+        contains: department.trim(),
+        mode: "insensitive",
       }
     }
 
-    const total = await prisma.post.count({
+    if (location?.trim()) {
+      whereClause.location = {
+        contains: location.trim(),
+        mode: "insensitive",
+      }
+    }
+
+    if (jobTypeParam) {
+      const validJobTypes = Object.values(JobType) as string[]
+      if (validJobTypes.includes(jobTypeParam)) {
+        whereClause.jobType = jobTypeParam as JobType
+      } else {
+        return NextResponse.json(
+          { error: `Invalid jobType. Allowed values: ${validJobTypes.join(", ")}` },
+          { status: 400 }
+        )
+      }
+    }
+
+    const total = await prisma.jobPosting.count({
       where: whereClause,
     })
 
-    const posts = await prisma.post.findMany({
+    const jobs = await prisma.jobPosting.findMany({
       where: whereClause,
       orderBy: { [sortBy]: sortOrder },
       skip,
       take: limit,
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        content: true,
-        featured: true,
-        createdAt: true,
-        updatedAt: true,
-        author: { select: { id: true, name: true, avatarUrl: true } },
-        featuredImage: { select: { id: true, filename: true, url: true, mimeType: true, size: true } },
-        categories: { select: { category: { select: { id: true, name: true, slug: true } } } },
+      include: {
+        questions: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            question: true,
+            type: true,
+            required: true,
+            order: true,
+            options: true,
+          },
+        },
       },
     })
-
-    const formattedPosts = posts.map((post) => ({
-      ...post,
-      categories: post.categories.map((c) => c.category),
-    }))
 
     const allowedOrigins = await getAllowedOrigins(auth.clientId)
     const origin = resolveOrigin(request.headers.get("origin"), allowedOrigins)
     return new NextResponse(
       JSON.stringify({
-        posts: formattedPosts,
+        jobs,
         pagination: {
           total,
           page,
@@ -96,8 +133,8 @@ export async function GET(request: NextRequest) {
       }
     )
   } catch (err) {
-    logger.error({ err }, "api/public/blogs GET failed")
-    return NextResponse.json({ error: "Failed to fetch blog posts" }, { status: 500 })
+    logger.error({ err }, "api/public/careers GET failed")
+    return NextResponse.json({ error: "Failed to fetch job postings" }, { status: 500 })
   }
 }
 

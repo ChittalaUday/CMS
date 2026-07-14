@@ -34,6 +34,7 @@ export default async function EditCareerPage({ params }: EditCareerPageProps) {
     requirementsJson: job.requirementsJson,
     salaryMin: job.salaryMin,
     salaryMax: job.salaryMax,
+    requiredExperience: job.requiredExperience,
     currency: job.currency,
     closingDate: job.closingDate,
     status: job.status as ExistingJob["status"],

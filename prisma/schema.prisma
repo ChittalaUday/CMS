@@ -275,6 +275,7 @@ model JobPosting {
   currency             String           @default("INR")
   status               JobStatus        @default(DRAFT)
   closingDate          DateTime?
+  requiredExperience   String?
   draftParentId        String?
   draftParent          JobPosting?      @relation("DraftVersion", fields: [draftParentId], references: [id], onDelete: Cascade)
   drafts               JobPosting[]     @relation("DraftVersion")
@@ -372,6 +373,8 @@ model Client {
   categories     Category[]
   apiKeys        ClientApiKey[]
   securityConfig ClientSecurityConfig?
+  careerDepartments CareerDepartment[] @relation("ClientDepartments")
+  careerLocations   CareerLocation[]   @relation("ClientLocations")
 
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -441,3 +444,26 @@ model ApiScopeDefinition {
   @@index([categoryId])
   @@index([isActive])
 }
+
+model CareerDepartment {
+  id        String   @id @default(cuid())
+  name      String
+  clientId  String?
+  client    Client?  @relation("ClientDepartments", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([name, clientId])
+  @@index([clientId])
+}
+
+model CareerLocation {
+  id        String   @id @default(cuid())
+  name      String
+  clientId  String?
+  client    Client?  @relation("ClientLocations", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([name, clientId])
+  @@index([clientId])
+}
+

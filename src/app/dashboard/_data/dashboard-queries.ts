@@ -56,6 +56,7 @@ export type ActiveJobRow = {
   location: string
   jobType: string
   createdAt: Date
+  closingDate: Date | null
   _count: {
     applications: number
   }
@@ -195,6 +196,7 @@ export async function fetchCareersStats(opts: {
           location: true,
           jobType: true,
           createdAt: true,
+          closingDate: true,
           _count: {
             select: { applications: true },
           },

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef } from "react"
+import { useState, useTransition, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -17,6 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import {
   Check,
   ChevronLeft,
@@ -40,6 +47,7 @@ import {
   PencilIcon,
   Paperclip,
   Sparkles,
+  Clock,
 } from "lucide-react"
 import { RichTextEditor } from "@/components/RichTextEditor"
 import {
@@ -49,6 +57,10 @@ import {
   discardDraft,
   publishDraft,
   extractKeywordsFromText,
+  getCareerDepartments,
+  getCareerLocations,
+  createCareerDepartment,
+  createCareerLocation,
   type JobPostingInput,
   type QuestionInput,
 } from "./actions"
@@ -71,6 +83,7 @@ interface BasicDetails {
   salaryValue: string
   salaryMin: string
   salaryMax: string
+  requiredExperience: string
   closingDate: string
 
 }
@@ -109,6 +122,7 @@ export interface ExistingJob {
   requirementsJson: unknown
   salaryMin: number | null
   salaryMax: number | null
+  requiredExperience: string | null
   currency: string
   closingDate: Date | null
   status: "DRAFT" | "PUBLISHED" | "CLOSED"
@@ -219,6 +233,100 @@ export function JobForm({ job }: JobFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const slugEditedRef = useRef(false)
 
+  const [departments, setDepartments] = useState<string[]>([])
+  const [locations, setLocations] = useState<string[]>([])
+  const [isDeptsLoading, setIsDeptsLoading] = useState(true)
+  const [isLocsLoading, setIsLocsLoading] = useState(true)
+
+  const [isAddingDept, setIsAddingDept] = useState(false)
+  const [newDeptName, setNewDeptName] = useState("")
+  const [isSubmittingDept, setIsSubmittingDept] = useState(false)
+
+  const [isAddingLoc, setIsAddingLoc] = useState(false)
+  const [newLocName, setNewLocName] = useState("")
+  const [isSubmittingLoc, setIsSubmittingLoc] = useState(false)
+
+  useEffect(() => {
+    async function loadDepts() {
+      try {
+        const depts = await getCareerDepartments()
+        const names = depts.map(d => d.name)
+        if (job?.department && !names.includes(job.department)) {
+          names.push(job.department)
+        }
+        setDepartments(names.sort())
+      } catch (err) {
+        console.error("Failed to load departments", err)
+      } finally {
+        setIsDeptsLoading(false)
+      }
+    }
+    async function loadLocs() {
+      try {
+        const locs = await getCareerLocations()
+        const names = locs.map(l => l.name)
+        if (job?.location && !names.includes(job.location)) {
+          names.push(job.location)
+        }
+        setLocations(names.sort())
+      } catch (err) {
+        console.error("Failed to load locations", err)
+      } finally {
+        setIsLocsLoading(false)
+      }
+    }
+    loadDepts()
+    loadLocs()
+  }, [job])
+
+  const handleAddDepartment = async () => {
+    if (!newDeptName.trim()) return
+    setIsSubmittingDept(true)
+    try {
+      const res = await createCareerDepartment(newDeptName)
+      if (res && 'name' in res) {
+        setDepartments(prev => {
+          const updated = [...prev, res.name];
+          return Array.from(new Set(updated)).sort();
+        })
+        setBasic(b => ({ ...b, department: res.name }))
+        setNewDeptName("")
+        setIsAddingDept(false)
+        toast.success("Department added successfully")
+      } else {
+        toast.error("Failed to add department")
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add department")
+    } finally {
+      setIsSubmittingDept(false)
+    }
+  }
+
+  const handleAddLocation = async () => {
+    if (!newLocName.trim()) return
+    setIsSubmittingLoc(true)
+    try {
+      const res = await createCareerLocation(newLocName)
+      if (res && 'name' in res) {
+        setLocations(prev => {
+          const updated = [...prev, res.name];
+          return Array.from(new Set(updated)).sort();
+        })
+        setBasic(b => ({ ...b, location: res.name }))
+        setNewLocName("")
+        setIsAddingLoc(false)
+        toast.success("Location added successfully")
+      } else {
+        toast.error("Failed to add location")
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add location")
+    } finally {
+      setIsSubmittingLoc(false)
+    }
+  }
+
   // --- Step 1 state ---
   const initialSalaryMode = inferSalaryMode(job?.salaryMin ?? null, job?.salaryMax ?? null)
   const [basic, setBasic] = useState<BasicDetails>({
@@ -231,6 +339,7 @@ export function JobForm({ job }: JobFormProps) {
     salaryValue: initialSalaryMode === "single" ? (job?.salaryMin?.toString() ?? "") : "",
     salaryMin: initialSalaryMode === "range" ? (job?.salaryMin?.toString() ?? "") : "",
     salaryMax: initialSalaryMode === "range" ? (job?.salaryMax?.toString() ?? "") : "",
+    requiredExperience: job?.requiredExperience?.toString() ?? "",
     closingDate: job?.closingDate ? new Date(job.closingDate).toISOString().split("T")[0] : "",
 
   })
@@ -245,23 +354,33 @@ export function JobForm({ job }: JobFormProps) {
     requirementsJson: job?.requirementsJson ?? null,
   })
 
-  // --- Step 3 state ---
+  // --- Step 3: Default fields & custom questions state ---
+  const [showResume, setShowResume] = useState(() => {
+    if (!job) return true
+    return job.questions.some(q => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+  })
+  const [requireResume, setRequireResume] = useState(() => {
+    if (!job) return true
+    const q = job.questions.find(q => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+    return q ? q.required : true
+  })
+  const [showCoverLetter, setShowCoverLetter] = useState(() => {
+    if (!job) return false
+    return job.questions.some(q => q.question.toLowerCase().includes("cover letter"))
+  })
+  const [requireCoverLetter, setRequireCoverLetter] = useState(() => {
+    if (!job) return false
+    const q = job.questions.find(q => q.question.toLowerCase().includes("cover letter"))
+    return q ? q.required : false
+  })
+
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
-    if (!job) {
-      return [
-        {
-          tempId: Date.now().toString(),
-          question: "Resume / CV",
-          type: "FILE",
-          required: true,
-          order: 0,
-          options: [],
-          newOption: "",
-        },
-      ]
-    }
-    if (!job.questions?.length) return []
-    return job.questions.map((q) => ({
+    if (!job) return []
+    const screening = job.questions.filter((q) => {
+      const lower = q.question.toLowerCase()
+      return !lower.includes("resume") && !lower.includes("cv") && !lower.includes("cover letter")
+    })
+    return screening.map((q) => ({
       tempId: q.id,
       question: q.question,
       type: q.type,
@@ -277,6 +396,7 @@ export function JobForm({ job }: JobFormProps) {
   const [newKeyword, setNewKeyword] = useState("")
   const [isRegeneratingKeywords, setIsRegeneratingKeywords] = useState(false)
   const [deleteKwConfirmOpen, setDeleteKwConfirmOpen] = useState(false)
+  const [unpublishConfirmOpen, setUnpublishConfirmOpen] = useState(false)
   const [kwToDelete, setKwToDelete] = useState<string | null>(null)
 
   const handleKeywordDeleteClick = (kw: string) => {
@@ -307,6 +427,35 @@ export function JobForm({ job }: JobFormProps) {
   // --- Payload builder ---
   function buildPayload(): JobPostingInput {
     const salary = getSalaryPayload()
+
+    const finalQuestions: QuestionInput[] = []
+    let orderIdx = 0
+    if (showResume) {
+      finalQuestions.push({
+        question: "Resume / CV",
+        type: "FILE",
+        required: requireResume,
+        order: orderIdx++,
+      })
+    }
+    if (showCoverLetter) {
+      finalQuestions.push({
+        question: "Cover Letter",
+        type: "LONG_TEXT",
+        required: requireCoverLetter,
+        order: orderIdx++,
+      })
+    }
+    questions.forEach((q) => {
+      finalQuestions.push({
+        question: q.question || "—",
+        type: q.type,
+        required: q.required,
+        order: orderIdx++,
+        options: (q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") ? q.options : undefined,
+      })
+    })
+
     return {
       title: basic.title || "Untitled",
       slug: basic.slug || toSlug(basic.title || "untitled"),
@@ -321,17 +470,11 @@ export function JobForm({ job }: JobFormProps) {
       requirementsJson: desc.requirementsJson as JobPostingInput["requirementsJson"],
       salaryMin: salary.salaryMin,
       salaryMax: salary.salaryMax,
+      requiredExperience: basic.requiredExperience || null,
       currency: "INR",
       closingDate: basic.closingDate || null,
-      questions: questions.map((q, i) => ({
-        question: q.question || "—",
-        type: q.type,
-        required: q.required,
-        order: i,
-        options: (q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") ? q.options : undefined,
-      })) as QuestionInput[],
+      questions: finalQuestions,
       keywords,
-
     }
   }
 
@@ -351,6 +494,12 @@ export function JobForm({ job }: JobFormProps) {
         errs.salaryMin = "Minimum salary cannot exceed maximum."
       }
     }
+    if (basic.requiredExperience.trim()) {
+      const experienceRegex = /^\d+(?:\s*(?:-|to)\s*\d+)?\s*\+?(?:\s*(?:years?|yrs?))?$/i
+      if (!experienceRegex.test(basic.requiredExperience.trim())) {
+        errs.requiredExperience = "Experience must be a number (e.g. 3), range (e.g. 2-5), or format like 3+ years."
+      }
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -366,8 +515,22 @@ export function JobForm({ job }: JobFormProps) {
 
   function validateStep3(): boolean {
     const errs: Record<string, string> = {}
+    const seenQuestions = new Set<string>()
+
     questions.forEach((q, i) => {
-      if (!q.question.trim()) errs[`q_${i}`] = "Question text is required."
+      const trimmedQ = q.question.trim()
+      if (!trimmedQ) {
+        errs[`q_${i}`] = "Question text is required."
+      } else {
+        const lowerQ = trimmedQ.toLowerCase()
+        if (lowerQ === "resume" || lowerQ === "resume / cv" || lowerQ === "cover letter" || lowerQ === "name" || lowerQ === "email" || lowerQ === "phone") {
+          errs[`q_${i}`] = "This is a reserved default field name."
+        } else if (seenQuestions.has(lowerQ)) {
+          errs[`q_${i}`] = "This exact question has already been added."
+        }
+        seenQuestions.add(lowerQ)
+      }
+
       if ((q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") && q.options.length < 2) {
         errs[`q_opts_${i}`] = "Please add at least 2 options."
       }
@@ -440,6 +603,14 @@ export function JobForm({ job }: JobFormProps) {
       toast.error("Please enter a job title before saving as draft.")
       return
     }
+    if (isEdit && job?.status === "PUBLISHED") {
+      setUnpublishConfirmOpen(true)
+      return
+    }
+    executeSaveDraft()
+  }
+
+  function executeSaveDraft() {
     startTransition(async () => {
       setIsSavingDraft(true)
       const toastId = toast.loading("Saving draft…")
@@ -447,6 +618,12 @@ export function JobForm({ job }: JobFormProps) {
         const payload = buildPayload()
         if (isEdit && job) {
           await updateJobPosting(job.id, payload)
+          if (job.status === "PUBLISHED") {
+            await updateJobStatus(job.id, "DRAFT")
+            toast.success("Job posting unpublished and saved as draft.", { id: toastId })
+            router.push("/dashboard/careers")
+            return
+          }
           toast.success("Draft saved.", { id: toastId })
         } else {
           const created = await createJobPosting(payload)
@@ -607,37 +784,117 @@ export function JobForm({ job }: JobFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Department */}
             <div className="space-y-2">
-              <Label htmlFor="dept" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Department <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="dept"
+              <div className="flex items-center justify-between">
+                <Label htmlFor="dept" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Department <span className="text-destructive">*</span>
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsAddingDept(true)}
+                >
+                  <Plus className="size-3.5" />
+                  <span className="sr-only">Add Department</span>
+                </Button>
+              </div>
+              
+              <Select
                 value={basic.department}
-                onChange={(e) => {
-                  setBasic((b) => ({ ...b, department: e.target.value }))
+                onValueChange={(val) => {
+                  setBasic((b) => ({ ...b, department: val }))
                   if (errors.department) setErrors((e) => ({ ...e, department: "" }))
                 }}
-                placeholder="e.g. Engineering"
-                className="h-9 bg-muted/30 border-border/80 text-sm"
-              />
+                disabled={isDeptsLoading}
+              >
+                <SelectTrigger id="dept" className="h-9 bg-muted/30 border-border/80 text-sm">
+                  <SelectValue placeholder={isDeptsLoading ? "Loading..." : "Select Department"} />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {departments.length === 0 ? (
+                    <SelectItem value="_empty" disabled>
+                      No departments found
+                    </SelectItem>
+                  ) : (
+                    departments.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))
+                  )}
+                  <div className="border-t border-border/60 my-1" />
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-primary font-semibold hover:bg-muted rounded-md transition-colors text-left cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setIsAddingDept(true)
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                    Add Department
+                  </button>
+                </SelectContent>
+              </Select>
               <FieldError message={errors.department} />
             </div>
 
             {/* Location */}
             <div className="space-y-2">
-              <Label htmlFor="location" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Location <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="location"
+              <div className="flex items-center justify-between">
+                <Label htmlFor="location" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Location <span className="text-destructive">*</span>
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsAddingLoc(true)}
+                >
+                  <Plus className="size-3.5" />
+                  <span className="sr-only">Add Location</span>
+                </Button>
+              </div>
+              
+              <Select
                 value={basic.location}
-                onChange={(e) => {
-                  setBasic((b) => ({ ...b, location: e.target.value }))
+                onValueChange={(val) => {
+                  setBasic((b) => ({ ...b, location: val }))
                   if (errors.location) setErrors((e) => ({ ...e, location: "" }))
                 }}
-                placeholder="e.g. Remote / Hyderabad, IN"
-                className="h-9 bg-muted/30 border-border/80 text-sm"
-              />
+                disabled={isLocsLoading}
+              >
+                <SelectTrigger id="location" className="h-9 bg-muted/30 border-border/80 text-sm">
+                  <SelectValue placeholder={isLocsLoading ? "Loading..." : "Select Location"} />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {locations.length === 0 ? (
+                    <SelectItem value="_empty" disabled>
+                      No locations found
+                    </SelectItem>
+                  ) : (
+                    locations.map((loc) => (
+                      <SelectItem key={loc} value={loc}>
+                        {loc}
+                      </SelectItem>
+                    ))
+                  )}
+                  <div className="border-t border-border/60 my-1" />
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-primary font-semibold hover:bg-muted rounded-md transition-colors text-left cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setIsAddingLoc(true)
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                    Add Location
+                  </button>
+                </SelectContent>
+              </Select>
               <FieldError message={errors.location} />
             </div>
           </div>
@@ -658,6 +915,24 @@ export function JobForm({ job }: JobFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Required Experience */}
+            <div className="space-y-2">
+              <Label htmlFor="requiredExperience" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Required Experience <span className="text-muted-foreground/60 font-normal normal-case">(optional, years)</span>
+              </Label>
+              <Input
+                id="requiredExperience"
+                type="text"
+                value={basic.requiredExperience}
+                onChange={(e) => setBasic((b) => ({ ...b, requiredExperience: e.target.value }))}
+                placeholder="e.g. 3, 2-5, or 3+"
+                className="h-9 bg-muted/30 border-border/80 text-sm"
+              />
+              <FieldError message={errors.requiredExperience} />
             </div>
 
             {/* Closing Date */}
@@ -812,143 +1087,244 @@ export function JobForm({ job }: JobFormProps) {
 
       {/* ── Step 3: Questionnaire ─────────────────────────────── */}
       {step === 3 && (
-        <div className="space-y-5">
+        <div className="space-y-6">
           <div className="space-y-1 pb-3 border-b border-border/60">
-            <h2 className="text-xl font-bold">Custom Questionnaire</h2>
+            <h2 className="text-xl font-bold">Questionnaire</h2>
             <p className="text-sm text-muted-foreground">
-              Add screening questions for applicants. Optional — leave empty to skip.
+              Configure default application fields and add custom screening questions.
             </p>
           </div>
 
-          {questions.length === 0 ? (
-            <div className="min-h-55 rounded-xl border border-dashed border-border/80 bg-muted/10 flex flex-col items-center justify-center gap-3 p-8 text-center">
-              <ListChecks className="size-8 text-muted-foreground/40" />
-              <div>
-                <p className="font-semibold text-sm">No questions yet</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Applicants will only fill in their name, email, and cover letter.
-                </p>
+          {/* Default Fields Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Default Fields</h3>
+            <div className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3.5">
+              {/* Name */}
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold">Full Name</span>
+                  <p className="text-xs text-muted-foreground">Applicant's full name</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
+                    <span className="text-xs text-muted-foreground">Show</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
+                    <span className="text-xs text-muted-foreground">Required</span>
+                  </div>
+                </div>
               </div>
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 mt-1" onClick={addQuestion}>
-                <Plus className="size-3.5" /> Add First Question
-              </Button>
+
+              {/* Email */}
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold">Email</span>
+                  <p className="text-xs text-muted-foreground">Applicant's email address</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
+                    <span className="text-xs text-muted-foreground">Show</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
+                    <span className="text-xs text-muted-foreground">Required</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold">Phone</span>
+                  <p className="text-xs text-muted-foreground">Applicant's phone number</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
+                    <span className="text-xs text-muted-foreground">Show</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
+                    <span className="text-xs text-muted-foreground">Required</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resume / CV */}
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold">Resume / CV</span>
+                  <p className="text-xs text-muted-foreground">Applicant's resume document</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <Switch checked={showResume} onCheckedChange={(v) => { setShowResume(v); if (!v) setRequireResume(false) }} />
+                    <span className="text-xs text-muted-foreground">Show</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch checked={requireResume} disabled={!showResume} onCheckedChange={setRequireResume} />
+                    <span className="text-xs text-muted-foreground">Required</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cover Letter */}
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-semibold">Cover Letter</span>
+                  <p className="text-xs text-muted-foreground">Applicant's introductory cover letter</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <Switch checked={showCoverLetter} onCheckedChange={(v) => { setShowCoverLetter(v); if (!v) setRequireCoverLetter(false) }} />
+                    <span className="text-xs text-muted-foreground">Show</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch checked={requireCoverLetter} disabled={!showCoverLetter} onCheckedChange={setRequireCoverLetter} />
+                    <span className="text-xs text-muted-foreground">Required</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {questions.map((q, i) => (
-                <div key={q.tempId} className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3">
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs font-bold text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
-                      Q{i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <Input
-                        value={q.question}
-                        onChange={(e) => {
-                          updateQuestion(q.tempId, { question: e.target.value })
-                          if (errors[`q_${i}`]) setErrors((e) => ({ ...e, [`q_${i}`]: "" }))
-                        }}
-                        placeholder="Enter your question…"
-                        className="h-9 bg-muted/30 border-border/80 text-sm"
-                      />
-                      <FieldError message={errors[`q_${i}`]} />
-                    </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-muted"
-                        disabled={i === 0} onClick={() => moveQuestion(q.tempId, "up")} title="Move up">
-                        <ChevronUp className="size-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-muted"
-                        disabled={i === questions.length - 1} onClick={() => moveQuestion(q.tempId, "down")} title="Move down">
-                        <ChevronDown className="size-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-destructive/10 text-destructive"
-                        onClick={() => removeQuestion(q.tempId)} title="Remove">
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+          </div>
 
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Select
-                      value={q.type}
-                      onValueChange={(v) => {
-                        updateQuestion(q.tempId, { type: v as QuestionType, options: [], newOption: "" })
-                        if (errors[`q_opts_${i}`]) setErrors((e) => ({ ...e, [`q_opts_${i}`]: "" }))
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-44 bg-muted/30 border-border/80 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(QUESTION_TYPE_LABELS).map(([val, label]) => (
-                          <SelectItem key={val} value={val} className="text-xs">
-                            {val === "FILE" && <Paperclip className="size-3 inline mr-1.5" />}
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+          {/* Screening Questions Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Screening Questions</h3>
 
-                    <div className="flex items-center gap-2">
-                      <Switch id={`req_${q.tempId}`} checked={q.required}
-                        onCheckedChange={(v) => updateQuestion(q.tempId, { required: v })} />
-                      <Label htmlFor={`req_${q.tempId}`} className="text-xs text-muted-foreground cursor-pointer">
-                        Required
-                      </Label>
-                    </div>
-
-                    {q.type === "FILE" && (
-                      <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
-                        <Paperclip className="size-3" /> Applicant will upload a file
+            {questions.length === 0 ? (
+              <div className="min-h-40 rounded-xl border border-dashed border-border/80 bg-muted/10 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                <ListChecks className="size-8 text-muted-foreground/40" />
+                <div>
+                  <p className="font-semibold text-sm">No custom screening questions</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Applicants will only fill in the enabled default fields.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 mt-1" onClick={addQuestion}>
+                  <Plus className="size-3.5" /> Add Question
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {questions.map((q, i) => (
+                  <div key={q.tempId} className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs font-bold text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
+                        Q{i + 1}
                       </span>
-                    )}
-                  </div>
-
-                  {/* Options editor */}
-                  {(q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") && (
-                    <div className="space-y-2 pt-1 border-t border-border/40">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Options</Label>
-                      <div className="flex flex-wrap gap-1.5 min-h-7">
-                        {q.options.length === 0 ? (
-                          <span className="text-xs text-muted-foreground/60 italic">No options yet — type below and press Enter</span>
-                        ) : (
-                          q.options.map((opt) => (
-                            <span key={opt} className="inline-flex items-center gap-1 text-xs bg-muted/60 border border-border/60 px-2.5 py-1 rounded-lg">
-                              {opt}
-                              <button type="button" onClick={() => removeOption(q.tempId, opt)}
-                                className="text-muted-foreground/60 hover:text-destructive ml-0.5 leading-none" aria-label={`Remove "${opt}"`}>
-                                ×
-                              </button>
-                            </span>
-                          ))
-                        )}
-                      </div>
-                      <FieldError message={errors[`q_opts_${i}`]} />
-                      <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
                         <Input
-                          value={q.newOption}
-                          onChange={(e) => updateQuestion(q.tempId, { newOption: e.target.value })}
-                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOption(q.tempId) } }}
-                          placeholder="Type an option and press Enter"
-                          className="h-8 bg-muted/30 border-border/80 text-xs"
+                          value={q.question}
+                          onChange={(e) => {
+                            updateQuestion(q.tempId, { question: e.target.value })
+                            if (errors[`q_${i}`]) setErrors((e) => ({ ...e, [`q_${i}`]: "" }))
+                          }}
+                          placeholder="Enter your question…"
+                          className="h-9 bg-muted/30 border-border/80 text-sm"
                         />
-                        <Button type="button" variant="outline" size="sm"
-                          className="h-8 text-xs shrink-0 border-border/60"
-                          onClick={() => addOption(q.tempId)} disabled={!q.newOption.trim()}>
-                          Add
+                        <FieldError message={errors[`q_${i}`]} />
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-muted"
+                          disabled={i === 0} onClick={() => moveQuestion(q.tempId, "up")} title="Move up">
+                          <ChevronUp className="size-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-muted"
+                          disabled={i === questions.length - 1} onClick={() => moveQuestion(q.tempId, "down")} title="Move down">
+                          <ChevronDown className="size-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-destructive/10 text-destructive"
+                          onClick={() => removeQuestion(q.tempId)} title="Remove">
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
 
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-dashed" onClick={addQuestion}>
-                <Plus className="size-3.5" /> Add Question
-              </Button>
-            </div>
-          )}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Select
+                        value={q.type}
+                        onValueChange={(v) => {
+                          updateQuestion(q.tempId, { type: v as QuestionType, options: [], newOption: "" })
+                          if (errors[`q_opts_${i}`]) setErrors((e) => ({ ...e, [`q_opts_${i}`]: "" }))
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-44 bg-muted/30 border-border/80 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(QUESTION_TYPE_LABELS).map(([val, label]) => (
+                            <SelectItem key={val} value={val} className="text-xs">
+                              {val === "FILE" && <Paperclip className="size-3 inline mr-1.5" />}
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <div className="flex items-center gap-2">
+                        <Switch id={`req_${q.tempId}`} checked={q.required}
+                          onCheckedChange={(v) => updateQuestion(q.tempId, { required: v })} />
+                        <Label htmlFor={`req_${q.tempId}`} className="text-xs text-muted-foreground cursor-pointer">
+                          Required
+                        </Label>
+                      </div>
+
+                      {q.type === "FILE" && (
+                        <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+                          <Paperclip className="size-3" /> Applicant will upload a file
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Options editor */}
+                    {(q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") && (
+                      <div className="space-y-2 pt-1 border-t border-border/40">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Options</Label>
+                        <div className="flex flex-wrap gap-1.5 min-h-7">
+                          {q.options.length === 0 ? (
+                            <span className="text-xs text-muted-foreground/60 italic">No options yet — type below and press Enter</span>
+                          ) : (
+                            q.options.map((opt) => (
+                              <span key={opt} className="inline-flex items-center gap-1 text-xs bg-muted/60 border border-border/60 px-2.5 py-1 rounded-lg">
+                                {opt}
+                                <button type="button" onClick={() => removeOption(q.tempId, opt)}
+                                  className="text-muted-foreground/60 hover:text-destructive ml-0.5 leading-none" aria-label={`Remove "${opt}"`}>
+                                  ×
+                                </button>
+                              </span>
+                            ))
+                          )}
+                        </div>
+                        <FieldError message={errors[`q_opts_${i}`]} />
+                        <div className="flex gap-2">
+                          <Input
+                            value={q.newOption}
+                            onChange={(e) => updateQuestion(q.tempId, { newOption: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOption(q.tempId) } }}
+                            placeholder="Type an option and press Enter"
+                            className="h-8 bg-muted/30 border-border/80 text-xs"
+                          />
+                          <Button type="button" variant="outline" size="sm"
+                            className="h-8 text-xs shrink-0 border-border/60"
+                            onClick={() => addOption(q.tempId)} disabled={!q.newOption.trim()}>
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-dashed" onClick={addQuestion}>
+                  <Plus className="size-3.5" /> Add Question
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -973,6 +1349,12 @@ export function JobForm({ job }: JobFormProps) {
                 <span className="flex items-center gap-1"><Building2 className="size-3 shrink-0" />{basic.department}</span>
                 <span className="flex items-center gap-1"><MapPin className="size-3 shrink-0" />{basic.location}</span>
                 <span className="flex items-center gap-1"><Briefcase className="size-3 shrink-0" />{JOB_TYPE_LABELS[basic.jobType]}</span>
+                {basic.requiredExperience && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3 shrink-0" />
+                    {basic.requiredExperience}{basic.requiredExperience.toLowerCase().includes("year") || basic.requiredExperience.toLowerCase().includes("yr") ? "" : " years"} Experience
+                  </span>
+                )}
                 {basic.salaryMode === "single" && basic.salaryValue && (
                   <span className="flex items-center gap-1">
                     <IndianRupeeIcon className="size-3 shrink-0" />
@@ -1223,6 +1605,88 @@ export function JobForm({ job }: JobFormProps) {
         confirmText="Delete"
         variant="destructive"
       />
+      <ConfirmDialog
+        isOpen={unpublishConfirmOpen}
+        onClose={() => setUnpublishConfirmOpen(false)}
+        onConfirm={() => {
+          setUnpublishConfirmOpen(false)
+          executeSaveDraft()
+        }}
+        title="Unpublish Job?"
+        description="Warning: Saving this published job posting as a draft will unpublish it. It will no longer be visible on the public careers page until you publish it again."
+        confirmText="Unpublish & Save"
+        variant="destructive"
+      />
+
+      {/* Add Department Dialog */}
+      <Dialog open={isAddingDept} onOpenChange={setIsAddingDept}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Department</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-dept-name">Department Name</Label>
+              <Input
+                id="new-dept-name"
+                value={newDeptName}
+                onChange={(e) => setNewDeptName(e.target.value)}
+                placeholder="e.g. Sales"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    handleAddDepartment()
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddingDept(false)} disabled={isSubmittingDept}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddDepartment} disabled={isSubmittingDept || !newDeptName.trim()}>
+              {isSubmittingDept ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Location Dialog */}
+      <Dialog open={isAddingLoc} onOpenChange={setIsAddingLoc}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Location</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-loc-name">Location Name</Label>
+              <Input
+                id="new-loc-name"
+                value={newLocName}
+                onChange={(e) => setNewLocName(e.target.value)}
+                placeholder="e.g. Bangalore, IN"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    handleAddLocation()
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddingLoc(false)} disabled={isSubmittingLoc}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddLocation} disabled={isSubmittingLoc || !newLocName.trim()}>
+              {isSubmittingLoc ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

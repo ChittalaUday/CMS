@@ -64,9 +64,20 @@ export async function GET(req: Request) {
     }
   }
 
+  // Auto-close jobs that are 5+ days past their closingDate
+  const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)
+  const closedJobs = await prisma.jobPosting.updateMany({
+    where: {
+      status: { not: "CLOSED" },
+      closingDate: { lte: fiveDaysAgo },
+    },
+    data: { status: "CLOSED" },
+  })
+
   return Response.json({
     ok: true,
     publishedPosts: publishedPosts.count,
     appliedRevisions,
+    closedJobsCount: closedJobs.count,
   })
 }

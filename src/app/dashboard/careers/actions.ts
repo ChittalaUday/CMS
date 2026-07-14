@@ -14,7 +14,7 @@ import {
 } from "@/lib/auth/roles"
 import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
 import { getClientIdFromRequestHeaders } from "@/lib/auth/api-auth"
-import { sanitizePlainText } from "@/lib/utils/sanitize"
+import { sanitizePlainText, checkForSqlInjection } from "@/lib/utils/sanitize"
 import { z } from "zod"
 
 const MAX_DRAFTS = 10
@@ -136,6 +136,7 @@ export type JobPostingInput = {
   requirementsJson?: Prisma.InputJsonValue
   salaryMin?: number | null
   salaryMax?: number | null
+  requiredExperience?: string | null
   currency?: string
   closingDate?: string | null
   questions?: QuestionInput[]
@@ -156,10 +157,10 @@ const questionSchema = z.object({
 const jobPostingSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   slug: z.string().max(200).optional(),
-  department: z.string().min(1, "Department is required").max(100),
-  location: z.string().min(1, "Location is required").max(200),
+  department: z.string().max(100).optional().or(z.literal("")),
+  location: z.string().max(200).optional().or(z.literal("")),
   jobType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP", "TEMPORARY"]),
-  description: z.string().min(1, "Description is required"),
+  description: z.string().optional().or(z.literal("")),
   descriptionJson: z.unknown().optional(),
   responsibilities: z.string().optional(),
   responsibilitiesJson: z.unknown().optional(),
@@ -167,6 +168,7 @@ const jobPostingSchema = z.object({
   requirementsJson: z.unknown().optional(),
   salaryMin: z.number().nullable().optional(),
   salaryMax: z.number().nullable().optional(),
+  requiredExperience: z.string().nullable().optional(),
   currency: z.string().max(10).optional(),
   closingDate: z.string().nullable().optional(),
   questions: z.array(questionSchema).optional(),
@@ -281,12 +283,36 @@ export async function getJobPostingById(id: string) {
 }
 
 export async function getJobPostingBySlug(slug: string) {
-  const clientId = await getClientIdFromRequestHeaders()
+  const user = await getSession().catch(() => null)
+
+  if (user && user.role === Role.SUPER_ADMIN) {
+    // Super admin can see any job status of any client
+    return await prisma.jobPosting.findFirst({
+      where: { slug },
+      include: { questions: { orderBy: { order: "asc" } } },
+    })
+  }
+
+  if (user && user.clientId) {
+    // Client admins can preview their own client's jobs regardless of status.
+    // Non-admins (HR) may only preview published jobs, or drafts they created themselves.
+    const isClientAdmin = (ADMIN_ROLES as readonly Role[]).includes(user.role)
+    return await prisma.jobPosting.findFirst({
+      where: {
+        slug,
+        clientId: user.clientId,
+        ...(isClientAdmin ? {} : { OR: [{ status: "PUBLISHED" }, { createdById: user.id }] }),
+      },
+      include: { questions: { orderBy: { order: "asc" } } },
+    })
+  }
+
+  const apiClientId = await getClientIdFromRequestHeaders().catch(() => null)
   return await prisma.jobPosting.findFirst({
     where: {
       slug,
       status: "PUBLISHED",
-      ...(clientId ? { clientId } : {}),
+      ...(apiClientId ? { clientId: apiClientId } : {}),
     },
     include: { questions: { orderBy: { order: "asc" } } },
   })
@@ -329,6 +355,7 @@ export async function createJobPosting(data: JobPostingInput) {
         requirementsJson: data.requirementsJson ?? undefined,
         salaryMin: data.salaryMin ?? null,
         salaryMax: data.salaryMax ?? null,
+        requiredExperience: data.requiredExperience ?? null,
         currency: data.currency || "INR",
         closingDate: data.closingDate ? new Date(data.closingDate) : null,
         createdById: user.id,
@@ -384,6 +411,7 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
         requirementsJson: data.requirementsJson ?? undefined,
         salaryMin: data.salaryMin ?? null,
         salaryMax: data.salaryMax ?? null,
+        requiredExperience: data.requiredExperience ?? null,
         currency: data.currency || "INR",
         closingDate: data.closingDate ? new Date(data.closingDate) : null,
         questions: data.questions?.length
@@ -482,6 +510,7 @@ export async function createDraftOf(publishedJobId: string) {
       requirementsJson: source.requirementsJson ?? undefined,
       salaryMin: source.salaryMin,
       salaryMax: source.salaryMax,
+      requiredExperience: source.requiredExperience,
       currency: source.currency,
       closingDate: source.closingDate,
       status: "DRAFT",
@@ -557,6 +586,7 @@ export async function publishDraft(draftId: string) {
         requirementsJson: draft.requirementsJson ?? undefined,
         salaryMin: draft.salaryMin,
         salaryMax: draft.salaryMax,
+        requiredExperience: draft.requiredExperience,
         currency: draft.currency,
         closingDate: draft.closingDate,
         status: "PUBLISHED",
@@ -724,6 +754,18 @@ export type ApplicationSubmitInput = {
 
 export async function submitApplication(data: ApplicationSubmitInput) {
   applicationSubmitSchema.parse(data)
+
+  // SQL Injection validation
+  checkForSqlInjection(data.applicantName)
+  checkForSqlInjection(data.applicantEmail)
+  checkForSqlInjection(data.applicantPhone || "")
+  checkForSqlInjection(data.coverLetter || "")
+  if (data.answers) {
+    for (const ans of data.answers) {
+      checkForSqlInjection(ans.answer)
+    }
+  }
+
   const duplicate = await prisma.jobApplication.findFirst({
     where: { jobId: data.jobId, applicantEmail: data.applicantEmail.toLowerCase().trim() },
   })
@@ -1049,4 +1091,74 @@ export async function getExportData(filters: {
 
   return jobs
 }
+
+export async function uploadPublicFile(formData: FormData) {
+  const { headers } = await import("next/headers")
+  const reqHeaders = await headers()
+  const ip = reqHeaders.get("x-forwarded-for")?.split(",")[0].trim() ?? reqHeaders.get("x-real-ip") ?? "unknown"
+
+  const { checkIpRateLimit } = await import("@/lib/utils/rate-limit")
+  const rl = checkIpRateLimit(`upload-public-file:${ip}`)
+  if (!rl.allowed) throw new Error("Too many uploads. Please try again in a moment.")
+
+  const file = formData.get("file") as File
+  if (!file) throw new Error("No file provided")
+
+  const { uploadViaR2 } = await import("@/lib/upload")
+  const res = await uploadViaR2(file)
+  return { url: res.url, name: file.name, size: file.size }
+}
+
+export async function getCareerDepartments() {
+  const clientId = await getClientScope()
+  const where: Prisma.CareerDepartmentWhereInput = clientId ? { clientId } : {}
+  return prisma.careerDepartment.findMany({
+    where,
+    orderBy: { name: "asc" },
+  })
+}
+
+export async function getCareerLocations() {
+  const clientId = await getClientScope()
+  const where: Prisma.CareerLocationWhereInput = clientId ? { clientId } : {}
+  return prisma.careerLocation.findMany({
+    where,
+    orderBy: { name: "asc" },
+  })
+}
+
+export async function createCareerDepartment(name: string) {
+  await requireCareersAccess()
+  const clientId = await getClientScope()
+  
+  try {
+    const newDept = await prisma.careerDepartment.create({
+      data: {
+        name: name.trim(),
+        clientId,
+      },
+    })
+    return newDept
+  } catch (err) {
+    return handlePrismaError(err, "createCareerDepartment")
+  }
+}
+
+export async function createCareerLocation(name: string) {
+  await requireCareersAccess()
+  const clientId = await getClientScope()
+  
+  try {
+    const newLoc = await prisma.careerLocation.create({
+      data: {
+        name: name.trim(),
+        clientId,
+      },
+    })
+    return newLoc
+  } catch (err) {
+    return handlePrismaError(err, "createCareerLocation")
+  }
+}
+
 

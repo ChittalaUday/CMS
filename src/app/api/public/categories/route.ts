@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Insufficient scope" }, { status: 403 })
   }
 
-  const rl = await checkRateLimit(auth.clientId)
+  const rl = await checkRateLimit(auth.clientId, request)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },

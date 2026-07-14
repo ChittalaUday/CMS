@@ -21,7 +21,6 @@ function checkRateLimit(key: string, max: number, windowMs: number): boolean {
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
   const isPublicApi = path.startsWith("/api/public/")
-  const isUploadThing = path.startsWith("/api/uploadthing")
 
   // Block TRACE to prevent Cross-Site Tracing (XST)
   if (req.method === "TRACE") {
@@ -41,8 +40,7 @@ export default async function proxy(req: NextRequest) {
   }
 
   // 1. CSRF: require Origin on all state-changing non-public requests.
-  //    UploadThing webhook callbacks are exempt (they use their own signature verification).
-  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method) && !isPublicApi && !isUploadThing) {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method) && !isPublicApi) {
     const origin = req.headers.get("origin")
     const host = req.headers.get("host")
 
@@ -92,8 +90,6 @@ export default async function proxy(req: NextRequest) {
 
   if (!isLoginPage && !isPublicPrefix && !token) {
     res = NextResponse.redirect(new URL("/", req.nextUrl))
-  } else if (isLoginPage && token) {
-    res = NextResponse.redirect(new URL("/dashboard", req.nextUrl))
   } else {
     res = NextResponse.next()
   }

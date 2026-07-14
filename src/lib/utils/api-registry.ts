@@ -135,7 +135,105 @@ export const API_REGISTRY: ApiCategory[] = [
         permission: "read",
         label: "Read job postings",
         description: "Fetch published job listings for display on your careers page",
-        endpoints: [],
+        endpoints: [
+          {
+            method: "GET",
+            path: "/api/public/careers",
+            summary: "List all published job postings for the authenticated client",
+            queryParams: [
+              { name: "page", type: "number", required: false, description: "Page number for pagination (defaults to 1)" },
+              { name: "limit", type: "number", required: false, description: "Max results to return per page (defaults to 10, max 100)" },
+              { name: "department", type: "string", required: false, description: "Filter by department" },
+              { name: "location", type: "string", required: false, description: "Filter by location" },
+              { name: "jobType", type: "string", required: false, description: "Filter by job type: FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP, TEMPORARY" },
+              { name: "sortBy", type: "string", required: false, description: "Field to sort by: createdAt, updatedAt, title (defaults to createdAt)" },
+              { name: "sortOrder", type: "string", required: false, description: "Sort direction: asc or desc (defaults to desc)" },
+            ],
+            responseExample: {
+              jobs: [
+                {
+                  id: "cmrde6rmv000801rzpwrvvyst",
+                  title: "Software Engineer",
+                  slug: "software-engineer",
+                  department: "Engineering",
+                  location: "Remote",
+                  jobType: "FULL_TIME",
+                  description: "<p>We are looking for...</p>",
+                  salaryMin: 1200000,
+                  salaryMax: 1800000,
+                  currency: "INR",
+                  closingDate: "2026-12-31T00:00:00.000Z",
+                  createdAt: "2026-07-09T10:57:03.847Z",
+                  updatedAt: "2026-07-09T11:05:50.889Z",
+                  questions: [
+                    {
+                      id: "cmrde6rmv000901rzpwrvvyzz",
+                      question: "Years of experience with React?",
+                      type: "SHORT_TEXT",
+                      required: true,
+                      order: 0,
+                      options: null
+                    }
+                  ]
+                }
+              ],
+              pagination: {
+                total: 1,
+                page: 1,
+                limit: 10,
+                totalPages: 1
+              }
+            }
+          },
+          {
+            method: "GET",
+            path: "/api/public/careers/:slug",
+            summary: "Fetch a single published job posting by slug",
+            responseExample: {
+              job: {
+                id: "cmrde6rmv000801rzpwrvvyst",
+                title: "Software Engineer",
+                slug: "software-engineer",
+                department: "Engineering",
+                location: "Remote",
+                jobType: "FULL_TIME",
+                description: "<p>We are looking for...</p>",
+                salaryMin: 1200000,
+                salaryMax: 1800000,
+                currency: "INR",
+                closingDate: "2026-12-31T00:00:00.000Z",
+                createdAt: "2026-07-09T10:57:03.847Z",
+                updatedAt: "2026-07-09T11:05:50.889Z",
+                questions: [
+                  {
+                    id: "cmrde6rmv000901rzpwrvvyzz",
+                    question: "Years of experience with React?",
+                    type: "SHORT_TEXT",
+                    required: true,
+                    order: 0,
+                    options: null
+                  }
+                ]
+              }
+            }
+          },
+          {
+            method: "GET",
+            path: "/api/public/careers/departments",
+            summary: "List all configured job departments for the authenticated client",
+            responseExample: {
+              departments: ["Engineering", "Product", "Design", "Sales"]
+            }
+          },
+          {
+            method: "GET",
+            path: "/api/public/careers/locations",
+            summary: "List all configured job locations for the authenticated client",
+            responseExample: {
+              locations: ["Remote", "Hyderabad, IN", "Bangalore, IN"]
+            }
+          }
+        ],
       },
       {
         id: "write:applications",

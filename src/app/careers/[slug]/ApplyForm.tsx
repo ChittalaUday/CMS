@@ -43,9 +43,13 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
-  const [resumeUrl, setResumeUrl] = useState("")
   const [coverLetter, setCoverLetter] = useState("")
   const [answers, setAnswers] = useState<Record<string, string>>({})
+
+  // Detect default fields among questions
+  const resumeQuestion = questions.find(q => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+  const coverLetterQuestion = questions.find(q => q.question.toLowerCase().includes("cover letter"))
+  const customQuestions = questions.filter(q => q.id !== resumeQuestion?.id && q.id !== coverLetterQuestion?.id)
 
   function validate(): boolean {
     const errs: Record<string, string> = {}
@@ -54,11 +58,25 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errs.email = "Please enter a valid email address."
     }
-    questions.forEach((q) => {
+    if (!phone.trim()) errs.phone = "Your phone number is required."
+
+    // Validate Resume if configured
+    if (resumeQuestion && resumeQuestion.required && !answers[resumeQuestion.id]?.trim()) {
+      errs.resume = "Your resume is required."
+    }
+
+    // Validate Cover Letter if configured
+    if (coverLetterQuestion && coverLetterQuestion.required && !coverLetter.trim()) {
+      errs.coverLetter = "Your cover letter is required."
+    }
+
+    // Validate Screening Questions
+    customQuestions.forEach((q) => {
       if (q.required && !answers[q.id]?.trim()) {
         errs[`q_${q.id}`] = "This question requires an answer."
       }
     })
+
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -67,16 +85,25 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
     if (!validate()) return
     startTransition(async () => {
       try {
+        const resolvedResumeUrl = resumeQuestion ? (answers[resumeQuestion.id] ?? "") : ""
+
+        // Append cover letter to answers if configured, so backend required validation succeeds
+        const finalAnswers = Object.entries(answers)
+          .filter(([, v]) => v.trim())
+          .map(([questionId, answer]) => ({ questionId, answer: answer.trim() }))
+
+        if (coverLetterQuestion && coverLetter.trim()) {
+          finalAnswers.push({ questionId: coverLetterQuestion.id, answer: coverLetter.trim() })
+        }
+
         await submitApplication({
           jobId,
           applicantName: name.trim(),
           applicantEmail: email.trim(),
           applicantPhone: phone.trim() || undefined,
-          resumeUrl: resumeUrl.trim() || undefined,
-          coverLetter: coverLetter.trim() || undefined,
-          answers: Object.entries(answers)
-            .filter(([, v]) => v.trim())
-            .map(([questionId, answer]) => ({ questionId, answer: answer.trim() })),
+          resumeUrl: resolvedResumeUrl.trim() || undefined,
+          coverLetter: coverLetterQuestion ? (coverLetter.trim() || undefined) : undefined,
+          answers: finalAnswers,
         })
         setSubmitted(true)
       } catch (err) {
@@ -156,76 +183,121 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label
-              htmlFor="phone"
-              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-            >
-              Phone{" "}
-              <span className="text-muted-foreground/60 font-normal normal-case">
-                (optional)
-              </span>
-            </Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 (555) 000-0000"
-              className="h-9 bg-muted/30 border-border/80 text-sm"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label
-              htmlFor="resume"
-              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-            >
-              Resume / Portfolio URL{" "}
-              <span className="text-muted-foreground/60 font-normal normal-case">
-                (optional)
-              </span>
-            </Label>
-            <Input
-              id="resume"
-              type="url"
-              value={resumeUrl}
-              onChange={(e) => setResumeUrl(e.target.value)}
-              placeholder="https://linkedin.com/in/…"
-              className="h-9 bg-muted/30 border-border/80 text-sm"
-            />
-          </div>
-        </div>
-
         <div className="space-y-2">
           <Label
-            htmlFor="cover"
+            htmlFor="phone"
             className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
           >
-            Cover Letter{" "}
-            <span className="text-muted-foreground/60 font-normal normal-case">
-              (optional)
-            </span>
+            Phone <span className="text-destructive">*</span>
           </Label>
-          <Textarea
-            id="cover"
-            value={coverLetter}
-            onChange={(e) => setCoverLetter(e.target.value)}
-            placeholder="Tell us why you're a great fit for this role…"
-            className="min-h-[120px] bg-muted/30 border-border/80 text-sm resize-y"
+          <Input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value)
+              if (errors.phone) setErrors((e) => ({ ...e, phone: "" }))
+            }}
+            placeholder="+1 (555) 000-0000"
+            className="h-9 bg-muted/30 border-border/80 text-sm"
           />
+          <FieldError message={errors.phone} />
         </div>
+
+        {/* Resume upload if enabled */}
+        {resumeQuestion && (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Resume / CV {resumeQuestion.required && <span className="text-destructive">*</span>}
+            </Label>
+            {answers[resumeQuestion.id] ? (
+              <div className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/40 border-border/80 text-sm">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="text-xs font-semibold text-primary truncate max-w-[200px]">
+                    {answers[resumeQuestion.id].split("/").pop()}
+                  </span>
+                  <span className="text-muted-foreground text-[10px]">Uploaded</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAnswers((a) => {
+                    const copy = { ...a }
+                    delete copy[resumeQuestion.id]
+                    return copy
+                  })}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="file"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    
+                    const formData = new FormData()
+                    formData.append("file", file)
+                    
+                    const toastId = toast.loading(`Uploading ${file.name}...`)
+                    try {
+                      const { uploadPublicFile } = await import("@/app/dashboard/careers/actions")
+                      const res = await uploadPublicFile(formData)
+                      setAnswers((a) => ({ ...a, [resumeQuestion.id]: res.url }))
+                      if (errors.resume) {
+                        setErrors((e) => ({ ...e, resume: "" }))
+                      }
+                      toast.success("File uploaded successfully", { id: toastId })
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Upload failed", { id: toastId })
+                    }
+                  }}
+                  accept=".pdf,.doc,.docx"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className="h-9 px-3 rounded-lg border border-dashed border-border/80 bg-muted/30 text-muted-foreground flex items-center justify-center text-xs font-medium hover:bg-muted/50 transition-colors">
+                  Click to upload document (PDF, DOC, DOCX)
+                </div>
+              </div>
+            )}
+            <FieldError message={errors.resume} />
+          </div>
+        )}
+
+        {/* Cover letter if enabled */}
+        {coverLetterQuestion && (
+          <div className="space-y-2">
+            <Label
+              htmlFor="cover"
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+            >
+              Cover Letter {coverLetterQuestion.required && <span className="text-destructive">*</span>}
+            </Label>
+            <Textarea
+              id="cover"
+              value={coverLetter}
+              onChange={(e) => {
+                setCoverLetter(e.target.value)
+                if (errors.coverLetter) setErrors((e) => ({ ...e, coverLetter: "" }))
+              }}
+              placeholder="Tell us why you're a great fit for this role…"
+              className="min-h-[120px] bg-muted/30 border-border/80 text-sm resize-y"
+            />
+            <FieldError message={errors.coverLetter} />
+          </div>
+        )}
       </div>
 
       {/* Custom questions */}
-      {questions.length > 0 && (
+      {customQuestions.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-base font-bold border-b border-border/60 pb-2">
             Screening Questions
           </h3>
 
-          {questions
+          {customQuestions
             .sort((a, b) => a.order - b.order)
             .map((q) => {
               const opts = Array.isArray(q.options) ? (q.options as string[]) : []
@@ -343,6 +415,63 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
                           </button>
                         )
                       })}
+                    </div>
+                  )}
+
+                  {q.type === "FILE" && (
+                    <div className="space-y-2">
+                      {answers[q.id] ? (
+                        <div className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/40 border-border/80 text-sm">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="text-xs font-semibold text-primary truncate max-w-[200px]">
+                              {answers[q.id].split("/").pop()}
+                            </span>
+                            <span className="text-muted-foreground text-[10px]">Uploaded</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAnswers((a) => {
+                              const copy = { ...a }
+                              delete copy[q.id]
+                              return copy
+                            })}
+                            className="text-xs text-destructive hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type="file"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              
+                              const formData = new FormData()
+                              formData.append("file", file)
+                              
+                              const toastId = toast.loading(`Uploading ${file.name}...`)
+                              try {
+                                const { uploadPublicFile } = await import("@/app/dashboard/careers/actions")
+                                const res = await uploadPublicFile(formData)
+                                setAnswers((a) => ({ ...a, [q.id]: res.url }))
+                                if (errors[`q_${q.id}`]) {
+                                  setErrors((e) => ({ ...e, [`q_${q.id}`]: "" }))
+                                }
+                                toast.success("File uploaded successfully", { id: toastId })
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Upload failed", { id: toastId })
+                              }
+                            }}
+                            accept=".pdf,.doc,.docx"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                          <div className="h-9 px-3 rounded-lg border border-dashed border-border/80 bg-muted/30 text-muted-foreground flex items-center justify-center text-xs font-medium hover:bg-muted/50 transition-colors">
+                            Click to upload document (PDF, DOC, DOCX)
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

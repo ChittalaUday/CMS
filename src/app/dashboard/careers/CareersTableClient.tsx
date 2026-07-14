@@ -63,6 +63,8 @@ interface Job {
   createdAt: Date | string
   closingDate: Date | string | null
   keywords: string[]
+  requiredExperience: string | null
+  createdBy: { id: string }
   _count: {
     applications: number
   }
@@ -71,6 +73,8 @@ interface Job {
 interface CareersTableClientProps {
   jobs: Job[]
   canDelete: boolean
+  currentUserId: string
+  isAdmin: boolean
   handleUpdateStatus: (formData: FormData) => Promise<void>
   handleDelete: (formData: FormData) => Promise<void>
 }
@@ -104,6 +108,8 @@ const JOB_TYPE_SHORT: Record<string, string> = {
 export function CareersTableClient({
   jobs,
   canDelete,
+  currentUserId,
+  isAdmin,
   handleUpdateStatus,
   handleDelete,
 }: CareersTableClientProps) {
@@ -127,9 +133,9 @@ export function CareersTableClient({
     }
   }
 
-  const handleRowClick = (jobId: string, status: JobStatus) => {
+  const handleRowClick = (jobId: string, status: JobStatus, canManage: boolean) => {
     if (status === JobStatus.DRAFT) {
-      router.push(`/dashboard/careers/${jobId}/edit`)
+      if (canManage) router.push(`/dashboard/careers/${jobId}/edit`)
     } else {
       router.push(`/dashboard/careers/${jobId}/applications`)
     }
@@ -178,11 +184,12 @@ export function CareersTableClient({
             {jobs.map((job) => {
               const cfg = STATUS_CONFIG[job.status]
               const StatusIcon = cfg.icon
+              const canManage = isAdmin || job.createdBy.id === currentUserId
 
               return (
                 <tr
                   key={job.id}
-                  onClick={() => handleRowClick(job.id, job.status)}
+                  onClick={() => handleRowClick(job.id, job.status, canManage)}
                   className="group hover:bg-muted/20 cursor-pointer transition-colors duration-150"
                 >
                   {/* Title */}
@@ -195,11 +202,39 @@ export function CareersTableClient({
                         <p className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
                           {job.title}
                         </p>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Building2 className="size-3 shrink-0" />
                             {job.department}
                           </span>
+                          {job.closingDate && (() => {
+                            const closingDate = new Date(job.closingDate)
+                            const today = new Date()
+                            today.setHours(0, 0, 0, 0)
+                            closingDate.setHours(0, 0, 0, 0)
+                            const daysDiff = Math.ceil((closingDate.getTime() - today.getTime()) / (1000 * 3600 * 24))
+                            if (daysDiff >= 0 && daysDiff <= 5) {
+                              return (
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-red-500/10 text-red-600 border-red-500/20 animate-pulse font-bold">
+                                  Closes in {daysDiff}d
+                                </Badge>
+                              )
+                            }
+                            if (daysDiff < 0) {
+                              return (
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-red-500/10 text-red-600 border-red-500/20 font-bold">
+                                  Closed
+                                </Badge>
+                              )
+                            }
+                            return (
+                              <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1.5">
+                                <span className="text-muted-foreground/30">•</span>
+                                <Calendar className="size-2.5" />
+                                Closes {closingDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                              </span>
+                            )
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -222,9 +257,15 @@ export function CareersTableClient({
                         <MapPin className="size-3 shrink-0" />
                         {job.location}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {JOB_TYPE_SHORT[job.jobType] ?? job.jobType}
-                      </span>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+                        <span>{JOB_TYPE_SHORT[job.jobType] ?? job.jobType}</span>
+                        {job.requiredExperience && (
+                          <>
+                            <span className="text-muted-foreground/40">•</span>
+                            <span>{job.requiredExperience}{job.requiredExperience.toLowerCase().includes("year") || job.requiredExperience.toLowerCase().includes("yr") ? "" : " years"} exp</span>
+                          </>
+                        )}
+                      </div>
                       {(job.salaryMin || job.salaryMax) && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <IndianRupee className="size-3 shrink-0" />
@@ -279,16 +320,6 @@ export function CareersTableClient({
                         year: "numeric",
                       })}
                     </span>
-                    {job.closingDate && (
-                      <p className="flex items-center gap-1 text-[10px] text-muted-foreground/60 mt-0.5">
-                        <Calendar className="size-3" />
-                        Closes{" "}
-                        {new Date(job.closingDate).toLocaleDateString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                        })}
-                      </p>
-                    )}
                   </td>
 
                   {/* Actions */}
@@ -297,6 +328,8 @@ export function CareersTableClient({
                       <div className="flex items-center justify-end gap-1">
                         {/* Edit + primary status action — sm+ */}
                         <div className="hidden sm:contents">
+                          {canManage && (
+                          <>
                           {/* Edit */}
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -376,6 +409,8 @@ export function CareersTableClient({
                               </Tooltip>
                             </form>
                           )}
+                          </>
+                          )}
                         </div>
 
                         {/* ⋯ dropdown — secondary actions */}
@@ -393,15 +428,17 @@ export function CareersTableClient({
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44 text-sm">
                                 {/* Edit — mobile only (sm+ sees the icon button) */}
-                                <DropdownMenuItem asChild className="sm:hidden">
-                                  <Link
-                                    href={`/dashboard/careers/${job.id}/edit`}
-                                    className="flex items-center gap-2 cursor-pointer"
-                                  >
-                                    <Edit className="size-3.5 text-muted-foreground" />
-                                    Edit Posting
-                                  </Link>
-                                </DropdownMenuItem>
+                                {canManage && (
+                                  <DropdownMenuItem asChild className="sm:hidden">
+                                    <Link
+                                      href={`/dashboard/careers/${job.id}/edit`}
+                                      className="flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <Edit className="size-3.5 text-muted-foreground" />
+                                      Edit Posting
+                                    </Link>
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem asChild>
                                   <Link
                                     href={`/dashboard/careers/${job.id}/applications`}

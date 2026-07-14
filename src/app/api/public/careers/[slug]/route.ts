@@ -12,7 +12,7 @@ export async function GET(
   if (!auth) {
     return NextResponse.json({ error: "Missing or invalid API key" }, { status: 401 })
   }
-  if (!auth.scopes.includes("read:blogs")) {
+  if (!auth.scopes.includes("read:careers")) {
     return NextResponse.json({ error: "Insufficient scope" }, { status: 403 })
   }
 
@@ -26,35 +26,44 @@ export async function GET(
 
   try {
     const { slug } = await params
-    const post = await prisma.post.findFirst({
-      where: { slug, published: true, clientId: auth.clientId },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        content: true,
-        contentJson: true,
-        createdAt: true,
-        updatedAt: true,
-        author: { select: { id: true, name: true, avatarUrl: true } },
-        featuredImage: { select: { id: true, filename: true, url: true, mimeType: true, size: true } },
-        categories: { select: { category: { select: { id: true, name: true, slug: true } } } },
+    const job = await prisma.jobPosting.findFirst({
+      where: {
+        slug,
+        status: "PUBLISHED",
+        clientId: auth.clientId,
+      },
+      include: {
+        questions: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            question: true,
+            type: true,
+            required: true,
+            order: true,
+            options: true,
+          },
+        },
       },
     })
 
-    if (!post) {
-      return NextResponse.json({ error: "Post not found or is not published" }, { status: 404 })
+    if (!job) {
+      return NextResponse.json({ error: "Job posting not found or is not published" }, { status: 404 })
     }
 
-    const formattedPost = { ...post, categories: post.categories.map((c) => c.category) }
+    const isExpired = job.closingDate && new Date(job.closingDate) < new Date()
+    if (isExpired) {
+      job.questions = []
+    }
+
     const allowedOrigins = await getAllowedOrigins(auth.clientId)
     const origin = resolveOrigin(request.headers.get("origin"), allowedOrigins)
-    return new NextResponse(JSON.stringify({ post: formattedPost }), {
+    return new NextResponse(JSON.stringify({ job }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
     })
   } catch (err) {
-    logger.error({ err }, "api/public/blogs/[slug] GET failed")
-    return NextResponse.json({ error: "Failed to fetch blog post" }, { status: 500 })
+    logger.error({ err }, "api/public/careers/[slug] GET failed")
+    return NextResponse.json({ error: "Failed to fetch job posting" }, { status: 500 })
   }
 }
 

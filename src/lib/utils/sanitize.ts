@@ -43,3 +43,12 @@ export function sanitizeBlogHtml(dirty: string): string {
 export function sanitizePlainText(dirty: string): string {
   return sanitizeHtml(dirty, { allowedTags: [], allowedAttributes: {} })
 }
+
+// SQL injection scanner for user text inputs
+export function checkForSqlInjection(value: string): void {
+  if (!value) return
+  const sqlPattern = /(?:'|--|\/\*|\*\/|union\s+select|select\s+.*\s+from|insert\s+into|delete\s+from|drop\s+table|update\s+.*\s+set)/i
+  if (sqlPattern.test(value)) {
+    throw new Error("Malicious SQL keywords or patterns detected in input fields.")
+  }
+}

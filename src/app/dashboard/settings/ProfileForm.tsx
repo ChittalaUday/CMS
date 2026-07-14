@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { useAction } from "next-safe-action/hooks"
 import { updateProfile, updatePassword } from "@/app/_actions/settings"
 import { logoutAction } from "@/app/_actions/auth"
-import { useUploadThing } from "@/lib/upload"
+import { uploadAvatar } from "@/app/_actions/upload"
 import { useTheme } from "next-themes"
 import type { Role } from "@/generated/prisma/enums"
 import {
@@ -84,26 +84,23 @@ export function SettingsClient({
   const [passwordPending, startPasswordTransition] = useTransition()
   const [logoutPending, startLogoutTransition] = useTransition()
 
-  // ── Upload ──
-  const { startUpload } = useUploadThing("avatarUploader", {
-    onClientUploadComplete: (res) => {
-      if (res?.[0]?.url) {
-        setAvatarUrl(res[0].url)
-        toast.success("Photo uploaded")
-      }
-      setIsUploading(false)
-    },
-    onUploadError: (e) => {
-      toast.error("Upload failed: " + e.message)
-      setIsUploading(false)
-    },
-  })
-
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setIsUploading(true)
-    await startUpload([file])
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await uploadAvatar(formData)
+      if (res?.url) {
+        setAvatarUrl(res.url)
+        toast.success("Photo uploaded")
+      }
+    } catch (err: any) {
+      toast.error("Upload failed: " + (err.message || err))
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   // ── Actions ──

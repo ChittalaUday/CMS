@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma"
 import { validateApiKey } from "@/lib/auth/api-auth"
 import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/utils/rate-limit"
 import { submitApplication } from "@/app/dashboard/careers/actions"
-import { uploadViaUploadThing } from "@/lib/upload"
+import { uploadViaR2 } from "@/lib/upload"
 import logger from "@/lib/utils/logger"
 
 export async function POST(request: NextRequest) {
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Insufficient scope" }, { status: 403 })
   }
 
-  const rl = await checkRateLimit(auth.clientId)
+  const rl = await checkRateLimit(auth.clientId, request)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       }
 
       const fileQuestions = job.questions.filter((q) => q.type === "FILE")
+      let isResumeField = true
       let uploadedFile = (formData.get("resume") as File) || (formData.get("resumeFile") as File)
       let fileQuestionIdForUpload = fileQuestions[0]?.id
 
@@ -79,13 +80,14 @@ export async function POST(request: NextRequest) {
         if (fileFromForm && fileFromForm.size > 0) {
           uploadedFile = fileFromForm
           fileQuestionIdForUpload = q.id
+          isResumeField = false
           break
         }
       }
 
       if (uploadedFile && uploadedFile.size > 0) {
         try {
-          const uploaded = await uploadViaUploadThing(uploadedFile)
+          const uploaded = await uploadViaR2(uploadedFile, { isResume: isResumeField })
           resumeUrl = uploaded.url
           if (fileQuestionIdForUpload) {
             answers = answers.filter((a) => a.questionId !== fileQuestionIdForUpload)
@@ -141,7 +143,18 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     logger.error({ err }, "api/public/careers/apply POST failed")
-    return NextResponse.json({ error: "Failed to submit application" }, { status: 500 })
+    const message = err instanceof Error ? err.message : "Failed to submit application"
+    const isClientError = err instanceof Error && (
+      err.message.includes("no longer exists") ||
+      err.message.includes("no longer accepting") ||
+      err.message.includes("deadline") ||
+      err.message.includes("already applied") ||
+      err.message.includes("required") ||
+      err.message.includes("Malicious") ||
+      err.message.includes("not allowed") ||
+      err.message.includes("exceeds")
+    )
+    return NextResponse.json({ error: message }, { status: isClientError ? 400 : 500 })
   }
 }
 

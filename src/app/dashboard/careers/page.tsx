@@ -113,6 +113,8 @@ export default async function CareersPage({ searchParams }: PageProps) {
           <CareersTableClient
             jobs={jobs as any}
             canDelete={canDelete}
+            currentUserId={user.id}
+            isAdmin={canDelete}
             handleUpdateStatus={handleUpdateStatus}
             handleDelete={handleDelete}
           />

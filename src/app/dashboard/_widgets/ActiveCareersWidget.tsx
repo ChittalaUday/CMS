@@ -20,6 +20,7 @@ export type ActiveJob = {
   location: string
   jobType: string
   createdAt: string | Date
+  closingDate?: string | Date | null
   _count: {
     applications: number
   }
@@ -60,9 +61,24 @@ export function ActiveCareersWidget({ jobs }: Props) {
                     <span className="font-semibold text-sm text-foreground line-clamp-1 group-hover:text-primary transition-colors">
                       {job.title}
                     </span>
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
                       {JOB_TYPE_LABELS[job.jobType] || job.jobType}
                     </Badge>
+                    {job.closingDate && (() => {
+                      const closingDate = new Date(job.closingDate)
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      closingDate.setHours(0, 0, 0, 0)
+                      const daysDiff = Math.ceil((closingDate.getTime() - today.getTime()) / (1000 * 3600 * 24))
+                      if (daysDiff >= 0 && daysDiff <= 5) {
+                        return (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-px shrink-0 bg-red-500/10 text-red-600 border-red-500/20 animate-pulse font-bold">
+                            Closing in {daysDiff}d
+                          </Badge>
+                        )
+                      }
+                      return null
+                    })()}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">

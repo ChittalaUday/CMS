@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { completeOnboarding } from "@/app/_actions/onboarding"
-import { useUploadThing } from "@/lib/upload"
+import { uploadAvatar } from "@/app/_actions/upload"
 import {
   Loader2Icon,
   UserIcon,
@@ -37,25 +37,23 @@ export function OnboardingForm({
   const [avatarMode, setAvatarMode] = useState<"url" | "upload">("url")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { startUpload } = useUploadThing("avatarUploader", {
-    onClientUploadComplete: (res) => {
-      if (res?.[0]?.url) {
-        setAvatarUrl(res[0].url)
-        toast.success("Photo uploaded")
-      }
-      setIsUploading(false)
-    },
-    onUploadError: (e) => {
-      toast.error("Upload failed: " + e.message)
-      setIsUploading(false)
-    },
-  })
-
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setIsUploading(true)
-    await startUpload([file])
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await uploadAvatar(formData)
+      if (res?.url) {
+        setAvatarUrl(res.url)
+        toast.success("Photo uploaded")
+      }
+    } catch (err: any) {
+      toast.error("Upload failed: " + (err.message || err))
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   function submit(skip: boolean) {
