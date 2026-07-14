@@ -90,10 +90,13 @@ export async function embedText(text: string, model?: string): Promise<number[]>
   const finalModel = model || DEFAULT_EMBEDDING_MODEL
   const url = `${OLLAMA_BASE_URL}/api/embeddings`
 
+  // Truncate text to a safe limit (e.g., 1000 chars) to prevent context length errors (e.g., in all-minilm)
+  const safeText = text.length > 1000 ? text.slice(0, 1000) : text
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: finalModel, prompt: text }),
+    body: JSON.stringify({ model: finalModel, prompt: safeText }),
   })
 
   if (!res.ok) {

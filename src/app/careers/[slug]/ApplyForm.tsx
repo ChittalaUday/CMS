@@ -54,11 +54,23 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
   function validate(): boolean {
     const errs: Record<string, string> = {}
     if (!name.trim()) errs.name = "Your name is required."
+    else if (!/^[a-zA-Z\s'\-]{2,50}$/.test(name.trim())) {
+      errs.name = "Please enter a valid name (letters, spaces, hyphens, and apostrophes only, 2-50 characters)."
+    }
+
     if (!email.trim()) errs.email = "Your email is required."
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim())) {
       errs.email = "Please enter a valid email address."
     }
-    if (!phone.trim()) errs.phone = "Your phone number is required."
+
+    if (!phone.trim()) {
+      errs.phone = "Your phone number is required."
+    } else {
+      const cleanPhone = phone.trim().replace(/[\s\-()]/g, "")
+      if (!/^(?:\+?91)?[6-9]\d{9}$/.test(cleanPhone)) {
+        errs.phone = "Please enter a valid 10-digit Indian phone number (optionally prefixed with +91)."
+      }
+    }
 
     // Validate Resume if configured
     if (resumeQuestion && resumeQuestion.required && !answers[resumeQuestion.id]?.trim()) {
@@ -361,30 +373,32 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
                   )}
 
                   {q.type === "SINGLE_CHOICE" && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="space-y-2">
                       {opts.map((opt) => (
-                        <button
+                        <label
                           key={opt}
-                          type="button"
-                          onClick={() => {
-                            setAnswers((a) => ({ ...a, [q.id]: opt }))
-                            if (errors[`q_${q.id}`])
-                              setErrors((e) => ({ ...e, [`q_${q.id}`]: "" }))
-                          }}
-                          className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                            answers[q.id] === opt
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border/60 text-muted-foreground hover:bg-muted"
-                          }`}
+                          className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
                         >
-                          {opt}
-                        </button>
+                          <input
+                            type="radio"
+                            name={`q_${q.id}`}
+                            value={opt}
+                            checked={answers[q.id] === opt}
+                            onChange={() => {
+                              setAnswers((a) => ({ ...a, [q.id]: opt }))
+                              if (errors[`q_${q.id}`])
+                                setErrors((e) => ({ ...e, [`q_${q.id}`]: "" }))
+                            }}
+                            className="size-4 rounded-full border border-border text-primary focus:ring-1 focus:ring-primary accent-primary"
+                          />
+                          <span>{opt}</span>
+                        </label>
                       ))}
                     </div>
                   )}
 
                   {q.type === "MULTIPLE_CHOICE" && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="space-y-2">
                       {opts.map((opt) => {
                         const selected = (answers[q.id] ?? "")
                           .split(",")
@@ -393,26 +407,27 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
                         const isSelected = selected.includes(opt)
 
                         return (
-                          <button
+                          <label
                             key={opt}
-                            type="button"
-                            onClick={() => {
-                              const next = isSelected
-                                ? selected.filter((s) => s !== opt)
-                                : [...selected, opt]
-                              setAnswers((a) => ({ ...a, [q.id]: next.join(", ") }))
-                              if (errors[`q_${q.id}`])
-                                setErrors((e) => ({ ...e, [`q_${q.id}`]: "" }))
-                            }}
-                            className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border/60 text-muted-foreground hover:bg-muted"
-                            }`}
+                            className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
                           >
-                            {isSelected && <span className="mr-1 text-[10px]">✓</span>}
-                            {opt}
-                          </button>
+                            <input
+                              type="checkbox"
+                              name={`q_${q.id}`}
+                              value={opt}
+                              checked={isSelected}
+                              onChange={() => {
+                                const next = isSelected
+                                  ? selected.filter((s) => s !== opt)
+                                  : [...selected, opt]
+                                setAnswers((a) => ({ ...a, [q.id]: next.join(", ") }))
+                                if (errors[`q_${q.id}`])
+                                  setErrors((e) => ({ ...e, [`q_${q.id}`]: "" }))
+                              }}
+                              className="size-4 rounded border border-border text-primary focus:ring-1 focus:ring-primary accent-primary"
+                            />
+                            <span>{opt}</span>
+                          </label>
                         )
                       })}
                     </div>

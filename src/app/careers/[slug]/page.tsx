@@ -126,18 +126,21 @@ export default async function PublicJobPage({ params }: PageProps) {
               line-height: 1.6;
               word-break: break-word;
             }
-            .article-body h1, .article-body h2, .article-body h3, .article-body h4 {
-              font-weight: 800;
-              letter-spacing: -0.025em;
-              color: hsl(var(--foreground));
-              margin: 1.5rem 0 0.5rem;
-              line-height: 1.25;
-            }
-            .article-body h1 { font-size: 1.75rem; }
-            .article-body h2 { font-size: 1.35rem; border-bottom: 1px solid hsl(var(--border) / 0.6); padding-bottom: 0.3rem; }
-            .article-body h3 { font-size: 1.15rem; }
-            .article-body p { margin: 0.75rem 0; }
-            .article-body a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 4px; }
+             .article-body h1, .article-body h2, .article-body h3, .article-body h4,
+             .article-body .slate-h1, .article-body .slate-h2, .article-body .slate-h3, .article-body .slate-h4,
+             .article-body [data-slate-type="h1"], .article-body [data-slate-type="h2"], .article-body [data-slate-type="h3"], .article-body [data-slate-type="h4"] {
+               font-weight: 800;
+               letter-spacing: -0.025em;
+               color: hsl(var(--foreground));
+               margin: 1.5rem 0 0.5rem;
+               line-height: 1.25;
+               display: block;
+             }
+             .article-body h1, .article-body .slate-h1, .article-body [data-slate-type="h1"] { font-size: 1.75rem; }
+             .article-body h2, .article-body .slate-h2, .article-body [data-slate-type="h2"] { font-size: 1.35rem; border-bottom: 1px solid hsl(var(--border) / 0.6); padding-bottom: 0.3rem; }
+             .article-body h3, .article-body .slate-h3, .article-body [data-slate-type="h3"] { font-size: 1.15rem; }
+             .article-body p, .article-body .slate-p, .article-body [data-slate-type="p"] { margin: 0.75rem 0; display: block; }
+             .article-body a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 4px; }
             .article-body strong, .article-body b { font-weight: 700; color: hsl(var(--foreground)); }
             .article-body em, .article-body i { font-style: italic; }
             .article-body ul { list-style: disc; padding-left: 1.5rem; margin: 0.75rem 0; }

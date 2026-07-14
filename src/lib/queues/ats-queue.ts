@@ -4,6 +4,7 @@ import { QueueStatus } from "@/generated/prisma/enums"
 import { atsQueue, keywordQueue } from "./queue-manager"
 import { queueEvents, activeAtsTaskIds, activeKeywordTaskIds } from "./queue-events"
 import { generateText, computeSemanticSimilarity } from "@/lib/ai/ai"
+import { isAIConfigured } from "@/lib/ai/ai-config"
 
 // Auto-healing and queue recovery loader
 export async function initializeQueues() {
@@ -183,6 +184,10 @@ export async function processJobKeywords(jobId: string) {
 
 // Queue Enqueuers (Deduplicated execution wrappers)
 export function enqueueAtsScorer(applicationId: string, model?: string) {
+  if (!isAIConfigured()) {
+    console.log(`[Queue] AI is disabled (ENABLE_AI != true). Skipping ATS scoring for application ${applicationId}.`)
+    return
+  }
   if (activeAtsTaskIds.has(applicationId)) return
   activeAtsTaskIds.add(applicationId)
   queueEvents.emit("change")
@@ -198,6 +203,10 @@ export function enqueueAtsScorer(applicationId: string, model?: string) {
 }
 
 export function enqueueKeywordGeneration(jobId: string) {
+  if (!isAIConfigured()) {
+    console.log(`[Queue] AI is disabled (ENABLE_AI != true). Skipping keyword extraction for job ${jobId}.`)
+    return
+  }
   if (activeKeywordTaskIds.has(jobId)) return
   activeKeywordTaskIds.add(jobId)
   queueEvents.emit("change")
