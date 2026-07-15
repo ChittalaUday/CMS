@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useMemo } from "react"
+import { useState, useMemo } from "react"
 import {
   DndContext,
   useSensor,
@@ -17,9 +17,9 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { KanbanColumn } from "./KanbanColumn"
 import { ApplicationDetailDialog } from "./ApplicationDetailDialog"
 import { Input } from "@/components/ui/input"
-import { Search, User, Sparkles } from "lucide-react"
+import { Search } from "lucide-react"
 import { toast } from "sonner"
-import { evaluateSearchQuery } from "@/lib/ats/search-parser"
+import { evaluateSearchQuery } from "@/lib/careers/search-parser"
 import { updateApplicationStatus } from "../../actions"
 
 type ApplicationStatus = "NEW" | "REVIEWING" | "SHORTLISTED" | "REJECTED" | "HIRED"
@@ -111,7 +111,6 @@ export function ApplicationsKanban({
   const search = propSearch !== undefined ? propSearch : localSearch
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
   const [mobileTab, setMobileTab] = useState<ApplicationStatus>("NEW")
-  const [isPending, startTransition] = useTransition()
 
   // Configure drag sensors
   const sensors = useSensors(

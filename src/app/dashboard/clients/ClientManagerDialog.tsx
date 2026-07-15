@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useTransition, useCallback, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -150,7 +149,6 @@ export function ClientManagerDialog({ triggerClassName }: Props) {
             {view.type === "list" && (
               <ListView
                 onView={(id) => setView({ type: "detail", id })}
-                onNew={() => setView({ type: "new" })}
               />
             )}
             {view.type === "new" && (
@@ -159,7 +157,6 @@ export function ClientManagerDialog({ triggerClassName }: Props) {
             {view.type === "detail" && (
               <DetailView
                 id={view.id}
-                onBack={() => setView({ type: "list" })}
                 onDeleted={() => setView({ type: "list" })}
                 onEdit={(client) => setView({ type: "edit", id: client.id, client })}
               />
@@ -171,8 +168,8 @@ export function ClientManagerDialog({ triggerClassName }: Props) {
                   name: view.client.name,
                   slug: view.client.slug,
                   domain: view.client.domain ?? undefined,
-                  description: (view.client as any).description ?? undefined,
-                  logoUrl: (view.client as any).logoUrl ?? undefined,
+                  description: view.client.description ?? undefined,
+                  logoUrl: view.client.logoUrl ?? undefined,
                 }}
                 onSuccess={() => setView({ type: "detail", id: view.id })}
               />
@@ -186,7 +183,7 @@ export function ClientManagerDialog({ triggerClassName }: Props) {
 
 // ── List view ─────────────────────────────────────────────────────────────────
 
-function ListView({ onView, onNew }: { onView: (id: string) => void; onNew: () => void }) {
+function ListView({ onView }: { onView: (id: string) => void }) {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -381,16 +378,13 @@ function ListView({ onView, onNew }: { onView: (id: string) => void; onNew: () =
 
 function DetailView({
   id,
-  onBack,
   onDeleted,
   onEdit,
 }: {
   id: string
-  onBack: () => void
   onDeleted: () => void
   onEdit: (client: ClientDetail) => void
 }) {
-  const router = useRouter()
   const [client, setClient] = useState<ClientDetail | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [apiKeys, setApiKeys] = useState<ApiKeyList>([])
@@ -511,7 +505,7 @@ function DetailView({
                 <span className="text-muted-foreground">Slug</span>
                 <span className="font-mono text-xs">{client.slug}</span>
                 <span className="text-muted-foreground">Domain</span>
-                <span>{(client as any).domain ?? <span className="text-muted-foreground/50">Not set</span>}</span>
+                <span>{client.domain ?? <span className="text-muted-foreground/50">Not set</span>}</span>
                 <span className="text-muted-foreground">Status</span>
                 <Badge variant="outline" className={`w-fit ${statusClass}`}>{statusLabel}</Badge>
                 <span className="text-muted-foreground">Created</span>
@@ -629,7 +623,7 @@ function DetailView({
           <AlertDialogHeader>
             <AlertDialogTitle>Remove user from client?</AlertDialogTitle>
             <AlertDialogDescription>
-              This user will lose access to this client's data but their account will not be deleted.
+              This user will lose access to this client&apos;s data but their account will not be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { TComboboxInputElement } from 'platejs';
 import type { PlateElementProps } from 'platejs/react';
 
 import { PlateElement } from 'platejs/react';
@@ -14,7 +15,7 @@ import { cn } from '@/lib/utils/utils';
  */
 export function EmojiInputElement({ className, ...props }: PlateElementProps) {
   const { children, element } = props;
-  const query = (element as any).value ?? '';
+  const query = (element as TComboboxInputElement).value ?? '';
 
   return (
     <PlateElement

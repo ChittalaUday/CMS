@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import type { TTableCellElement } from 'platejs';
 import { PlateElement, PlateElementProps } from 'platejs/react';
 import { cn } from '@/lib/utils/utils';
 
@@ -33,7 +34,7 @@ export function TableRowElement({ className, ...props }: PlateElementProps) {
 }
 
 export function TableCellElement({ className, ...props }: PlateElementProps) {
-  const { background } = props.element as any;
+  const { background } = props.element as TTableCellElement;
   return (
     <PlateElement
       as="td"
@@ -47,7 +48,7 @@ export function TableCellElement({ className, ...props }: PlateElementProps) {
 }
 
 export function TableCellHeaderElement({ className, ...props }: PlateElementProps) {
-  const { background } = props.element as any;
+  const { background } = props.element as TTableCellElement;
   return (
     <PlateElement
       as="th"

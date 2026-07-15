@@ -1,44 +1,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { ApplicationStatus } from "@/generated/prisma/enums"
+import { since, bucketByDate } from "./query-utils"
 
-function since(days: number): Date {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function bucketByDate<T extends { createdAt: Date }>(
-  rows: T[],
-  days: number
-): Map<string, T[]> {
-  const map = new Map<string, T[]>()
-  const start = since(days)
-  for (let i = 0; i < days; i++) {
-    const d = new Date(start)
-    d.setDate(d.getDate() + i)
-    map.set(d.toISOString().slice(0, 10), [])
-  }
-  for (const row of rows) {
-    const key = row.createdAt.toISOString().slice(0, 10)
-    if (map.has(key)) map.get(key)!.push(row)
-  }
-  return map
-}
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
-export type ViewsByDay = { date: string; views: number }[]
-export type LikesByDay = { date: string; likes: number }[]
-export type EngagementByDay = { date: string; views: number; likes: number }[]
-export type TopPost = {
-  id: string
-  title: string
-  slug: string
-  views: number
-  likes: number
-  createdAt: Date
-}
 export type AppsByDay = { date: string; count: number }[]
 export type FunnelRow = {
   jobId: string
@@ -65,14 +28,6 @@ export type ActiveJobRow = {
 export type ATSRow = { jobTitle: string; avgScore: number; count: number }
 export type AppPerJob = { jobTitle: string; count: number }
 
-export type BlogStats = {
-  totalPosts: number
-  totalViews: number
-  viewsPerDay: ViewsByDay
-  topPosts: TopPost[]
-  engagementByDay: EngagementByDay
-}
-
 export type CareersStats = {
   openJobs: number
   newApplications: number
@@ -82,75 +37,6 @@ export type CareersStats = {
   appsPerJob: AppPerJob[]
   activeJobs: ActiveJobRow[]
 }
-
-// ── Blog ─────────────────────────────────────────────────────────────────────
-
-export async function fetchBlogStats(opts: {
-  clientId: string | null
-  userId?: string
-  days: number
-}): Promise<BlogStats> {
-  const { clientId, userId, days } = opts
-  const clientFilter = clientId ? { clientId } : {}
-  const authorFilter = userId ? { authorId: userId } : {}
-  const postFilter = { published: true, ...clientFilter, ...authorFilter }
-  const sinceDate = since(days)
-
-  const [totalPosts, totalViews, recentViews, recentLikes, topPostsRaw] =
-    await Promise.all([
-      prisma.post.count({ where: postFilter }),
-      prisma.view.count({ where: { post: postFilter } }),
-      prisma.view.findMany({
-        where: { createdAt: { gte: sinceDate }, post: postFilter },
-        select: { createdAt: true },
-      }),
-      prisma.like.findMany({
-        where: { createdAt: { gte: sinceDate }, post: postFilter },
-        select: { createdAt: true },
-      }),
-      prisma.post.findMany({
-        where: postFilter,
-        select: {
-          id: true,
-          title: true,
-          slug: true,
-          createdAt: true,
-          _count: { select: { views: true, likes: true } },
-        },
-        orderBy: { views: { _count: "desc" } },
-        take: 10,
-      }),
-    ])
-
-  const viewBuckets = bucketByDate(recentViews, days)
-  const likeBuckets = bucketByDate(recentLikes, days)
-
-  const viewsPerDay: ViewsByDay = []
-  const engagementByDay: EngagementByDay = []
-
-  for (const [date, vs] of viewBuckets) {
-    const lks = likeBuckets.get(date) ?? []
-    viewsPerDay.push({ date, views: vs.length })
-    engagementByDay.push({ date, views: vs.length, likes: lks.length })
-  }
-
-  return {
-    totalPosts,
-    totalViews,
-    viewsPerDay,
-    topPosts: topPostsRaw.map((p) => ({
-      id: p.id,
-      title: p.title,
-      slug: p.slug,
-      createdAt: p.createdAt,
-      views: p._count.views,
-      likes: p._count.likes,
-    })),
-    engagementByDay,
-  }
-}
-
-// ── Careers ──────────────────────────────────────────────────────────────────
 
 export async function fetchCareersStats(opts: {
   clientId: string | null

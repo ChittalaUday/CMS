@@ -8,10 +8,9 @@ import { Button } from "@/components/ui/button"
 interface BlogsPaginationProps {
   page: number
   totalPages: number
-  pageSize: number
 }
 
-export function BlogsPagination({ page, totalPages, pageSize }: BlogsPaginationProps) {
+export function BlogsPagination({ page, totalPages }: BlogsPaginationProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()

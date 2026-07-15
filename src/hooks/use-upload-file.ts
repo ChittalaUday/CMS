@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { uploadMediaItem } from '@/app/dashboard/blogs/actions';
 
-export type UploadedFile<T = unknown> = {
+export type UploadedFile = {
   key: string;
   name: string;
   size: number;

@@ -7,7 +7,6 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { GalleryVerticalEndIcon } from "lucide-react"
@@ -62,8 +61,9 @@ export function LoginForm({
       setUser(result.data)
       toast.success("Welcome back!", { id: toastId })
       router.push("/dashboard")
-    } catch (err: any) {
-      toast.error(err.message || "Invalid email or password", { id: toastId })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(message || "Invalid email or password", { id: toastId })
     } finally {
       setLoading(false)
     }

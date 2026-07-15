@@ -19,7 +19,6 @@ import {
   Calendar,
   IndianRupee,
   Loader2,
-  Plus,
   Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -49,7 +48,7 @@ import { updateJobKeywords } from "./actions"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
-interface Job {
+export interface Job {
   id: string
   title: string
   slug: string
@@ -580,8 +579,8 @@ export function CareersTableClient({
                       toast.success("Keywords updated successfully!")
                       router.refresh()
                       setSelectedJob(null)
-                    } catch (err: any) {
-                      toast.error(err.message || "Failed to update keywords")
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Failed to update keywords")
                     }
                   })
                 }}

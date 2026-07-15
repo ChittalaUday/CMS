@@ -2,6 +2,7 @@
 
 import { Fragment, useState, useTransition } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import {
   Calendar,
@@ -18,8 +19,6 @@ import {
   Activity,
   BarChart3,
   ExternalLink,
-  ChevronDown,
-  ChevronRight,
   GitBranch,
   Star,
   Clock,
@@ -38,8 +37,6 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
-  SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
 import {
@@ -51,59 +48,13 @@ import {
 import { PostMetaHoverCard } from "./PostMetaHoverCard"
 import { PublishButton } from "./PublishButton"
 import { PublishRevisionButton } from "./PublishRevisionButton"
-import { Role } from "@/lib/auth/roles"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { getErrorMessage } from "@/lib/utils/utils"
+import type { PostWithRelations } from "./actions"
 
-interface Author {
-  id: string
-  name: string | null
-  email: string
-  avatarUrl?: string | null
-}
-
-interface Category {
-  id: string
-  name: string
-  slug: string
-}
-
-interface PostCategory {
-  categoryId: string
-  category: Category
-}
-
-interface FeaturedImage {
-  id: string
-  filename: string
-  url: string
-  mimeType: string
-  size: number
-}
-
-interface Post {
-  id: string
-  title: string
-  slug: string
-  content: string
-  published: boolean
-  featured: boolean
-  scheduledAt?: Date | string | null
-  reviewRequested?: boolean
-  createdAt: Date | string
-  updatedAt: Date | string
-  author: Author | null
-  featuredImage: FeaturedImage | null
-  categories: PostCategory[]
-  metadata: any
-  _count: {
-    views: number
-    likes: number
-    comments: number
-  }
-  drafts?: Post[]
-}
+type Post = PostWithRelations
 
 interface BlogsTableClientProps {
   posts: Post[]
@@ -131,8 +82,8 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
             ? `"${postTitle}" is no longer featured`
             : `"${postTitle}" is now featured`
         )
-      } catch (err: any) {
-        toast.error(err.message || "Failed to update featured status")
+      } catch (err) {
+        toast.error(getErrorMessage(err, "Failed to update featured status"))
       }
     })
   }
@@ -149,8 +100,8 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
           await submitPostForReview(postId)
           toast.success(`"${postTitle}" submitted for review`)
         }
-      } catch (err: any) {
-        toast.error(err.message || "Failed to update review status")
+      } catch (err) {
+        toast.error(getErrorMessage(err, "Failed to update review status"))
       }
     })
   }
@@ -200,8 +151,9 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
             </thead>
             <tbody className="divide-y divide-border/40">
               {posts.map((post) => {
-                const seoDesc = (post.metadata as any)?.seoDescription || ""
-                const tags: string[] = (post.metadata as any)?.tags || []
+                const metadata = post.metadata as Record<string, unknown> | null
+                const seoDesc = (metadata?.seoDescription as string) || ""
+                const tags: string[] = (metadata?.tags as string[]) || []
                 const draft = post.drafts?.[0]
                 // Show draft row only when toggled via toolbar OR if the current user authored the draft OR if it's pending review or scheduled
                 const hasDraft = post.published &&
@@ -225,9 +177,11 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                           <div className="flex items-start gap-3">
                             <div className="size-10 rounded-lg overflow-hidden border border-border/50 bg-muted/40 shrink-0 flex items-center justify-center">
                               {post.featuredImage ? (
-                                <img
+                                <Image
                                   src={post.featuredImage.url}
                                   alt={post.title}
+                                  width={40}
+                                  height={40}
                                   className="object-cover w-full h-full"
                                 />
                               ) : (
@@ -643,10 +597,12 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 md:border-r border-border/60">
                   {selectedPost.featuredImage && (
                     <div className="w-full h-52 sm:h-64 rounded-xl overflow-hidden border border-border/50 relative bg-muted/40">
-                      <img
+                      <Image
                         src={selectedPost.featuredImage.url}
                         alt={selectedPost.title}
-                        className="object-cover w-full h-full"
+                        fill
+                        sizes="(min-width: 768px) 50vw, 100vw"
+                        className="object-cover"
                       />
                     </div>
                   )}
@@ -674,9 +630,11 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                     <div className="flex items-center gap-3 pt-1">
                       <div className="size-9 rounded-full bg-primary/10 border border-primary/15 flex items-center justify-center overflow-hidden">
                         {selectedPost.author?.avatarUrl ? (
-                          <img
+                          <Image
                             src={selectedPost.author.avatarUrl}
                             alt={selectedPost.author.name || ""}
+                            width={36}
+                            height={36}
                             className="object-cover w-full h-full"
                           />
                         ) : (
@@ -785,11 +743,11 @@ export function BlogsTableClient({ posts, canPublish, showEditorDrafts, currentU
                     </div>
 
                     {/* Tags section */}
-                    {((selectedPost.metadata as any)?.tags || []).length > 0 && (
+                    {((selectedPost.metadata as Record<string, unknown> | null)?.tags as string[] || []).length > 0 && (
                       <div className="space-y-2 pt-2">
                         <div className="text-muted-foreground font-semibold">Tags</div>
                         <div className="flex flex-wrap gap-1">
-                          {((selectedPost.metadata as any)?.tags || []).map((tag: string) => (
+                          {((selectedPost.metadata as Record<string, unknown> | null)?.tags as string[] || []).map((tag: string) => (
                             <span
                               key={tag}
                               className="text-[10px] bg-muted border border-border px-2 py-0.5 rounded-md text-foreground/80 font-medium"

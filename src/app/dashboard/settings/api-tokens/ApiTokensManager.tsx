@@ -324,7 +324,7 @@ function RevokeButton({ tokenId, tokenName }: { tokenId: string; tokenName: stri
         <AlertDialogHeader>
           <AlertDialogTitle>Revoke token?</AlertDialogTitle>
           <AlertDialogDescription>
-            <strong>"{tokenName}"</strong> will be permanently revoked. Any integrations using this token will stop working immediately.
+            <strong>&quot;{tokenName}&quot;</strong> will be permanently revoked. Any integrations using this token will stop working immediately.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

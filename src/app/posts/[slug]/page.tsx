@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/session"
 import { redirect, notFound } from "next/navigation"
 import { Role, ADMIN_ROLES } from "@/lib/auth/roles"
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowLeft, Edit, Calendar, User, Tag, Globe, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -114,11 +115,14 @@ export default async function PostPreviewPage({ params, searchParams }: PageProp
 
         {/* Featured Image */}
         {post.featuredImage && (
-          <div className="w-full aspect-video rounded-2xl overflow-hidden border border-border/40 bg-muted/20 mb-12 shadow-md">
-            <img
+          <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-border/40 bg-muted/20 mb-12 shadow-md">
+            <Image
               src={post.featuredImage.url}
               alt={post.title}
-              className="object-cover w-full h-full"
+              fill
+              sizes="100vw"
+              priority
+              className="object-cover"
             />
           </div>
         )}

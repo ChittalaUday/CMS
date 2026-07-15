@@ -8,8 +8,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { BarChart3 } from "lucide-react"
-import { WidgetCard } from "./WidgetCard"
-import type { AppPerJob } from "../_data/dashboard-queries"
+import { WidgetCard } from "../WidgetCard"
+import type { AppPerJob } from "../../_data/careers-queries"
 
 const CHART_CONFIG = {
   count: { label: "Applications", color: "hsl(var(--primary))" },

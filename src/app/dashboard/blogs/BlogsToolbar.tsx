@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useCallback, useTransition, useState, useEffect } from "react"
-import { Search, X, Filter, GitBranch, Info } from "lucide-react"
+import { Search, X, Filter, Info } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -31,10 +31,13 @@ export function BlogsToolbar({ categories, totalCount, search, categoryId, statu
   const [searchInput, setSearchInput] = useState(search)
   const debouncedSearch = useDebounce(searchInput, 400)
 
-  // Sync state from prop (e.g. on external/back action or clear filters)
-  useEffect(() => {
+  // Sync state from prop (e.g. on external/back action or clear filters) — computed
+  // during render per https://react.dev/learn/you-might-not-need-an-effect#adjusting-state-based-on-a-prop-change
+  const [prevSearch, setPrevSearch] = useState(search)
+  if (search !== prevSearch) {
+    setPrevSearch(search)
     setSearchInput(search)
-  }, [search])
+  }
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {

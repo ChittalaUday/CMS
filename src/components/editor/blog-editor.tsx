@@ -12,7 +12,6 @@ import { ImagePlugin } from '@platejs/media/react';
 import { FontColorPlugin, FontBackgroundColorPlugin } from '@platejs/basic-styles/react';
 
 import {
-  insertTable,
   insertTableRow,
   insertTableColumn,
   deleteRow,
@@ -22,6 +21,9 @@ import {
   getCellTypes,
   getEmptyTableNode
 } from '@platejs/table';
+import type { TElement, TText, Value, Descendant, NodeEntry } from 'platejs';
+import type { getPostById } from '@/app/dashboard/blogs/actions';
+import type { Prisma } from '@/generated/prisma/client';
 
 import { Badge } from '@/components/ui/badge';
 import { useWritingAssist } from '@/components/editor/hooks/useWritingAssist';
@@ -42,10 +44,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { MediaSelectorModal } from '@/components/MediaSelectorModal';
 import { EmojiPickerButton } from '@/components/ui/emoji-picker-button';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils/utils';
+import { cn, getErrorMessage } from '@/lib/utils/utils';
 import { toast } from 'sonner';
-import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 import { RevisionCompareDialog } from '@/app/dashboard/blogs/RevisionCompareDialog'
 import { PublishSheet } from '@/app/dashboard/blogs/PublishSheet'
@@ -97,6 +99,19 @@ interface Category {
   id: string;
   name: string;
 }
+
+// Plate's editor instance is a plain mutable object at runtime; attaching a custom
+// `uploadImage` method on it (consumed by image-element.tsx's retry handler) is the
+// standard Plate.js pattern for exposing imperative editor APIs that need access to
+// component-level closures (server actions, upload progress state, etc).
+type EditorWithUploadImage = { uploadImage: (file: File, uploadId: string) => void };
+
+type LinkElementNode = TElement & { url?: string };
+
+// The exact shape returned by getPostById (Post + its included relations), inferred
+// straight from the server action so it always matches — no hand-duplicated shape.
+type PostWithRelations = NonNullable<Awaited<ReturnType<typeof getPostById>>>;
+type DraftRevision = PostWithRelations['drafts'][number];
 
 const colors = [
   { name: 'Default', value: 'inherit' },
@@ -155,11 +170,22 @@ function ColorPicker({
 
 const SIDE_RIGHT = { side: 'right' as const };
 
-function LinkElement({ className, ...props }: PlateElementProps) {
-  const url = (props.element as any)?.url || '';
-  const PlateElementAny = PlateElement as any;
+// PlateElement's exported prop type doesn't model tag-specific DOM attributes (href/target/rel)
+// at the top level — only via the internal `attributes` slot. Casting through `unknown` to a
+// precise anchor-shaped prop type keeps the same runtime call (still just PlateElement as="a")
+// without a bare `any`.
+type AnchorPlateElementProps = PlateElementProps<LinkElementNode> & {
+  as: 'a';
+  href: string;
+  target: string;
+  rel: string;
+};
+
+function LinkElement({ className, ...props }: PlateElementProps<LinkElementNode>) {
+  const url = props.element.url || '';
+  const AnchorPlateElement = PlateElement as unknown as (props: AnchorPlateElementProps) => React.ReactElement;
   return (
-    <PlateElementAny
+    <AnchorPlateElement
       as="a"
       className={cn(className, 'text-primary underline cursor-pointer hover:opacity-80')}
       href={url}
@@ -168,7 +194,7 @@ function LinkElement({ className, ...props }: PlateElementProps) {
       {...props}
     >
       {props.children}
-    </PlateElementAny>
+    </AnchorPlateElement>
   );
 }
 
@@ -202,7 +228,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [content, setContent] = useState("");
-  const [contentJson, setContentJson] = useState<any[]>([{ children: [{ text: '' }], type: 'p' }]);
+  const [contentJson, setContentJson] = useState<Value>([{ children: [{ text: '' }], type: 'p' }]);
   const [published, setPublished] = useState(false);
   const [featuredImageId, setFeaturedImageId] = useState<string | null>(null);
   const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
@@ -250,10 +276,10 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
 
   // Extract plain text from contentJson for writing assist
   const plainTextForAssist = React.useMemo(() => {
-    function extract(nodes: any[]): string {
+    function extract(nodes: Descendant[]): string {
       return nodes.map(n => {
         if (typeof n.text === 'string') return n.text;
-        if (n.children) return extract(n.children);
+        if (Array.isArray(n.children)) return extract(n.children as Descendant[]);
         return '';
       }).join(' ').replace(/\s+/g, ' ').trim();
     }
@@ -332,8 +358,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     ],
     override: {
       components: {
-        ul: (props: any) => <ListElement variant="ul" {...props} />,
-        ol: (props: any) => <ListElement variant="ol" {...props} />,
+        ul: (props: PlateElementProps) => <ListElement variant="ul" {...props} />,
+        ol: (props: PlateElementProps) => <ListElement variant="ol" {...props} />,
         li: ListItemElement,
         table: TableElement,
         tr: TableRowElement,
@@ -350,7 +376,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     const findNodePath = () => {
       const entries = editor.api.nodes({
         at: [],
-        match: (n: any) => n.type === 'img' && n.uploadId === uploadId
+        match: (n) => n.type === 'img' && n.uploadId === uploadId
       });
       const next = entries.next();
       return next.value ? next.value[1] : null;
@@ -418,7 +444,11 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     }
   }, [editor]);
 
-  (editor as any).uploadImage = uploadImageFn;
+  // Attaching a custom imperative method to the Plate editor instance (consumed by
+  // image-element.tsx's retry handler); the editor is a mutable class instance, not
+  // React-managed state.
+  // eslint-disable-next-line react-hooks/immutability
+  (editor as unknown as EditorWithUploadImage).uploadImage = uploadImageFn;
 
 
   // Capture-phase Tab handler — fires before Plate's IndentPlugin
@@ -437,8 +467,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       try {
         if (partial && selection) {
           // Mid-word: delete the partial the user already typed, insert the full word
-          const [leaf] = editor.api.node(selection.focus.path) as [any, any];
-          const textBefore = (leaf?.text as string || '').slice(0, selection.focus.offset);
+          const [leaf] = editor.api.node(selection.focus.path) as NodeEntry<TText>;
+          const textBefore = (leaf?.text || '').slice(0, selection.focus.offset);
           const actualPartial = textBefore.match(/\S+$/)?.[0] || '';
           const deleteLen = actualPartial.length;
 
@@ -453,8 +483,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           editor.tf.insertText(suggestion);
         } else if (selection) {
           // Next-word: add a space only if the cursor isn't already after one
-          const [leaf] = editor.api.node(selection.focus.path) as [any, any];
-          const textBefore = (leaf?.text as string || '').slice(0, selection.focus.offset);
+          const [leaf] = editor.api.node(selection.focus.path) as NodeEntry<TText>;
+          const textBefore = (leaf?.text || '').slice(0, selection.focus.offset);
           const lastChar = textBefore.slice(-1);
           const prefix = lastChar && lastChar !== ' ' ? ' ' : '';
           editor.tf.insertText(prefix + suggestion);
@@ -489,33 +519,33 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
 
         if (id) {
           const { getPostById } = await import('@/app/dashboard/blogs/actions');
-          const post = await getPostById(id);
+          const post: PostWithRelations | null = await getPostById(id);
           if (post) {
             // --- Revision mode detection ---
             if (post.published && !post.draftParentId) {
               // This is a published post. Load the pending revision if one exists,
               // otherwise we'll create one on the first save.
-              const existingDraft = (post as any).drafts?.[0];
+              const existingDraft: DraftRevision | undefined = post.drafts?.[0];
               if (existingDraft) {
                 // Redirect editor to the revision
                 setId(existingDraft.id);
                 window.history.replaceState({}, '', `/editor?id=${existingDraft.id}`);
                 setParentPostId(post.id);
                 setTitle(existingDraft.title || "");
-                setReviewRequested(!!(existingDraft as any).reviewRequested);
+                setReviewRequested(!!existingDraft.reviewRequested);
                 // Show the proposed published slug (stored in metadata), not the --draft slug
-                const proposedSlug = (existingDraft.metadata as any)?.proposedSlug || post.slug;
+                const proposedSlug = (existingDraft.metadata as Record<string, unknown> | null)?.proposedSlug as string || post.slug;
                 setSlug(proposedSlug);
                 setContent(existingDraft.content || "");
                 setPublished(false);
                 setFeatured(existingDraft.featured || false);
                 setFeaturedImageId(existingDraft.featuredImageId || null);
                 setFeaturedImageUrl(existingDraft.featuredImage?.url || null);
-                setSelectedCategoryIds(existingDraft.categories.map((c: any) => c.categoryId));
-                setSeoDescription((existingDraft.metadata as any)?.seoDescription || "");
-                setTagsInput(((existingDraft.metadata as any)?.tags || []).join(", "));
+                setSelectedCategoryIds(existingDraft.categories.map((c) => c.categoryId));
+                setSeoDescription((existingDraft.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
+                setTagsInput((((existingDraft.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
                 if (existingDraft.contentJson) {
-                  const val = existingDraft.contentJson as any[];
+                  const val = existingDraft.contentJson as unknown as Value;
                   setContentJson(val);
                   editor.tf.setValue(val);
                 }
@@ -530,10 +560,10 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                 setFeaturedImageId(post.featuredImageId || null);
                 setFeaturedImageUrl(post.featuredImage?.url || null);
                 setSelectedCategoryIds(post.categories.map(c => c.categoryId));
-                setSeoDescription((post.metadata as any)?.seoDescription || "");
-                setTagsInput(((post.metadata as any)?.tags || []).join(", "));
+                setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
+                setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
                 if (post.contentJson) {
-                  const val = post.contentJson as any[];
+                  const val = post.contentJson as unknown as Value;
                   setContentJson(val);
                   editor.tf.setValue(val);
                 }
@@ -541,9 +571,9 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             } else if (post.draftParentId) {
               // Directly opened a revision — set parentPostId so publish button works correctly
               setParentPostId(post.draftParentId);
-              setReviewRequested(!!(post as any).reviewRequested);
+              setReviewRequested(!!post.reviewRequested);
               setTitle(post.title || "");
-              const proposedSlug = (post.metadata as any)?.proposedSlug || post.slug;
+              const proposedSlug = (post.metadata as Record<string, unknown> | null)?.proposedSlug as string || post.slug;
               setSlug(proposedSlug);
               setContent(post.content || "");
               setPublished(false);
@@ -551,10 +581,10 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               setFeaturedImageId(post.featuredImageId || null);
               setFeaturedImageUrl(post.featuredImage?.url || null);
               setSelectedCategoryIds(post.categories.map(c => c.categoryId));
-              setSeoDescription((post.metadata as any)?.seoDescription || "");
-              setTagsInput(((post.metadata as any)?.tags || []).join(", "));
+              setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
+              setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
               if (post.contentJson) {
-                const val = post.contentJson as any[];
+                const val = post.contentJson as unknown as Value;
                 setContentJson(val);
                 editor.tf.setValue(val);
               }
@@ -565,15 +595,15 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               setContent(post.content || "");
               setPublished(post.published);
               setScheduledAt(post.scheduledAt || null);
-              setReviewRequested(!!(post as any).reviewRequested);
+              setReviewRequested(!!post.reviewRequested);
               setFeatured(post.featured || false);
               setFeaturedImageId(post.featuredImageId || null);
               setFeaturedImageUrl(post.featuredImage?.url || null);
               setSelectedCategoryIds(post.categories.map(c => c.categoryId));
-              setSeoDescription((post.metadata as any)?.seoDescription || "");
-              setTagsInput(((post.metadata as any)?.tags || []).join(", "));
+              setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
+              setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
               if (post.contentJson) {
-                const val = post.contentJson as any[];
+                const val = post.contentJson as unknown as Value;
                 setContentJson(val);
                 editor.tf.setValue(val);
               }
@@ -583,7 +613,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             setId(null); // Revert to new post mode
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
         toast.error("Failed to load post configuration");
       } finally {
@@ -597,7 +627,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
 
     initialLoadDone.current = false;
     loadData();
-  }, [id]);
+  }, [id, editor.tf]);
 
   // DRAFT CREATION: Triggered explicitly when user commits the title (blur or Enter)
   const handleTitleCommit = async () => {
@@ -636,7 +666,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         window.history.replaceState({ path: newUrl }, '', newUrl);
         toast.success("Draft created!");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Draft creation error:", err);
       setSaveStatus('error');
     }
@@ -647,6 +677,9 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     if (!id) return;
     if (!initialLoadDone.current) return;
     if (!title.trim()) {
+      // Resets the debounced autosave's status flag; part of the save synchronization
+      // this effect performs, not state derived from a single prop.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSaveStatus('idle');
       return;
     }
@@ -662,7 +695,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           title,
           slug,
           content,
-          contentJson,
+          contentJson: contentJson as unknown as Prisma.InputJsonValue,
           published: false,
           featured,
           featuredImageId,
@@ -685,7 +718,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         }
 
         setSaveStatus('saved');
-      } catch (err: any) {
+      } catch (err) {
         console.error("Autosave error:", err);
         setSaveStatus('error');
       }
@@ -712,7 +745,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           const parsedTags = tagsInput.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
           const { upsertPostDraftRevision } = await import('@/app/dashboard/blogs/actions');
           const draft = await upsertPostDraftRevision(parentPostId, {
-            title, slug, content, contentJson, published: false, featured, featuredImageId,
+            title, slug, content, contentJson: contentJson as unknown as Prisma.InputJsonValue, published: false, featured, featuredImageId,
             categoryIds: selectedCategoryIds,
             metadata: { seoDescription, tags: parsedTags },
           });
@@ -722,9 +755,9 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         await publishPostDraftRevision(revisionId);
         toast.success("Revision published — live post updated!");
         router.push('/dashboard/blogs');
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
-        toast.error(err.message || "Failed to publish revision");
+        toast.error(getErrorMessage(err, "Failed to publish revision"));
       } finally {
         setIsPublishing(false);
       }
@@ -738,7 +771,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       const nextPublishedState = !published;
       const parsedTags = tagsInput.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
       const updated = await updatePost(id, {
-        title, slug, content, contentJson,
+        title, slug, content, contentJson: contentJson as unknown as Prisma.InputJsonValue,
         published: nextPublishedState,
         featured,
         featuredImageId,
@@ -752,9 +785,9 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           router.push('/dashboard/blogs');
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      toast.error(err.message || "Failed to update publish state");
+      toast.error(getErrorMessage(err, "Failed to update publish state"));
     } finally {
       setIsPublishing(false);
     }
@@ -780,7 +813,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       }
     ]);
 
-    (editor as any).uploadImage(file, uploadId);
+    (editor as unknown as EditorWithUploadImage).uploadImage(file, uploadId);
   };
 
   const handleOpenLinkDialog = () => {
@@ -877,8 +910,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         setIsAddCatDialogOpen(false);
         toast.success("Category created successfully!");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create category");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to create category"));
     } finally {
       setIsCreatingCategory(false);
     }
@@ -895,8 +928,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       setAvailableCategories(prev => prev.filter(cat => cat.id !== catId));
       setSelectedCategoryIds(prev => prev.filter(id => id !== catId));
       toast.success("Category deleted");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete category");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to delete category"));
     } finally {
       setDeletingCatId(null);
     }
@@ -981,7 +1014,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     editor.tf.withoutNormalizing(() => {
       const blockEntries = Array.from(
         editor.api.nodes({
-          match: (n: any) => editor.api.isBlock(n),
+          match: (n) => editor.api.isBlock(n),
           mode: 'lowest',
         })
       );
@@ -989,12 +1022,11 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       for (const [node, path] of blockEntries) {
         const text = editor.api.string(path);
         if (text.includes('\n')) {
-          const lines = text.split('\n');
           const sel = editor.selection;
           if (sel) {
             // Compute character offset inside the block
             let offset = 0;
-            const children = (node as any).children || [];
+            const children = ((node as TElement).children || []) as TText[];
             const targetPathIndex = sel.anchor.path[sel.anchor.path.length - 1];
             
             if (Array.isArray(children) && typeof targetPathIndex === 'number' && targetPathIndex < children.length) {
@@ -1014,7 +1046,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               );
               const afterText = nextNewlineIndex === -1 ? '' : text.substring(nextNewlineIndex + 1);
 
-              const newNodes: any[] = [];
+              const newNodes: TElement[] = [];
               if (beforeText) {
                 newNodes.push({ type: 'p', children: [{ text: beforeText }] });
               }
@@ -1104,7 +1136,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     // Count grapheme clusters so emojis count as 1 character each
     let charCount = 0;
     if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
-      const segmenter = new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' });
+      const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
       for (const seg of segmenter.segment(trimmed)) {
         if ((seg.segment as string).trim().length > 0) charCount++;
       }
@@ -1163,10 +1195,12 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           <Label className="text-xs font-semibold text-muted-foreground">Featured Image</Label>
           {featuredImageUrl ? (
             <div className="relative aspect-video rounded-xl overflow-hidden border border-border/60 bg-muted/50 shadow-sm group">
-              <img
+              <Image
                 src={featuredImageUrl}
                 alt="Featured image preview"
-                className="object-cover w-full h-full"
+                fill
+                sizes="320px"
+                className="object-cover"
               />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                 <Button
@@ -1242,8 +1276,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                         setReviewRequested(true);
                         toast.success('Submitted for admin review.');
                       }
-                    } catch (err: any) {
-                      toast.error(err.message || 'Failed.');
+                    } catch (err) {
+                      toast.error(getErrorMessage(err, 'Failed.'));
                     } finally {
                       setIsSubmittingReview(false);
                     }
@@ -1416,8 +1450,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
 
         setContentJson(val.value);
         setIsTableActive(editor.api.some({ match: { type: getCellTypes(editor) } }));
-        setActiveColor((editor.api.marks() as any)?.['color'] || 'inherit');
-        setActiveHighlight((editor.api.marks() as any)?.['backgroundColor'] || 'inherit');
+        setActiveColor((editor.api.marks()?.['color'] as string) || 'inherit');
+        setActiveHighlight((editor.api.marks()?.['backgroundColor'] as string) || 'inherit');
 
         // Ensure trailing paragraph if last node is a table
         const lastNode = val.value[val.value.length - 1];
@@ -1433,8 +1467,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         // Dynamic HTML & Markdown serialization for saves
         let md = '';
         try {
-          md = serializeMd(editor as any);
-        } catch (e) { /* ignore */ }
+          md = serializeMd(editor);
+        } catch { /* ignore */ }
 
         serializeHtml(editor, { stripClassNames: true }).then((html) => {
           setContent(html || md || '');
@@ -1569,7 +1603,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                       {readabilityStats.ruleIssues.slice(0, 3).map((issue, i) => (
                         <div key={i} className="text-[11px] bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 rounded-lg px-2.5 py-1.5">
                           <span className="font-medium text-amber-700 dark:text-amber-400">{issue.message}:</span>{' '}
-                          <span className="text-muted-foreground italic">"{issue.text}"</span>
+                          <span className="text-muted-foreground italic">&quot;{issue.text}&quot;</span>
                         </div>
                       ))}
                       {grammarIssues.slice(0, 3).map((issue, i) => (
@@ -1713,8 +1747,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                       await withdrawRevisionFromReview(id!);
                       setReviewRequested(false);
                       toast.success('Review request withdrawn.');
-                    } catch (err: any) {
-                      toast.error(err.message || 'Failed to withdraw.');
+                    } catch (err) {
+                      toast.error(getErrorMessage(err, 'Failed to withdraw.'));
                     } finally {
                       setIsSubmittingReview(false);
                     }
@@ -1787,8 +1821,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                       await withdrawPostFromReview(id);
                       setReviewRequested(false);
                       toast.success('Review request withdrawn.');
-                    } catch (err: any) {
-                      toast.error(err.message || 'Failed to withdraw.');
+                    } catch (err) {
+                      toast.error(getErrorMessage(err, 'Failed to withdraw.'));
                     } finally {
                       setIsSubmittingReview(false);
                     }
@@ -1811,8 +1845,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                       setReviewRequested(true);
                       toast.success('Submitted for admin review.');
                       router.push('/dashboard/blogs');
-                    } catch (err: any) {
-                      toast.error(err.message || 'Failed to submit.');
+                    } catch (err) {
+                      toast.error(getErrorMessage(err, 'Failed to submit.'));
                     } finally {
                       setIsSubmittingReview(false);
                     }

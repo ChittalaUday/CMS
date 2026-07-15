@@ -167,7 +167,7 @@ function EndpointBlock({ ep }: { ep: ApiEndpoint }) {
   )
 }
 
-function ScopeSection({ scope, categoryLabel }: { scope: ApiCategory["scopes"][number]; categoryLabel: string }) {
+function ScopeSection({ scope }: { scope: ApiCategory["scopes"][number] }) {
   const perm = permissionFromId(scope.id)
 
   return (
@@ -269,7 +269,7 @@ export function ApiDocsPage({ registry }: { registry: ApiCategory[] }) {
 
           <div className="space-y-8">
             {category.scopes.map((scope) => (
-              <ScopeSection key={scope.id} scope={scope} categoryLabel={category.label} />
+              <ScopeSection key={scope.id} scope={scope} />
             ))}
           </div>
 

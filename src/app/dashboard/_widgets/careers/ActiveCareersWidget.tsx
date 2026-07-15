@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { MapPin, Briefcase, Users, Calendar, ArrowRight } from "lucide-react"
-import { WidgetCard } from "./WidgetCard"
+import { WidgetCard } from "../WidgetCard"
 import { Badge } from "@/components/ui/badge"
 
 const JOB_TYPE_LABELS: Record<string, string> = {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 interface GrammarIssue {
   start: number;
@@ -46,6 +46,7 @@ export function useWritingAssist(plainText: string, enabled = true): UseWritingA
 
   // Ghost text — 750ms debounce
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets stale suggestion before starting a new debounced fetch (data-fetch reset pattern, see https://react.dev/learn/you-might-not-need-an-effect#fetching-data)
     setGhostSuggestion('');
     setGhostPartial('');
     if (!enabled || !plainText || plainText.length < 15) return;
@@ -85,10 +86,11 @@ export function useWritingAssist(plainText: string, enabled = true): UseWritingA
     }, 750);
 
     return () => clearTimeout(timer);
-  }, [plainText]);
+  }, [plainText, enabled]);
 
   // Grammar check — 2000ms debounce
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale issues when disabled before the debounced fetch below, part of the same data-fetch effect
     if (!enabled) { setGrammarIssues([]); return; }
     if (plainText.length < 30) return;
     if (plainText === lastCheckedTextRef.current) return;
@@ -114,7 +116,7 @@ export function useWritingAssist(plainText: string, enabled = true): UseWritingA
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [plainText]);
+  }, [plainText, enabled]);
 
   // Readability stats — synchronous, computed via useMemo
   const readabilityStats = useMemo<ReadabilityStats>(() => {

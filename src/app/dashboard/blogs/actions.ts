@@ -103,11 +103,15 @@ function handlePrismaError(err: unknown, context?: string): never {
 
 // --- Posts Actions ---
 const REVISION_INCLUDE = {
-  author: { select: { id: true, name: true, email: true } },
+  author: { select: { id: true, name: true, email: true, avatarUrl: true } },
   featuredImage: true,
   categories: { include: { category: true } },
   _count: { select: { comments: true, likes: true, views: true } },
 } as const
+
+export type PostWithRelations = Prisma.PostGetPayload<{
+  include: typeof REVISION_INCLUDE & { drafts: { include: typeof REVISION_INCLUDE } }
+}>
 
 export async function getPosts() {
   const user = await requireBlogAccess()
@@ -609,7 +613,6 @@ export async function getRevisionComparison(draftId: string) {
 
 export async function deletePost(id: string) {
   const user = await requireBlogAccess()
-  const clientId = await getClientScope()
 
   const existing = await prisma.post.findUnique({
     where: { id },
@@ -997,7 +1000,9 @@ export async function uploadMediaItem(formData: FormData) {
   try {
     const { shaKey, buffer, url } = await uploadToStorage(file, "uploads")
 
-    const existing = await prisma.media.findUnique({ where: { shaKey } })
+    const mediaUserInclude = { user: { select: { name: true, email: true } } } as const
+
+    const existing = await prisma.media.findUnique({ where: { shaKey }, include: mediaUserInclude })
     if (existing) return existing
 
     const dimensions = getImageDimensions(buffer, file.type)
@@ -1015,6 +1020,7 @@ export async function uploadMediaItem(formData: FormData) {
         shaKey,
         clientId,
       },
+      include: mediaUserInclude,
     })
 
     revalidatePath("/dashboard/media")

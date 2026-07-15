@@ -256,7 +256,7 @@ function RemoveUserButton({ userId, clientId }: { userId: string; clientId: stri
         <AlertDialogHeader>
           <AlertDialogTitle>Remove user from client?</AlertDialogTitle>
           <AlertDialogDescription>
-            This user will lose access to this client's data but their account will not be deleted.
+            This user will lose access to this client&apos;s data but their account will not be deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

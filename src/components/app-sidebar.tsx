@@ -14,7 +14,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import {
   TerminalIcon,
@@ -27,6 +26,7 @@ import {
   LogOutIcon,
   Building2,
 } from "lucide-react"
+import Link from "next/link"
 import { logoutAction } from "@/app/_actions/auth"
 import { toast } from "sonner"
 import { ClientSwitcher } from "@/app/dashboard/clients/ClientSwitcher"
@@ -160,10 +160,10 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/dashboard/clients">
+                  <Link href="/dashboard/clients">
                     <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="truncate">Manage Clients</span>
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </>

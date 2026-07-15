@@ -16,10 +16,11 @@ import {
 
 import { WidgetGrid, WidgetSlot } from "./_widgets/WidgetGrid"
 import { StatCard } from "./_widgets/StatCard"
-import { ActiveCareersWidget } from "./_widgets/ActiveCareersWidget"
-import { TopPostsWidget } from "./_widgets/TopPostsWidget"
+import { ActiveCareersWidget } from "./_widgets/careers/ActiveCareersWidget"
+import { TopPostsWidget } from "./_widgets/blogs/TopPostsWidget"
 import { TimeRangeSelector } from "./_widgets/TimeRangeSelector"
-import { fetchBlogStats, fetchCareersStats } from "./_data/dashboard-queries"
+import { fetchBlogStats } from "./_data/blog-queries"
+import { fetchCareersStats } from "./_data/careers-queries"
 
 export const dynamic = "force-dynamic"
 

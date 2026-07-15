@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/auth/session"
 import { Role, QueueStatus } from "@/generated/prisma/enums"
-import { processQueue, calculateAtsScoreInternal, generateJobKeywords } from "@/lib/queues/ats-queue"
+import { processQueue, generateJobKeywords } from "@/lib/careers/ats-queue"
 import { generateText } from "@/lib/ai/ai"
 import {
   ADMIN_ROLES,
@@ -862,16 +862,16 @@ export async function getAtsScore(applicationId: string, model?: string) {
   })
 
   // Enqueue into the background worker (non-blocking — survives browser disconnect)
-  const { enqueueAtsScorer } = await import("@/lib/queues/ats-queue")
+  const { enqueueAtsScorer } = await import("@/lib/careers/ats-queue")
   enqueueAtsScorer(applicationId, model)
 
-  const { queueEvents } = await import("@/lib/queues/queue-events")
+  const { queueEvents } = await import("@/lib/careers/queue-events")
   queueEvents.emit("change")
 }
 
 export async function getQueueStatus() {
   await requireCareersAccess()
-  const { atsQueue, keywordQueue } = await import("@/lib/queues/queue-manager")
+  const { atsQueue, keywordQueue } = await import("@/lib/careers/queue-manager")
 
   // 1. ATS Queue Stats
   const [atsPending, atsProcessing, atsCompleted, atsFailed, atsItems] = await Promise.all([
@@ -942,9 +942,9 @@ export async function getQueueStatus() {
 
 export async function triggerQueueWorker() {
   await requireCareersAccess()
-  const { initializeQueues } = await import("@/lib/queues/ats-queue")
+  const { initializeQueues } = await import("@/lib/careers/ats-queue")
   await initializeQueues()
-  const { queueEvents } = await import("@/lib/queues/queue-events")
+  const { queueEvents } = await import("@/lib/careers/queue-events")
   queueEvents.emit("change")
   return { success: true }
 }
@@ -975,7 +975,7 @@ export async function resetFailedQueueItems() {
   })
 
   // Re-enqueue to active queues
-  const { enqueueAtsScorer, enqueueKeywordGeneration } = await import("@/lib/queues/ats-queue")
+  const { enqueueAtsScorer, enqueueKeywordGeneration } = await import("@/lib/careers/ats-queue")
   
   for (const app of failedApps) {
     enqueueAtsScorer(app.id)
@@ -985,7 +985,7 @@ export async function resetFailedQueueItems() {
     enqueueKeywordGeneration(job.id)
   }
 
-  const { queueEvents } = await import("@/lib/queues/queue-events")
+  const { queueEvents } = await import("@/lib/careers/queue-events")
   queueEvents.emit("change")
 
   return { success: true }
@@ -1068,7 +1068,7 @@ export async function getExportData(filters: {
           AND: [
             filters.startDate ? { createdAt: { gte: new Date(filters.startDate) } } : {},
             filters.endDate ? { createdAt: { lte: new Date(filters.endDate + "T23:59:59.999Z") } } : {},
-            filters.status && filters.status !== "ALL" ? { status: filters.status as any } : {},
+            filters.status && filters.status !== "ALL" ? { status: filters.status as "NEW" | "REVIEWING" | "SHORTLISTED" | "REJECTED" | "HIRED" } : {},
             filters.search?.trim() ? {
               OR: [
                 { applicantName: { contains: filters.search.trim(), mode: "insensitive" } },

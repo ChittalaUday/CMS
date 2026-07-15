@@ -4,6 +4,7 @@ import { validateApiKey } from "@/lib/auth/api-auth"
 import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/utils/rate-limit"
 import logger from "@/lib/utils/logger"
 import { JobType } from "@/generated/prisma/client"
+import type { Prisma } from "@/generated/prisma/client"
 
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request)
@@ -43,27 +44,29 @@ export async function GET(request: NextRequest) {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - 5)
 
-    const whereClause: any = {
-      status: "PUBLISHED",
-      clientId: auth.clientId,
-      AND: [
-        {
-          OR: [
-            { closingDate: null },
-            { closingDate: { gte: cutoffDate } }
-          ]
-        }
-      ]
-    }
+    const andConditions: Prisma.JobPostingWhereInput[] = [
+      {
+        OR: [
+          { closingDate: null },
+          { closingDate: { gte: cutoffDate } }
+        ]
+      }
+    ]
 
     if (search?.trim()) {
-      whereClause.AND.push({
+      andConditions.push({
         OR: [
           { title: { contains: search.trim(), mode: "insensitive" } },
           { description: { contains: search.trim(), mode: "insensitive" } },
           { department: { contains: search.trim(), mode: "insensitive" } },
         ]
       })
+    }
+
+    const whereClause: Prisma.JobPostingWhereInput = {
+      status: "PUBLISHED",
+      clientId: auth.clientId,
+      AND: andConditions,
     }
 
     if (department?.trim()) {

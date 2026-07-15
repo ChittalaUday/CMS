@@ -69,6 +69,7 @@ export function ApplicationsWrapper({
   useEffect(() => {
     const savedView = localStorage.getItem("applications_view_mode") as ViewMode
     if (savedView && (savedView === "board" || savedView === "table")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading localStorage (external system, unavailable during SSR) on mount, not derived state
       setView(savedView)
     }
     setMounted(true)

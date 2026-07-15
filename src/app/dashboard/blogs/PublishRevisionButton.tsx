@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { GitMerge } from "lucide-react"
 import { RevisionCompareDialog } from "./RevisionCompareDialog"
 import {

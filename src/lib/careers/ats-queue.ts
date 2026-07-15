@@ -130,13 +130,13 @@ export async function processAtsApplication(applicationId: string, model?: strin
         extractedEducation: scoreResult.education
       }
     })
-  } catch (err: any) {
+  } catch (err) {
     console.error(`ATS queue processing failed for ${applicationId}:`, err)
     await prisma.jobApplication.update({
       where: { id: applicationId },
       data: {
         atsStatus: QueueStatus.FAILED,
-        atsJustification: err.message || "Failed to analyze application"
+        atsJustification: err instanceof Error ? err.message : "Failed to analyze application"
       }
     })
   }
@@ -166,7 +166,7 @@ export async function processJobKeywords(jobId: string) {
         keywordStatus: QueueStatus.COMPLETED
       }
     })
-  } catch (err: any) {
+  } catch (err) {
     console.error(`Keyword queue processing failed for ${jobId}:`, err)
     await prisma.jobPosting.update({
       where: { id: jobId },

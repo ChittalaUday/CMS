@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils/utils";
 
 export type PasswordStrength =
@@ -13,9 +13,7 @@ interface PasswordStrengthIndicatorProps {
 }
 
 export default function PasswordIndicator({ password, setValid }: PasswordStrengthIndicatorProps) {
-    const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>("LOW");
-
-    useEffect(() => {
+    const passwordStrength = useMemo<PasswordStrength>(() => {
         let score = 0;
 
         if (password.length >= 8) score++;
@@ -25,29 +23,20 @@ export default function PasswordIndicator({ password, setValid }: PasswordStreng
         if (/([^A-Za-z0-9])/.test(password)) score++;
 
         switch (score) {
-            case 0:
-            case 1:
-            case 2:
-                setPasswordStrength("LOW");
-                setValid(false);
-                break;
-
             case 3:
-                setPasswordStrength("MODERATE");
-                setValid(false);
-                break;
-
+                return "MODERATE";
             case 4:
-                setPasswordStrength("GOOD");
-                setValid(true);
-                break;
-
+                return "GOOD";
             case 5:
-                setPasswordStrength("VERY_GOOD");
-                setValid(true);
-                break;
+                return "VERY_GOOD";
+            default:
+                return "LOW";
         }
-    }, [password, setValid]);
+    }, [password]);
+
+    useEffect(() => {
+        setValid(passwordStrength === "GOOD" || passwordStrength === "VERY_GOOD");
+    }, [passwordStrength, setValid]);
 
     const getStrengthColor = (strength: PasswordStrength) => {
         switch (strength) {

@@ -12,9 +12,6 @@ export default async function SettingsLayout({
   const user = await getSession()
   if (!user) redirect("/")
 
-  const displayName = user.name || user.username
-  const initials = displayName.slice(0, 2).toUpperCase()
-
   return (
     <div className="w-full px-1 py-3 max-w-4xl space-y-6">
       {/* Header */}

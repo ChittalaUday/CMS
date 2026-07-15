@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useCallback, useTransition } from "react"
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
@@ -35,12 +34,19 @@ import {
   Loader2,
   FileSpreadsheet,
   AlertCircle,
-  FileText,
   Settings2,
-  Check,
 } from "lucide-react"
 import { getExportData } from "./actions"
 import { toast } from "sonner"
+
+type ExportJob = Awaited<ReturnType<typeof getExportData>>[number]
+type ExportApplication = ExportJob["applications"][number]
+
+interface ExportColumn {
+  id: string
+  label: string
+  isQuestion?: boolean
+}
 
 interface ExportDialogProps {
   isOpen: boolean
@@ -50,7 +56,7 @@ interface ExportDialogProps {
 
 export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
   const [isPending, startTransition] = useTransition()
-  const [jobsData, setJobsData] = useState<any[]>([])
+  const [jobsData, setJobsData] = useState<ExportJob[]>([])
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
 
   // Filters state
@@ -62,7 +68,7 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
   // Column Selection state
   const [selectedColIds, setSelectedColIds] = useState<string[]>([])
 
-  const fetchExportData = () => {
+  const fetchExportData = useCallback(() => {
     startTransition(async () => {
       try {
         const data = await getExportData({
@@ -76,35 +82,37 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
         // Automatically set active job ID
         if (data.length > 0) {
           if (jobId) {
-            const found = data.find((j: any) => j.id === jobId)
-            if (found) setActiveJobId(found.id)
-            else setActiveJobId(data[0].id)
-          } else if (!activeJobId || !data.some((j: any) => j.id === activeJobId)) {
-            setActiveJobId(data[0].id)
+            const found = data.find((j) => j.id === jobId)
+            setActiveJobId(found ? found.id : data[0].id)
+          } else {
+            setActiveJobId((current) =>
+              data.some((j) => j.id === current) ? current : data[0].id
+            )
           }
         } else {
           setActiveJobId(null)
         }
-      } catch (err: any) {
-        toast.error(err.message || "Failed to load export data.")
+      } catch (err) {
+        const message = err instanceof Error ? err.message : ""
+        toast.error(message || "Failed to load export data.")
       }
     })
-  }
+  }, [startDate, endDate, appStatus, searchQuery, jobId])
 
   // Refetch when filters change or dialog opens
   useEffect(() => {
     if (isOpen) {
       fetchExportData()
     }
-  }, [isOpen, startDate, endDate, appStatus, searchQuery])
+  }, [isOpen, fetchExportData])
 
   // Get active job object
   const activeJob = jobsData.find((j) => j.id === activeJobId)
 
   // Column definitions for active job
-  const getAvailableColumns = (job: any) => {
+  const getAvailableColumns = (job: ExportJob | undefined): ExportColumn[] => {
     if (!job) return []
-    const base = [
+    const base: ExportColumn[] = [
       { id: "name", label: "Applicant Name" },
       { id: "email", label: "Applicant Email" },
       { id: "phone", label: "Applicant Phone" },
@@ -115,7 +123,7 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
       { id: "cover", label: "Cover Letter" },
       { id: "notes", label: "Notes" },
     ]
-    const questions = (job.questions || []).map((q: any) => ({
+    const questions: ExportColumn[] = (job.questions || []).map((q) => ({
       id: q.id,
       label: q.question,
       isQuestion: true,
@@ -125,13 +133,18 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
 
   const availableColumns = getAvailableColumns(activeJob)
 
-  // Initialize/reset columns to select all on job switch
-  useEffect(() => {
+  // Initialize/reset columns to select all whenever the active job's data changes.
+  // Computed during render (not in an effect) per https://react.dev/learn/you-might-not-need-an-effect#adjusting-state-based-on-a-prop-change
+  const [colsResetFor, setColsResetFor] = useState<{ activeJobId: string | null; jobsData: ExportJob[] }>({
+    activeJobId,
+    jobsData,
+  })
+  if (colsResetFor.activeJobId !== activeJobId || colsResetFor.jobsData !== jobsData) {
+    setColsResetFor({ activeJobId, jobsData })
     if (activeJob) {
-      const allIds = getAvailableColumns(activeJob).map((col: any) => col.id)
-      setSelectedColIds(allIds)
+      setSelectedColIds(getAvailableColumns(activeJob).map((col) => col.id))
     }
-  }, [activeJobId, jobsData])
+  }
 
   // Toggle single column selection
   const handleToggleCol = (colId: string) => {
@@ -160,7 +173,7 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
 
     const headers = columnsToExport.map((col) => col.label)
 
-    const escapeCsvValue = (val: any): string => {
+    const escapeCsvValue = (val: string | number | null | undefined): string => {
       if (val === null || val === undefined) return ""
       let str = String(val)
       str = str.replace(/"/g, '""')
@@ -170,9 +183,9 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
       return str
     }
 
-    const rows = applications.map((app: any) => {
+    const rows = applications.map((app: ExportApplication) => {
       const answersMap = new Map<string, string>(
-        app.answers.map((ans: any) => [ans.questionId, String(ans.answer || "")])
+        app.answers.map((ans) => [ans.questionId, String(ans.answer || "")])
       )
       
       const rowData: string[] = []
@@ -401,7 +414,7 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
                       <span className="text-[10px] font-semibold text-muted-foreground uppercase">Toggle Columns</span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setSelectedColIds(availableColumns.map((c: any) => c.id))}
+                          onClick={() => setSelectedColIds(availableColumns.map((c) => c.id))}
                           className="text-[10px] text-primary hover:underline cursor-pointer"
                         >
                           All
@@ -415,7 +428,7 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
                       </div>
                     </div>
                     <div className="space-y-1 pt-1">
-                      {availableColumns.map((col: any) => {
+                      {availableColumns.map((col) => {
                         const checked = selectedColIds.includes(col.id)
                         return (
                           <div
@@ -476,9 +489,9 @@ export function ExportDialog({ isOpen, onClose, jobId }: ExportDialogProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40 bg-card">
-                    {activeJob.applications.map((app: any) => {
+                    {activeJob.applications.map((app: ExportApplication) => {
                       const answersMap = new Map<string, string>(
-                        app.answers.map((ans: any) => [ans.questionId, String(ans.answer || "")])
+                        app.answers.map((ans) => [ans.questionId, String(ans.answer || "")])
                       )
                       return (
                         <tr key={app.id} className="hover:bg-muted/10">

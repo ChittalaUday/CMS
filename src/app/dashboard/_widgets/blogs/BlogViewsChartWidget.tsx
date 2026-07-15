@@ -7,16 +7,15 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { Calendar } from "lucide-react"
-import { WidgetCard } from "./WidgetCard"
-import type { AppsByDay } from "../_data/dashboard-queries"
+import { WidgetCard } from "../WidgetCard"
+import type { ViewsByDay } from "../../_data/blog-queries"
 
 const CHART_CONFIG = {
-  count: { label: "Applications", color: "hsl(217, 91%, 60%)" },
+  views: { label: "Views", color: "hsl(var(--primary))" },
 } satisfies ChartConfig
 
 interface Props {
-  data: AppsByDay
+  data: ViewsByDay
   days: number
 }
 
@@ -28,15 +27,15 @@ function shortDate(iso: any) {
   })
 }
 
-export function ApplicationsTimelineWidget({ data, days }: Props) {
+export function BlogViewsChartWidget({ data, days }: Props) {
   return (
-    <WidgetCard title="Applications Over Time" description={`Last ${days} days`} contentClassName="pb-2" icon={Calendar}>
-      <ChartContainer config={CHART_CONFIG} className="w-full aspect-[4/1] min-h-[140px]">
+    <WidgetCard title="Page Views" description={`Last ${days} days`} contentClassName="pb-2">
+      <ChartContainer config={CHART_CONFIG} className="w-full aspect-[4/1] min-h-[160px]">
         <AreaChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <defs>
-            <linearGradient id="appGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--color-count)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--color-count)" stopOpacity={0} />
+            <linearGradient id="viewsGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--color-views)" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="var(--color-views)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -48,23 +47,21 @@ export function ApplicationsTimelineWidget({ data, days }: Props) {
             axisLine={false}
             interval={Math.floor(data.length / 6)}
           />
-          <YAxis
-            allowDecimals={false}
-            tick={{ fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-          />
+          <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
           <ChartTooltip
             content={
-              <ChartTooltipContent labelFormatter={shortDate} indicator="dot" />
+              <ChartTooltipContent
+                labelFormatter={shortDate}
+                indicator="dot"
+              />
             }
           />
           <Area
             type="monotone"
-            dataKey="count"
-            stroke="var(--color-count)"
+            dataKey="views"
+            stroke="var(--color-views)"
             strokeWidth={2}
-            fill="url(#appGrad)"
+            fill="url(#viewsGrad)"
           />
         </AreaChart>
       </ChartContainer>

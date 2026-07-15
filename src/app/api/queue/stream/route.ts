@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server"
-import { queueEvents } from "@/lib/queues/queue-events"
+import { queueEvents } from "@/lib/careers/queue-events"
 import { getQueueStatus } from "@/app/dashboard/careers/actions"
 
 export const dynamic = "force-dynamic"
+
+type QueueStatusPayload = Awaited<ReturnType<typeof getQueueStatus>>
+type SseEvent = { type: "status"; data: QueueStatusPayload }
 
 export async function GET(req: NextRequest) {
   let keepAliveInterval: NodeJS.Timeout
@@ -10,11 +13,11 @@ export async function GET(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
-      
-      const sendEvent = (data: any) => {
+
+      const sendEvent = (data: SseEvent) => {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        } catch (e) {
+        } catch {
           // controller might be closed
         }
       }
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest) {
       keepAliveInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": ping\n\n"))
-        } catch (e) {
+        } catch {
           // ignore
         }
       }, 10000)
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest) {
         queueEvents.off("change", onChange)
         try {
           controller.close()
-        } catch (e) {}
+        } catch {}
         console.log("[SSE] Connection aborted by client.")
       })
     },

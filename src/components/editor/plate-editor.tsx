@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Plate, usePlateEditor, PlateElement } from 'platejs/react';
+import React, { useState, useRef, useCallback } from 'react';
+import { Plate, usePlateEditor, type PlateElementProps } from 'platejs/react';
+import type { Value, TElement } from 'platejs';
 import { serializeMd } from '@platejs/markdown';
 import { serializeHtml } from '@platejs/core/static';
 import { ListPlugin, useListToolbarButton, useListToolbarButtonState } from '@platejs/list/react';
@@ -10,18 +11,16 @@ import { TablePlugin, TableRowPlugin, TableCellPlugin, TableCellHeaderPlugin } f
 import { ImagePlugin } from '@platejs/media/react';
 import { FontColorPlugin, FontBackgroundColorPlugin } from '@platejs/basic-styles/react';
 
-import { 
-  insertTable, 
-  insertTableRow, 
-  insertTableColumn, 
-  deleteRow, 
-  deleteColumn, 
-  deleteTable, 
-  setCellBackground, 
-  getCellTypes, 
-  getEmptyTableNode 
+import {
+  insertTableRow,
+  insertTableColumn,
+  deleteRow,
+  deleteColumn,
+  deleteTable,
+  setCellBackground,
+  getCellTypes,
+  getEmptyTableNode
 } from '@platejs/table';
-import { insertImage } from '@platejs/media';
 
 import { BasicNodesKit } from '@/components/editor/plugins/basic-nodes-kit';
 import { Editor, EditorContainer } from '@/components/ui/editor';
@@ -30,15 +29,15 @@ import { ToolbarGroup, ToolbarButton } from '@/components/ui/toolbar';
 import { MarkToolbarButton } from '@/components/ui/mark-toolbar-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/utils';
-import { 
-  BoldIcon, 
-  ItalicIcon, 
-  UnderlineIcon, 
-  StrikethroughIcon, 
-  CodeIcon, 
-  Heading1Icon, 
-  Heading2Icon, 
-  ListIcon, 
+import {
+  BoldIcon,
+  ItalicIcon,
+  UnderlineIcon,
+  StrikethroughIcon,
+  CodeIcon,
+  Heading1Icon,
+  Heading2Icon,
+  ListIcon,
   ListOrderedIcon,
   TableIcon,
   ImageIcon,
@@ -59,8 +58,8 @@ import { ImageElement } from '@/components/ui/image-element';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface PlateEditorProps {
-  initialValue?: any[];
-  onChange?: (html: string, json: any[], md?: string) => void;
+  initialValue?: Value;
+  onChange?: (html: string, json: Value, md?: string) => void;
 }
 
 const colors = [
@@ -78,14 +77,14 @@ const colors = [
   { name: 'White', value: '#ffffff' },
 ];
 
-function ColorPicker({ 
-  onSelect, 
-  activeValue, 
-  title 
-}: { 
-  onSelect: (value: string) => void; 
-  activeValue?: string; 
-  title: string; 
+function ColorPicker({
+  onSelect,
+  activeValue,
+  title
+}: {
+  onSelect: (value: string) => void;
+  activeValue?: string;
+  title: string;
 }) {
   return (
     <div className="p-2 flex flex-col gap-2 w-48">
@@ -129,13 +128,13 @@ function ListToolbarButton({ nodeType, children, tooltip }: { nodeType: string, 
 }
 
 export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
-  const [internalValue, setInternalValue] = useState<any[]>(initialValue || [{ children: [{ text: '' }], type: 'p' }]);
+  const [internalValue, setInternalValue] = useState<Value>(initialValue || [{ children: [{ text: '' }], type: 'p' }]);
   const [isTableActive, setIsTableActive] = useState(false);
   const [activeColor, setActiveColor] = useState('inherit');
   const [activeHighlight, setActiveHighlight] = useState('inherit');
   const [tableGrid, setTableGrid] = useState({ rows: 0, cols: 0 });
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [compressionDialog, setCompressionDialog] = useState<{
     isOpen: boolean;
@@ -166,8 +165,8 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
     ],
     override: {
       components: {
-        ul: (props: any) => <ListElement variant="ul" {...props} />,
-        ol: (props: any) => <ListElement variant="ol" {...props} />,
+        ul: (props: PlateElementProps) => <ListElement variant="ul" {...props} />,
+        ol: (props: PlateElementProps) => <ListElement variant="ol" {...props} />,
         li: ListItemElement,
         table: TableElement,
         tr: TableRowElement,
@@ -182,7 +181,7 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
     const findNodePath = () => {
       const entries = editor.api.nodes({
         at: [],
-        match: (n: any) => n.type === 'img' && n.uploadId === uploadId
+        match: (n: TElement) => n.type === 'img' && n.uploadId === uploadId
       });
       const next = entries.next();
       return next.value ? next.value[1] : null;
@@ -281,7 +280,12 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
     }
   }, [editor]);
 
-  (editor as any).uploadImage = uploadImageFn;
+  // `editor.uploadImage` is a cross-file bridge: src/components/ui/image-element.tsx reads it to
+  // retry a failed upload from within the plate node, so it must live on the editor instance itself.
+  // usePlateEditor is third-party and doesn't expose a way to inject this at construction time, so
+  // the bridge is attached here instead of mutated inline.
+  // eslint-disable-next-line react-hooks/immutability -- see comment above
+  (editor as typeof editor & { uploadImage: typeof uploadImageFn }).uploadImage = uploadImageFn;
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,7 +307,7 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
       }
     ]);
 
-    (editor as any).uploadImage(file, uploadId);
+    (editor as typeof editor & { uploadImage: typeof uploadImageFn }).uploadImage(file, uploadId);
   };
 
   const handleInsertGridTable = (rows: number, cols: number) => {
@@ -349,22 +353,22 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
   };
 
   return (
-    <Plate 
+    <Plate
       editor={editor}
       onValueChange={(val) => {
         setInternalValue(val.value);
-        
+
         // Dynamic active state updates
         setIsTableActive(editor.api.some({ match: { type: getCellTypes(editor) } }));
-        setActiveColor((editor.api.marks() as any)?.['color'] || 'inherit');
-        setActiveHighlight((editor.api.marks() as any)?.['backgroundColor'] || 'inherit');
+        setActiveColor((editor.api.marks()?.['color'] as string | undefined) || 'inherit');
+        setActiveHighlight((editor.api.marks()?.['backgroundColor'] as string | undefined) || 'inherit');
 
         if (onChange) {
           let md = '';
           try {
-            md = serializeMd(editor as any);
-          } catch(e) { /* ignore */ }
-          
+            md = serializeMd(editor);
+          } catch { /* ignore */ }
+
           serializeHtml(editor, { stripClassNames: true }).then((html) => {
             onChange(html, val.value, md);
           }).catch((e) => {
@@ -398,16 +402,16 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
             <MarkToolbarButton nodeType={BaseCodePlugin.key} tooltip="Code (⌘+E)">
               <CodeIcon />
             </MarkToolbarButton>
-            
+
             {/* Text Color Picker */}
             <Popover>
               <PopoverTrigger asChild>
                 <ToolbarButton tooltip="Text Color">
                   <div className="relative flex flex-col items-center justify-center">
                     <Type className="size-4" />
-                    <span 
-                      className="absolute bottom-0 w-3.5 h-0.5 rounded-full" 
-                      style={{ backgroundColor: activeColor !== 'inherit' ? activeColor : 'currentColor' }} 
+                    <span
+                      className="absolute bottom-0 w-3.5 h-0.5 rounded-full"
+                      style={{ backgroundColor: activeColor !== 'inherit' ? activeColor : 'currentColor' }}
                     />
                   </div>
                 </ToolbarButton>
@@ -433,9 +437,9 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
                 <ToolbarButton tooltip="Text Highlight">
                   <div className="relative flex flex-col items-center justify-center">
                     <Highlighter className="size-4" />
-                    <span 
-                      className="absolute bottom-0 w-3.5 h-0.5 rounded-full" 
-                      style={{ backgroundColor: activeHighlight !== 'inherit' ? activeHighlight : 'transparent' }} 
+                    <span
+                      className="absolute bottom-0 w-3.5 h-0.5 rounded-full"
+                      style={{ backgroundColor: activeHighlight !== 'inherit' ? activeHighlight : 'transparent' }}
                     />
                   </div>
                 </ToolbarButton>
@@ -461,7 +465,7 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
             <ListToolbarButton nodeType="decimal" tooltip="Numbered List">
               <ListOrderedIcon />
             </ListToolbarButton>
-            
+
             {/* Insert Table (Grid Popover) */}
             <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
               <PopoverTrigger asChild>
@@ -510,7 +514,7 @@ export function PlateEditor({ initialValue, onChange }: PlateEditorProps) {
                 <ToolbarButton tooltip="Delete Table" onClick={() => deleteTable(editor)}>
                   <X className="size-4 text-destructive/85 hover:text-destructive border border-destructive/20 rounded-md p-px" />
                 </ToolbarButton>
-                
+
                 {/* Cell Background Picker */}
                 <Popover>
                   <PopoverTrigger asChild>

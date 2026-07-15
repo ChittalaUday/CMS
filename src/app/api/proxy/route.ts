@@ -38,9 +38,10 @@ export async function GET(request: NextRequest) {
     headers.set("Cache-Control", "public, max-age=300")
 
     return new NextResponse(body, { status: 200, headers })
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json(
-      { error: err.message || "Failed to proxy document" },
+      { error: message || "Failed to proxy document" },
       { status: 500 }
     )
   }

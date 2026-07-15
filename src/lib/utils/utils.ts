@@ -5,6 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Narrow an unknown caught error down to a display-safe message, falling back
+// to a caller-supplied default when the thrown value isn't an Error instance.
+export function getErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback
+}
+
 export async function copyToClipboard(text: string): Promise<boolean> {
   if (typeof window === "undefined") return false;
   

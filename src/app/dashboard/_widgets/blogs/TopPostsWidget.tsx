@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react"
-import { WidgetCard } from "./WidgetCard"
-import type { TopPost } from "../_data/dashboard-queries"
+import { WidgetCard } from "../WidgetCard"
+import type { TopPost } from "../../_data/blog-queries"
 
 interface Props {
   posts: TopPost[]

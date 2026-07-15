@@ -8,7 +8,7 @@ import { Plus, Briefcase } from "lucide-react"
 import { Role, ADMIN_ROLES, CAREERS_ACCESS_ROLES } from "@/lib/auth/roles"
 import { JobsToolbar } from "./JobsToolbar"
 import { getJobPostings, updateJobStatus, deleteJobPosting } from "./actions"
-import { CareersTableClient } from "./CareersTableClient"
+import { CareersTableClient, type Job } from "./CareersTableClient"
 
 export const dynamic = "force-dynamic"
 
@@ -111,7 +111,7 @@ export default async function CareersPage({ searchParams }: PageProps) {
         <>
           {/* Table */}
           <CareersTableClient
-            jobs={jobs as any}
+            jobs={jobs as unknown as Job[]}
             canDelete={canDelete}
             currentUserId={user.id}
             isAdmin={canDelete}

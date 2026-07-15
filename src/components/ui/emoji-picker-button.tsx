@@ -2,12 +2,12 @@
 
 import * as React from 'react';
 import { useEmojiDropdownMenuState, FrequentEmojiStorage } from '@platejs/emoji/react';
-import { insertEmoji } from '@platejs/emoji';
+import { insertEmoji, type Emoji } from '@platejs/emoji';
 import { useEditorRef } from 'platejs/react';
+import type { SlateEditor } from 'platejs';
 import { SmilePlus, Search, X, Clock } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolbarButton } from '@/components/ui/toolbar';
-import { cn } from '@/lib/utils/utils';
 
 const SIDE_RIGHT = { side: 'right' as const };
 
@@ -19,9 +19,9 @@ function EmojiButton({
   onMouseOver,
   onSelect,
 }: {
-  emoji: any;
-  onMouseOver: (e?: any) => void;
-  onSelect: (e: any) => void;
+  emoji: Emoji;
+  onMouseOver: (e?: Emoji) => void;
+  onSelect: (e: Emoji) => void;
 }) {
   return (
     <button
@@ -64,6 +64,7 @@ export function EmojiPickerButton() {
   React.useEffect(() => {
     if (isOpen) {
       try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- reads external storage state when picker opens, not derived from a prop
         setRecentIds(frequentStorage.getList());
       } catch {
         setRecentIds([]);
@@ -76,15 +77,15 @@ export function EmojiPickerButton() {
       .map((id) => {
         try { return emojiLibrary.getEmoji(id); } catch { return null; }
       })
-      .filter(Boolean)
+      .filter((emoji): emoji is Emoji => emoji !== null)
       .slice(0, 16);
   }, [recentIds, emojiLibrary]);
 
   // --- Insert handler (also updates recent list) ---
   const handleSelect = React.useCallback(
-    (emoji: any) => {
+    (emoji: Emoji) => {
       editor.tf.focus();
-      insertEmoji(editor as any, emoji);
+      insertEmoji(editor as unknown as SlateEditor, emoji);
       // Persist to FrequentEmojiStorage so future opens show it
       try { frequentStorage.update(emoji.id); } catch { /* ignore */ }
       setIsOpen(false);
@@ -95,17 +96,20 @@ export function EmojiPickerButton() {
   // --- Category browsing (non-search mode) ---
   const categories = React.useMemo(() => {
     if (isSearching) return [];
-    const result: { label: string; emojis: any[] }[] = [];
+    const result: { label: string; emojis: Emoji[] }[] = [];
     visibleCategories?.forEach((isVisible: boolean, categoryId: string) => {
       // Skip the built-in frequent section — we render our own above
       if (categoryId === 'frequent' || !isVisible) return;
       try {
-        const section = (emojiLibrary.getGrid().sections as any).get(categoryId as any);
+        const sections = emojiLibrary.getGrid().sections as unknown as Map<string, { elements?: string[] } | undefined>;
+        const section = sections.get(categoryId);
         if (!section) return;
-        const emojiIds: string[] = (section as any).elements ?? [];
-        const emojis = emojiIds.map((id) => {
-          try { return emojiLibrary.getEmoji(id); } catch { return null; }
-        }).filter(Boolean);
+        const emojiIds: string[] = section.elements ?? [];
+        const emojis = emojiIds
+          .map((id) => {
+            try { return emojiLibrary.getEmoji(id); } catch { return null; }
+          })
+          .filter((emoji): emoji is Emoji => emoji !== null);
         if (emojis.length > 0) {
           const label =
             (i18n.categories as Record<string, string>)?.[categoryId] ?? categoryId;
@@ -160,13 +164,13 @@ export function EmojiPickerButton() {
         {/* Body */}
         <div
           className="overflow-y-auto max-h-64 p-2 space-y-3"
-          ref={refs.current?.content as any}
+          ref={refs.current?.content as unknown as React.Ref<HTMLDivElement>}
         >
           {isSearching ? (
             /* ── Search results ── */
             hasFound ? (
               <div className="grid grid-cols-8 gap-0.5">
-                {searchResult.map((emoji: any) => (
+                {searchResult.map((emoji: Emoji) => (
                   <EmojiButton
                     key={emoji.id}
                     emoji={emoji}
@@ -177,7 +181,7 @@ export function EmojiPickerButton() {
               </div>
             ) : (
               <p className="text-center text-xs text-muted-foreground py-6">
-                No emoji found for "{searchValue}"
+                No emoji found for &quot;{searchValue}&quot;
               </p>
             )
           ) : (
@@ -191,7 +195,7 @@ export function EmojiPickerButton() {
                     Recently used
                   </p>
                   <div className="grid grid-cols-8 gap-0.5">
-                    {recentEmojis.map((emoji: any) => (
+                    {recentEmojis.map((emoji: Emoji) => (
                       <EmojiButton
                         key={emoji.id}
                         emoji={emoji}
@@ -210,7 +214,7 @@ export function EmojiPickerButton() {
                     {label}
                   </p>
                   <div className="grid grid-cols-8 gap-0.5">
-                    {emojis.slice(0, 32).map((emoji: any) => (
+                    {emojis.slice(0, 32).map((emoji: Emoji) => (
                       <EmojiButton
                         key={emoji.id}
                         emoji={emoji}

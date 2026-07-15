@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Loader2, Send, CheckCircle2, AlertCircle } from "lucide-react"
 import { submitApplication } from "@/app/dashboard/careers/actions"
 
@@ -136,8 +135,8 @@ export function ApplyForm({ jobId, jobTitle, questions }: ApplyFormProps) {
           <h2 className="text-xl font-bold">Application Submitted!</h2>
           <p className="text-muted-foreground text-sm max-w-sm">
             Thanks for applying for{" "}
-            <span className="font-semibold text-foreground">{jobTitle}</span>. We'll review
-            your application and get back to you if there's a match.
+            <span className="font-semibold text-foreground">{jobTitle}</span>. We&apos;ll review
+            your application and get back to you if there&apos;s a match.
           </p>
         </div>
       </div>

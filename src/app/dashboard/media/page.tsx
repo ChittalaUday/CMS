@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import Image from "next/image"
 import { getMediaItems, uploadMediaItem, deleteMediaItem } from "../blogs/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,20 +11,9 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { copyToClipboard as utilCopyToClipboard } from "@/lib/utils/utils"
+import { copyToClipboard as utilCopyToClipboard, getErrorMessage } from "@/lib/utils/utils"
 
-interface MediaItem {
-  id: string
-  filename: string
-  url: string
-  mimeType: string
-  size: number
-  createdAt: Date
-  user: {
-    name: string | null
-    email: string
-  } | null
-}
+type MediaItem = Awaited<ReturnType<typeof getMediaItems>>["media"][number]
 
 export default function MediaLibraryPage() {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
@@ -54,11 +44,12 @@ export default function MediaLibraryPage() {
     onCancel: () => {},
   })
 
+  const selectedItemRef = useRef(selectedItem)
   useEffect(() => {
-    loadMedia()
-  }, [search, type, page])
+    selectedItemRef.current = selectedItem
+  }, [selectedItem])
 
-  const loadMedia = async () => {
+  const loadMedia = useCallback(async () => {
     try {
       setIsLoading(true)
       const result = await getMediaItems({ search, type, page, pageSize })
@@ -66,15 +57,20 @@ export default function MediaLibraryPage() {
       setTotalCount(result.totalCount)
       setTotalPages(result.totalPages)
       setPage(result.page)
-      if (result.media.length === 0 && selectedItem) {
+      if (result.media.length === 0 && selectedItemRef.current) {
         setSelectedItem(null)
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load media library")
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to load media library"))
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [search, type, page, pageSize])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on dependency change, not derived state
+    loadMedia()
+  }, [loadMedia])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -119,13 +115,13 @@ export default function MediaLibraryPage() {
           if (prev.some((item) => item.id === newMedia.id)) {
             return prev;
           }
-          return [newMedia as any, ...prev];
+          return [newMedia, ...prev];
         })
       }
       toast.success("Uploaded successfully")
       setPage(1)
-    } catch (err: any) {
-      toast.error(err.message || "Upload failed")
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Upload failed"))
     } finally {
       setIsUploading(false)
       e.target.value = ""
@@ -146,8 +142,8 @@ export default function MediaLibraryPage() {
         setSelectedItem(null)
       }
       toast.success("File deleted successfully")
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete file")
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to delete file"))
     }
   }
 
@@ -280,10 +276,12 @@ export default function MediaLibraryPage() {
                     }`}
                   >
                     {item.mimeType.startsWith("image/") ? (
-                      <img
+                      <Image
                         src={item.url}
                         alt={item.filename}
-                        className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-300"
+                        fill
+                        sizes="(min-width: 768px) 25vw, 50vw"
+                        className="object-cover group-hover:scale-102 transition-transform duration-300"
                       />
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full p-4 text-center">
@@ -354,12 +352,14 @@ export default function MediaLibraryPage() {
                 <CardTitle className="text-sm font-semibold text-foreground">Asset Details</CardTitle>
               </CardHeader>
               <CardContent className="pt-5 space-y-4">
-                <div className="aspect-video bg-muted border border-border rounded-lg overflow-hidden flex items-center justify-center shadow-inner">
+                <div className="relative aspect-video bg-muted border border-border rounded-lg overflow-hidden flex items-center justify-center shadow-inner">
                   {selectedItem.mimeType.startsWith("image/") ? (
-                    <img
+                    <Image
                       src={selectedItem.url}
                       alt={selectedItem.filename}
-                      className="object-contain w-full h-full max-h-32"
+                      fill
+                      sizes="300px"
+                      className="object-contain"
                     />
                   ) : (
                     <FileText className="size-10 text-muted-foreground/60" />

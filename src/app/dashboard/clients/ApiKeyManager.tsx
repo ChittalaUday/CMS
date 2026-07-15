@@ -367,7 +367,7 @@ export function ApiKeyManager({ clientId, initialKeys }: Props) {
       <AlertDialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Revoke "{revokeTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>Revoke &quot;{revokeTarget?.name}&quot;?</AlertDialogTitle>
             <AlertDialogDescription>
               This will immediately invalidate this key. Any service using it will receive 401 errors.
             </AlertDialogDescription>

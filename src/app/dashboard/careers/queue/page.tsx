@@ -5,8 +5,7 @@ import { getQueueStatus, triggerQueueWorker, resetFailedQueueItems } from "../ac
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { 
+import {
   Loader2, 
   RefreshCw, 
   Play, 
@@ -27,47 +26,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-interface AtsQueueItem {
-  id: string
-  applicantName: string
-  applicantEmail: string
-  atsStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "IDLE"
-  atsScore: number | null
-  atsJustification: string | null
-  updatedAt: string
-  job: {
-    title: string
-  }
-}
-
-interface KeywordQueueItem {
-  id: string
-  title: string
-  keywordStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "IDLE"
-  keywords: string[]
-  updatedAt: string
-}
-
-interface QueueData {
-  ats: {
-    pending: number
-    processing: number
-    completed: number
-    failed: number
-    items: AtsQueueItem[]
-    memorySize: number
-    memoryPending: number
-  }
-  keyword: {
-    pending: number
-    processing: number
-    completed: number
-    failed: number
-    items: KeywordQueueItem[]
-    memorySize: number
-    memoryPending: number
-  }
-}
+type QueueData = Awaited<ReturnType<typeof getQueueStatus>>
+type AtsQueueItem = QueueData["ats"]["items"][number]
+type KeywordQueueItem = QueueData["keyword"]["items"][number]
 
 export default function QueueMonitorPage() {
   const [data, setData] = useState<QueueData | null>(null)
@@ -80,9 +41,9 @@ export default function QueueMonitorPage() {
     if (showLoading) setLoading(true)
     try {
       const res = await getQueueStatus()
-      setData(res as any)
-    } catch (err: any) {
-      toast.error(err.message || "Failed to fetch queue status")
+      setData(res)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to fetch queue status")
     } finally {
       setLoading(false)
     }
@@ -138,6 +99,7 @@ export default function QueueMonitorPage() {
     }
 
     // Load initial data immediately to stop the rotating loader spinner
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount, sanctioned effect pattern
     fetchStatus(true)
     connect()
 
@@ -154,8 +116,8 @@ export default function QueueMonitorPage() {
       await triggerQueueWorker()
       toast.success("Worker kickstart triggered across all queues")
       fetchStatus()
-    } catch (err: any) {
-      toast.error(err.message || "Failed to trigger worker")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to trigger worker")
     } finally {
       setActionPending(false)
     }
@@ -167,8 +129,8 @@ export default function QueueMonitorPage() {
       await resetFailedQueueItems()
       toast.success("Failed items reset back to PENDING and enqueued for execution")
       fetchStatus()
-    } catch (err: any) {
-      toast.error(err.message || "Failed to reset tasks")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reset tasks")
     } finally {
       setActionPending(false)
     }

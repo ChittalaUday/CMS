@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -51,13 +50,11 @@ import {
   Loader2,
   MessageSquare,
   FileText,
-  ChevronDown,
   Briefcase,
   Sparkles,
-  AlertTriangle,
 } from "lucide-react"
 import { updateApplicationStatus, getAtsScore, getApplicationById } from "../../actions"
-import { evaluateSearchQuery } from "@/lib/ats/search-parser"
+import { evaluateSearchQuery } from "@/lib/careers/search-parser"
 
 type ApplicationStatus = "NEW" | "REVIEWING" | "SHORTLISTED" | "REJECTED" | "HIRED"
 
@@ -335,11 +332,6 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
     const updatedNotes = selected.notes ? `${selected.notes}\n\n${atsText}` : atsText
     handleUpdateStatus(selected.id, selected.status, updatedNotes)
     setNotes(updatedNotes)
-  }
-
-  function saveNotes() {
-    if (!selected) return
-    handleUpdateStatus(selected.id, selected.status, notes)
   }
 
   function handleSaveNotes() {

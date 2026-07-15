@@ -64,6 +64,7 @@ export function ClientForm({ clientId, defaultValues, onSuccess }: Props) {
   const nameValue = watch("name")
 
   function onNameBlur() {
+    // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() is inherently unmemoizable; avoiding it here would require a broader form refactor
     if (!clientId && nameValue && !watch("slug")) {
       setValue("slug", toSlug(nameValue))
     }

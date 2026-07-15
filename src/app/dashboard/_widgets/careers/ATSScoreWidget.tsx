@@ -1,7 +1,6 @@
-import { WidgetCard } from "./WidgetCard"
-import { Badge } from "@/components/ui/badge"
+import { WidgetCard } from "../WidgetCard"
 import { cn } from "@/lib/utils/utils"
-import type { ATSRow } from "../_data/dashboard-queries"
+import type { ATSRow } from "../../_data/careers-queries"
 
 interface Props {
   data: ATSRow[]

@@ -151,15 +151,19 @@ export function ApplicationDetailDialog({
   const [ollamaModels, setOllamaModels] = useState<{ name: string; model: string }[]>([])
   const [selectedModel, setSelectedModel] = useState<string>("")
   const pollCancelledRef = useRef(false)
+  const [prevApplication, setPrevApplication] = useState(application)
 
-  useEffect(() => {
+  // Sync ATS fields from the selected application — adjust during render
+  // instead of an effect, per https://react.dev/learn/you-might-not-need-an-effect
+  if (application !== prevApplication) {
+    setPrevApplication(application)
     if (application) {
       setAtsScore(application.atsScore)
       setAtsConfidence(application.atsConfidence)
       setAtsJustification(application.atsJustification)
       setIsAtsLoading(application.atsStatus === "PROCESSING")
     }
-  }, [application])
+  }
 
   useEffect(() => {
     fetch("/api/ai/models")

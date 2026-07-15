@@ -134,7 +134,7 @@ export function ClientSecurityForm({ clientId, initial }: Props) {
           CORS — Allowed Origins
         </h4>
         <p className="text-xs text-muted-foreground">
-          Leave empty to allow the client's registered domain only. Add origins like{" "}
+          Leave empty to allow the client&apos;s registered domain only. Add origins like{" "}
           <code className="bg-muted px-1 rounded text-xs">https://app.example.com</code> to permit additional ones.
         </p>
         <div className="flex gap-2">

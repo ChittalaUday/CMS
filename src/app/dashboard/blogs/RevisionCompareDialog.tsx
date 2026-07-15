@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useTransition, type ReactNode } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import {
   Dialog,
@@ -11,11 +12,10 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar } from "@/components/ui/calendar"
-import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus, CalendarClock, Clock, X, CalendarCheck, Trash2 } from "lucide-react"
+import { Loader2, GitMerge, Check, Image as ImageIcon, Tag, Globe, Minus, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils/utils"
-import { getRevisionComparison, publishPostDraftRevision, schedulePostDraftRevision, unschedulePostDraftRevision } from "./actions"
+import { cn, getErrorMessage } from "@/lib/utils/utils"
+import { getRevisionComparison, publishPostDraftRevision } from "./actions"
 
 // --- Word-level diff (for title) ---
 type DiffToken = { text: string; type: "same" | "added" | "removed" }
@@ -136,20 +136,12 @@ const HTML_STYLES =
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-muted-foreground " +
   "[&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold"
 
-function formatScheduled(dt: Date | string) {
-  return new Date(dt).toLocaleString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  })
-}
-
 export function RevisionCompareDialog({
   draftId,
   trigger,
   onPublished,
   onReviewSubmitted,
   disabled = false,
-  scheduledAt,
   mode = "publish",
 }: RevisionCompareDialogProps) {
   const [open, setOpen] = useState(false)
@@ -165,6 +157,7 @@ export function RevisionCompareDialog({
 
   useEffect(() => {
     if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on open, not derived state
     setLoading(true)
     setData(null)
     setContentDiff(null)
@@ -173,7 +166,7 @@ export function RevisionCompareDialog({
         setData(d)
         setContentDiff(diffHtmlBlocks(d.parent.content, d.draft.content))
       })
-      .catch((err: Error) => toast.error(err.message || "Failed to load comparison"))
+      .catch((err) => toast.error(getErrorMessage(err, "Failed to load comparison")))
       .finally(() => setLoading(false))
   }, [open, draftId])
 
@@ -184,8 +177,8 @@ export function RevisionCompareDialog({
         toast.success("Revision published — live post updated.")
         setOpen(false)
         onPublished?.()
-      } catch (err: unknown) {
-        toast.error((err as Error).message || "Failed to publish revision")
+      } catch (err) {
+        toast.error(getErrorMessage(err, "Failed to publish revision"))
       }
     })
   }
@@ -274,9 +267,11 @@ export function RevisionCompareDialog({
                 <div className="px-6 py-4 border-r">
                   <FieldLabel icon={<ImageIcon className="size-3" />} label="Featured Image" />
                   {parent?.featuredImage ? (
-                    <img
+                    <Image
                       src={parent.featuredImage.url}
                       alt=""
+                      width={224}
+                      height={112}
                       className="h-28 w-auto rounded-lg object-cover border border-border/50"
                     />
                   ) : (
@@ -290,9 +285,11 @@ export function RevisionCompareDialog({
                     changed={imageChanged}
                   />
                   {draft?.featuredImage ? (
-                    <img
+                    <Image
                       src={draft.featuredImage.url}
                       alt=""
+                      width={224}
+                      height={112}
                       className="h-28 w-auto rounded-lg object-cover border border-border/50"
                     />
                   ) : (
@@ -503,8 +500,8 @@ export function RevisionCompareDialog({
                           toast.success("Revision discarded.");
                           setOpen(false);
                           router.refresh();
-                        } catch (err: any) {
-                          toast.error(err.message || "Failed to discard revision.");
+                        } catch (err) {
+                          toast.error(getErrorMessage(err, "Failed to discard revision."));
                         }
                       }
                     }}
@@ -533,8 +530,8 @@ export function RevisionCompareDialog({
                         toast.success("Revision submitted for admin review.")
                         setOpen(false)
                         onReviewSubmitted?.()
-                      } catch (err: unknown) {
-                        toast.error((err as Error).message || "Failed to submit.")
+                      } catch (err) {
+                        toast.error(getErrorMessage(err, "Failed to submit."))
                       } finally {
                         setIsSubmittingReview(false)
                       }
@@ -563,8 +560,8 @@ export function RevisionCompareDialog({
                         toast.success("Revision discarded.");
                         setOpen(false);
                         router.refresh();
-                      } catch (err: any) {
-                        toast.error(err.message || "Failed to discard revision.");
+                      } catch (err) {
+                        toast.error(getErrorMessage(err, "Failed to discard revision."));
                       }
                     }
                   }}

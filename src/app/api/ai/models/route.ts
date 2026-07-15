@@ -1,6 +1,4 @@
-import type { NextRequest } from "next/server"
-
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const baseUrl = process.env.OLLAMA_API_URL || "http://localhost:11434"
 
   try {

@@ -43,7 +43,6 @@ import {
   FileText,
   SaveIcon,
   Undo2Icon,
-  AlertTriangleIcon,
   PencilIcon,
   Paperclip,
   Sparkles,
@@ -296,8 +295,8 @@ export function JobForm({ job }: JobFormProps) {
       } else {
         toast.error("Failed to add department")
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to add department")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add department")
     } finally {
       setIsSubmittingDept(false)
     }
@@ -320,8 +319,8 @@ export function JobForm({ job }: JobFormProps) {
       } else {
         toast.error("Failed to add location")
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to add location")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add location")
     } finally {
       setIsSubmittingLoc(false)
     }
@@ -1103,7 +1102,7 @@ export function JobForm({ job }: JobFormProps) {
               <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
                 <div className="space-y-0.5">
                   <span className="text-sm font-semibold">Full Name</span>
-                  <p className="text-xs text-muted-foreground">Applicant's full name</p>
+                  <p className="text-xs text-muted-foreground">Applicant&apos;s full name</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5 opacity-60">
@@ -1121,7 +1120,7 @@ export function JobForm({ job }: JobFormProps) {
               <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
                 <div className="space-y-0.5">
                   <span className="text-sm font-semibold">Email</span>
-                  <p className="text-xs text-muted-foreground">Applicant's email address</p>
+                  <p className="text-xs text-muted-foreground">Applicant&apos;s email address</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5 opacity-60">
@@ -1139,7 +1138,7 @@ export function JobForm({ job }: JobFormProps) {
               <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
                 <div className="space-y-0.5">
                   <span className="text-sm font-semibold">Phone</span>
-                  <p className="text-xs text-muted-foreground">Applicant's phone number</p>
+                  <p className="text-xs text-muted-foreground">Applicant&apos;s phone number</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5 opacity-60">
@@ -1157,7 +1156,7 @@ export function JobForm({ job }: JobFormProps) {
               <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
                 <div className="space-y-0.5">
                   <span className="text-sm font-semibold">Resume / CV</span>
-                  <p className="text-xs text-muted-foreground">Applicant's resume document</p>
+                  <p className="text-xs text-muted-foreground">Applicant&apos;s resume document</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5">
@@ -1175,7 +1174,7 @@ export function JobForm({ job }: JobFormProps) {
               <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
                 <div className="space-y-0.5">
                   <span className="text-sm font-semibold">Cover Letter</span>
-                  <p className="text-xs text-muted-foreground">Applicant's introductory cover letter</p>
+                  <p className="text-xs text-muted-foreground">Applicant&apos;s introductory cover letter</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5">
@@ -1457,8 +1456,8 @@ export function JobForm({ job }: JobFormProps) {
                       })
                       setKeywords(extracted)
                       toast.success("Keywords regenerated successfully!")
-                    } catch (e: any) {
-                      toast.error(e.message || "Failed to regenerate keywords")
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Failed to regenerate keywords")
                     } finally {
                       setIsRegeneratingKeywords(false)
                     }

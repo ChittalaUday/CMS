@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useEffect, useCallback } from "react"
 import { createEditor, updateEditor, deleteEditor } from "@/app/_actions/users"
 import { regenerateInvite } from "@/app/_actions/invites"
 import { Button } from "@/components/ui/button"
@@ -233,6 +233,7 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
     defaultValues: { name: "", username: "", email: "", role: "EDITOR", password: "", confirmPassword: "" },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() is inherently unmemoizable; avoiding it here would require a broader form refactor
   const editPasswordValue = editForm.watch("password") || ""
   const editConfirmValue = editForm.watch("confirmPassword") || ""
 
@@ -277,10 +278,10 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
     })
   }, [debouncedSearch, role, pathname, searchParams, router, currentSearch, currentRole])
 
-  function openCreateModal() {
+  const openCreateModal = useCallback(() => {
     createForm.reset({ name: "", username: "", email: "", role: "ADMIN" })
     setModalMode("create")
-  }
+  }, [createForm])
 
   useEffect(() => {
     if (searchParams?.get("invite") === "true") {
@@ -291,7 +292,7 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
       router.replace(cleanUrl)
       openCreateModal()
     }
-  }, [searchParams, pathname, router])
+  }, [searchParams, pathname, router, openCreateModal])
 
   function openEditModal(editor: EditorUser) {
     editForm.reset({
@@ -592,7 +593,7 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
           Showing {filteredEditors.length} of {totalCount} users
         </p>
         <div className="flex items-center justify-end">
-          <BlogsPagination page={currentPage} totalPages={totalPages} pageSize={15} />
+          <BlogsPagination page={currentPage} totalPages={totalPages} />
         </div>
       </div>
 

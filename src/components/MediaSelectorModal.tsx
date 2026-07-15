@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { 
+import { useState, useEffect, useCallback } from "react"
+import NextImage from "next/image"
+import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
@@ -9,6 +10,7 @@ import { Image, Upload, Check, Loader2 } from "lucide-react"
 import { getMediaItems, uploadMediaItem } from "@/app/dashboard/blogs/actions"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { getErrorMessage } from "@/lib/utils/utils"
 
 interface MediaItem {
   id: string
@@ -43,23 +45,24 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
     onCancel: () => {},
   })
 
-  useEffect(() => {
-    if (isOpen) {
-      loadMedia()
-    }
-  }, [isOpen])
-
-  const loadMedia = async () => {
+  const loadMedia = useCallback(async () => {
     try {
       setIsLoading(true)
       const result = await getMediaItems()
       setMediaItems(result.media)
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load media library")
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to load media library"))
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on open, not derived state
+      loadMedia()
+    }
+  }, [isOpen, loadMedia])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -104,11 +107,11 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
         if (prev.some((item) => item.id === newMedia.id)) {
           return prev;
         }
-        return [newMedia as any, ...prev];
+        return [newMedia, ...prev];
       })
       toast.success("File uploaded successfully")
-    } catch (err: any) {
-      toast.error(err.message || "File upload failed")
+    } catch (err) {
+      toast.error(getErrorMessage(err, "File upload failed"))
     } finally {
       setIsUploading(false)
     }
@@ -119,6 +122,7 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
       <SheetTrigger asChild>
         {triggerText ? (
           <Button variant="outline" className="gap-2 text-xs font-semibold h-9">
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide icon, not an <img> */}
             <Image className="size-4" />
             {triggerText}
           </Button>
@@ -128,6 +132,7 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
             className="p-1.5 rounded hover:bg-muted text-muted-foreground transition-colors"
             title="Insert Image"
           >
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide icon, not an <img> */}
             <Image className="size-4" />
           </button>
         )}
@@ -191,10 +196,12 @@ export function MediaSelectorModal({ onSelect, triggerText = "Select Image", sel
                     }`}
                   >
                     {item.mimeType.startsWith("image/") ? (
-                      <img
+                      <NextImage
                         src={item.url}
                         alt={item.filename}
-                        className="object-cover w-full h-full"
+                        fill
+                        sizes="150px"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="flex items-center justify-center w-full h-full text-xs text-muted-foreground p-1 text-center truncate">

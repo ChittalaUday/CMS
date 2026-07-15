@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { Prisma } from "@/generated/prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { validateApiKey } from "@/lib/auth/api-auth"
 import { checkRateLimit, getAllowedOrigins, resolveOrigin } from "@/lib/utils/rate-limit"
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get("category") ?? undefined
 
   try {
-    const whereClause: any = {
+    const whereClause: Prisma.PostWhereInput = {
       published: true,
       clientId: auth.clientId,
     }

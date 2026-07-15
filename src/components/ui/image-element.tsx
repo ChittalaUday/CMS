@@ -2,13 +2,28 @@
 
 import * as React from 'react';
 import { PlateElement, PlateElementProps } from 'platejs/react';
+import type { TElement } from 'platejs';
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils/utils';
 
-export function ImageElement({ className, ...props }: PlateElementProps) {
-  const element = props.element as any;
+type ImageElementNode = TElement & {
+  url?: string
+  uploading?: boolean
+  error?: boolean
+  filename?: string
+  uploadId?: string
+  file?: File
+  progress?: number
+}
+
+type EditorWithUploadImage = PlateElementProps['editor'] & {
+  uploadImage?: (file: File, uploadId: string) => unknown
+}
+
+export function ImageElement({ className, ...props }: PlateElementProps<ImageElementNode>) {
+  const { element } = props;
   const { url, uploading, error, filename, uploadId, file, progress = 10 } = element;
-  const editor = props.editor as any;
+  const editor = props.editor as EditorWithUploadImage;
 
   const handleRetry = () => {
     if (editor?.uploadImage && file && uploadId) {
@@ -17,9 +32,9 @@ export function ImageElement({ className, ...props }: PlateElementProps) {
   };
 
   const handleRemove = () => {
-    const entry = editor.api.nodes({
+    const entry = editor.api.nodes<ImageElementNode>({
       at: [],
-      match: (n: any) => n.type === 'img' && n.uploadId === uploadId
+      match: (n) => n.type === 'img' && n.uploadId === uploadId
     }).next().value;
     if (entry) {
       const [, path] = entry;
@@ -71,6 +86,7 @@ export function ImageElement({ className, ...props }: PlateElementProps) {
             </div>
           </div>
         ) : url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- arbitrary/external editor content, unknown dimensions, not restricted to our R2 host
           <img
             src={url}
             alt="Uploaded content"

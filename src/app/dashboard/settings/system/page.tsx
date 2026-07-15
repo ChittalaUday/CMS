@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { API_REGISTRY } from "@/lib/utils/api-registry"
 import { ShieldCheck, Globe, KeyRound, Zap, Server, Users, FileText, Briefcase } from "lucide-react"
+import Link from "next/link"
 
 export const dynamic = "force-dynamic"
 
@@ -72,9 +73,9 @@ export default async function SystemSettingsPage() {
           </div>
           <p className="text-sm text-muted-foreground">
             Applied to clients without a custom override. Configure per-client overrides in the{" "}
-            <a href="/dashboard/clients" className="underline underline-offset-2 hover:text-foreground">
+            <Link href="/dashboard/clients" className="underline underline-offset-2 hover:text-foreground">
               Clients page
-            </a>{" "}
+            </Link>{" "}
             → Security tab.
           </p>
         </CardHeader>

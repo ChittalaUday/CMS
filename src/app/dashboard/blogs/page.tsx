@@ -100,7 +100,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
         <>
           {/* Table */}
           <BlogsTableClient
-            posts={posts as any}
+            posts={posts}
             canPublish={canPublish}
             showEditorDrafts={showEditorDrafts}
             currentUserId={user.id}
@@ -109,7 +109,7 @@ export default async function BlogsPage({ searchParams }: PageProps) {
 
           {/* Pagination */}
           <Suspense fallback={null}>
-            <BlogsPagination page={page} totalPages={totalPages} pageSize={15} />
+            <BlogsPagination page={page} totalPages={totalPages} />
           </Suspense>
         </>
       )}

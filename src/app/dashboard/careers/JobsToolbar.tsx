@@ -26,12 +26,15 @@ export function JobsToolbar({ totalCount, search, statusFilter }: JobsToolbarPro
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [searchInput, setSearchInput] = useState(search)
+  const [prevSearch, setPrevSearch] = useState(search)
   const debouncedSearch = useDebounce(searchInput, 400)
 
-  // Sync state from prop (e.g. on external/back action or clear filters)
-  useEffect(() => {
+  // Sync state from prop (e.g. on external/back action or clear filters) — adjust
+  // during render instead of an effect, per https://react.dev/learn/you-might-not-need-an-effect
+  if (search !== prevSearch) {
+    setPrevSearch(search)
     setSearchInput(search)
-  }, [search])
+  }
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {

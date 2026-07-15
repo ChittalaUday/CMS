@@ -57,18 +57,22 @@ export function applyAccent(key: string) {
 }
 
 export function useAccentColor() {
-  const [accent, setAccentState] = useState<string>(DEFAULT_ACCENT)
+  const [accent, setAccentState] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) ?? DEFAULT_ACCENT
+    } catch {
+      return DEFAULT_ACCENT
+    }
+  })
 
+  // Sync the <style> tag with React state — external DOM mutation, must live in an effect.
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) ?? DEFAULT_ACCENT
-    setAccentState(stored)
-    applyAccent(stored)
-  }, [])
+    applyAccent(accent)
+  }, [accent])
 
   const setAccent = useCallback((key: string) => {
     setAccentState(key)
     localStorage.setItem(STORAGE_KEY, key)
-    applyAccent(key)
   }, [])
 
   return { accent, setAccent }

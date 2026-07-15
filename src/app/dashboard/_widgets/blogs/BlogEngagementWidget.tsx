@@ -9,8 +9,8 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { WidgetCard } from "./WidgetCard"
-import type { EngagementByDay } from "../_data/dashboard-queries"
+import { WidgetCard } from "../WidgetCard"
+import type { EngagementByDay } from "../../_data/blog-queries"
 
 const CHART_CONFIG = {
   views: { label: "Views", color: "hsl(var(--primary))" },

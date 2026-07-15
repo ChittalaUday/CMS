@@ -9,8 +9,8 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { WidgetCard } from "./WidgetCard"
-import type { FunnelRow } from "../_data/dashboard-queries"
+import { WidgetCard } from "../WidgetCard"
+import type { FunnelRow } from "../../_data/careers-queries"
 
 const CHART_CONFIG = {
   NEW:         { label: "New",         color: "hsl(262, 80%, 60%)" },

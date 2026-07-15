@@ -96,8 +96,8 @@ export function SettingsClient({
         setAvatarUrl(res.url)
         toast.success("Photo uploaded")
       }
-    } catch (err: any) {
-      toast.error("Upload failed: " + (err.message || err))
+    } catch (err) {
+      toast.error("Upload failed: " + (err instanceof Error ? err.message : String(err)))
     } finally {
       setIsUploading(false)
     }
