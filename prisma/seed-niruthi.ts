@@ -29,40 +29,47 @@ async function main() {
     })
     console.log(`Client found/created: ID = ${client.id}`)
 
-    const adminEmail = "niruthiadmin@niruthi.com"
-    const adminUsername = "niruthiadmin"
+    const adminUsers = [
+      {
+        email: "shiva.in@niruthi.com",
+        username: "shiva.in",
+        name: "Shiva",
+      },
+    ]
+
     const adminPassword = process.env.NIRUTHI_ADMIN_PASSWORD || "Niruthi@123"
-    const adminName = "Niruthi Admin"
 
     console.log(`Hashing password...`)
     const SALT_ROUNDS = 12
     const hashedPassword = await bcrypt.hash(adminPassword, SALT_ROUNDS)
 
-    console.log(`Creating/updating admin user: ${adminEmail}...`)
-    const user = await prisma.user.upsert({
-      where: { email: adminEmail },
-      update: {
-        username: adminUsername,
-        name: adminName,
-        password: hashedPassword,
-        role: "ADMIN",
-        clientId: client.id,
-      },
-      create: {
-        email: adminEmail,
-        username: adminUsername,
-        name: adminName,
-        password: hashedPassword,
-        role: "ADMIN",
-        clientId: client.id,
-      },
-    })
+    for (const adminUser of adminUsers) {
+      console.log(`Creating/updating admin user: ${adminUser.email}...`)
+      const user = await prisma.user.upsert({
+        where: { email: adminUser.email },
+        update: {
+          username: adminUser.username,
+          name: adminUser.name,
+          password: hashedPassword,
+          role: "ADMIN",
+          clientId: client.id,
+        },
+        create: {
+          email: adminUser.email,
+          username: adminUser.username,
+          name: adminUser.name,
+          password: hashedPassword,
+          role: "ADMIN",
+          clientId: client.id,
+        },
+      })
 
-    console.log(`Admin user seeded successfully!`)
-    console.log(`Email: ${user.email}`)
-    console.log(`Username: ${user.username}`)
-    console.log(`Password: ${process.env.NIRUTHI_ADMIN_PASSWORD ? "[REDACTED]" : adminPassword}`)
-    console.log(`Client: ${clientName} (ID: ${client.id})`)
+      console.log(`Admin user seeded successfully!`)
+      console.log(`Email: ${user.email}`)
+      console.log(`Username: ${user.username}`)
+      console.log(`Password: ${process.env.NIRUTHI_ADMIN_PASSWORD ? "[REDACTED]" : adminPassword}`)
+      console.log(`Client: ${clientName} (ID: ${client.id})`)
+    }
   } finally {
     await prisma.$disconnect()
   }
