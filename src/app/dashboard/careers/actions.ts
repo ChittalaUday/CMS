@@ -285,19 +285,21 @@ export async function getJobPostingById(id: string) {
 export async function getJobPostingBySlug(slug: string) {
   const user = await getSession().catch(() => null)
 
+  let job: any = null
+  let finalClientId: string | null = null
+
   if (user && user.role === Role.SUPER_ADMIN) {
     // Super admin can see any job status of any client
-    return await prisma.jobPosting.findFirst({
+    job = await prisma.jobPosting.findFirst({
       where: { slug },
       include: { questions: { orderBy: { order: "asc" } } },
     })
-  }
-
-  if (user && user.clientId) {
+    finalClientId = job?.clientId
+  } else if (user && user.clientId) {
     // Client admins can preview their own client's jobs regardless of status.
     // Non-admins (HR) may only preview published jobs, or drafts they created themselves.
     const isClientAdmin = (ADMIN_ROLES as readonly Role[]).includes(user.role)
-    return await prisma.jobPosting.findFirst({
+    job = await prisma.jobPosting.findFirst({
       where: {
         slug,
         clientId: user.clientId,
@@ -305,17 +307,37 @@ export async function getJobPostingBySlug(slug: string) {
       },
       include: { questions: { orderBy: { order: "asc" } } },
     })
+    finalClientId = user.clientId
+  } else {
+    const apiClientId = await getClientIdFromRequestHeaders().catch(() => null)
+    job = await prisma.jobPosting.findFirst({
+      where: {
+        slug,
+        status: "PUBLISHED",
+        ...(apiClientId ? { clientId: apiClientId } : {}),
+      },
+      include: { questions: { orderBy: { order: "asc" } } },
+    })
+    finalClientId = apiClientId || job?.clientId
   }
 
-  const apiClientId = await getClientIdFromRequestHeaders().catch(() => null)
-  return await prisma.jobPosting.findFirst({
-    where: {
-      slug,
-      status: "PUBLISHED",
-      ...(apiClientId ? { clientId: apiClientId } : {}),
-    },
-    include: { questions: { orderBy: { order: "asc" } } },
-  })
+  if (job && finalClientId) {
+    const client = await prisma.client.findUnique({
+      where: { id: finalClientId },
+      select: { settings: true },
+    })
+    const settings = (client?.settings as any) || {}
+    const careersConfig = settings.careers || {}
+    if (careersConfig.defaultTemplate) {
+      if (careersConfig.templatePosition === "start") {
+        job.description = `${careersConfig.defaultTemplate}<br><br>${job.description}`
+      } else {
+        job.description = `${job.description}<br><br>${careersConfig.defaultTemplate}`
+      }
+    }
+  }
+
+  return job
 }
 
 function buildQuestionsCreate(questions: QuestionInput[]) {
@@ -1161,4 +1183,54 @@ export async function createCareerLocation(name: string) {
   }
 }
 
+// --- Global Config Helpers ---
 
+export async function getCareersConfig() {
+  const user = await requireCareersAccess()
+  if (!user.clientId) return null
+  
+  const client = await prisma.client.findUnique({
+    where: { id: user.clientId },
+    select: { settings: true }
+  })
+  if (!client?.settings) return null
+  
+  const settings = client.settings as any
+  return settings.careers as {
+    defaultTemplate?: string
+    defaultTemplateJson?: any
+    templatePosition?: "start" | "end"
+  } | undefined
+}
+
+export async function updateCareersConfig(config: {
+  defaultTemplate?: string
+  defaultTemplateJson?: any
+  templatePosition?: "start" | "end"
+}) {
+  const user = await requireCareersAdmin()
+  if (!user.clientId) throw new Error("No client associated.")
+
+  const client = await prisma.client.findUnique({
+    where: { id: user.clientId },
+    select: { settings: true }
+  })
+
+  let settings = (client?.settings as any) || {}
+  if (typeof settings !== "object") settings = {}
+
+  settings = {
+    ...settings,
+    careers: {
+      ...((settings.careers as any) || {}),
+      ...config
+    }
+  }
+
+  await prisma.client.update({
+    where: { id: user.clientId },
+    data: { settings }
+  })
+
+  revalidatePath("/dashboard/careers")
+}

@@ -170,6 +170,16 @@
   margin-bottom: 0.03125rem !important;
 }
 
+/* Remove padding/margin from paragraphs inside list items to fix large gaps */
+.slate-editor li p,
+.prose li p,
+.article-body li p {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
 /* Indentation styling for lists using CSS :has() */
 .slate-editor ul:has(> li > [style*="margin-left: 24px"]),
 .slate-editor ol:has(> li > [style*="margin-left: 24px"]),

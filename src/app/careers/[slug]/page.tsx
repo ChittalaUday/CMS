@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { Briefcase, MapPin, DollarSign, Calendar, Building2, Clock, AlertTriangle } from "lucide-react"
-import { getJobPostingBySlug } from "@/app/dashboard/careers/actions"
+import { getJobPostingBySlug, getCareersConfig } from "@/app/dashboard/careers/actions"
 import { ApplyForm } from "./ApplyForm"
 
 interface PageProps {
@@ -19,6 +19,9 @@ export default async function PublicJobPage({ params }: PageProps) {
   const { slug } = await params
   const job = await getJobPostingBySlug(slug)
   if (!job) notFound()
+
+  const config = await getCareersConfig()
+  const includeTemplate = !job.keywords?.includes("__exclude-global-template__")
 
   const isExpired = job.closingDate && new Date(job.closingDate) < new Date()
   
@@ -101,6 +104,15 @@ export default async function PublicJobPage({ params }: PageProps) {
 
         {/* Job details (always visible) */}
         <div className="space-y-6">
+          {includeTemplate && config?.defaultTemplate && config.templatePosition === "start" && (
+            <div className="space-y-3">
+              <div
+                className="article-body"
+                dangerouslySetInnerHTML={{ __html: config.defaultTemplate }}
+              />
+            </div>
+          )}
+
           <div className="space-y-3">
             <h2 className="text-xl font-bold">About the Role</h2>
             <div
@@ -115,6 +127,15 @@ export default async function PublicJobPage({ params }: PageProps) {
               <div
                 className="article-body"
                 dangerouslySetInnerHTML={{ __html: job.requirements }}
+              />
+            </div>
+          )}
+
+          {includeTemplate && config?.defaultTemplate && config.templatePosition === "end" && (
+            <div className="space-y-3">
+              <div
+                className="article-body"
+                dangerouslySetInnerHTML={{ __html: config.defaultTemplate }}
               />
             </div>
           )}
@@ -143,9 +164,18 @@ export default async function PublicJobPage({ params }: PageProps) {
              .article-body a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 4px; }
             .article-body strong, .article-body b { font-weight: 700; color: hsl(var(--foreground)); }
             .article-body em, .article-body i { font-style: italic; }
-            .article-body ul { list-style: disc; padding-left: 1.5rem; margin: 0.75rem 0; }
-            .article-body ol { list-style: decimal; padding-left: 1.5rem; margin: 0.75rem 0; }
-            .article-body li { margin: 0.25rem 0; }
+            .article-body ul, .article-body ol {
+              margin-bottom: 1em;
+              padding-left: 1.5em;
+            }
+            .article-body ul { list-style-type: disc; }
+            .article-body ol { list-style-type: decimal; }
+            .article-body li {
+              margin-bottom: 0.25em;
+            }
+            .article-body li p {
+              margin-bottom: 0;
+            }
             .article-body blockquote {
               border-left: 4px solid hsl(var(--primary) / 0.4);
               padding: 0.4rem 0 0.4rem 1rem;

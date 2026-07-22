@@ -3,20 +3,9 @@
 import { useState, useTransition, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -26,142 +15,37 @@ import {
 } from "@/components/ui/dialog"
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  Plus,
-  Trash2,
   Loader2,
-  Briefcase,
-  MapPin,
-  IndianRupeeIcon,
-  Calendar,
-  Building2,
-  ListChecks,
   AlertCircle,
-  FileText,
-  SaveIcon,
   Undo2Icon,
   PencilIcon,
-  Paperclip,
-  Sparkles,
-  Clock,
 } from "lucide-react"
-import { RichTextEditor } from "@/components/RichTextEditor"
 import {
   createJobPosting,
   updateJobPosting,
   updateJobStatus,
   discardDraft,
   publishDraft,
-  extractKeywordsFromText,
   getCareerDepartments,
   getCareerLocations,
   createCareerDepartment,
   createCareerLocation,
+  getCareersConfig,
   type JobPostingInput,
   type QuestionInput,
 } from "./actions"
 
-// --- Types ---
-
-type Step = 1 | 2 | 3 | 4
-
-type JobType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP" | "TEMPORARY"
-type QuestionType = "SHORT_TEXT" | "LONG_TEXT" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "YES_NO" | "FILE"
-type SalaryMode = "none" | "single" | "range"
-
-interface BasicDetails {
-  title: string
-  slug: string
-  department: string
-  location: string
-  jobType: JobType
-  salaryMode: SalaryMode
-  salaryValue: string
-  salaryMin: string
-  salaryMax: string
-  requiredExperience: string
-  closingDate: string
-
-}
-
-interface DescriptionDetails {
-  description: string
-  descriptionJson: unknown
-  responsibilities: string
-  responsibilitiesJson: unknown
-  requirements: string
-  requirementsJson: unknown
-}
-
-interface QuestionDraft {
-  tempId: string
-  question: string
-  type: QuestionType
-  required: boolean
-  order: number
-  options: string[]
-  newOption: string
-}
-
-export interface ExistingJob {
-  id: string
-  title: string
-  slug: string
-  department: string
-  location: string
-  jobType: JobType
-  description: string
-  descriptionJson: unknown
-  responsibilities: string | null
-  responsibilitiesJson: unknown
-  requirements: string | null
-  requirementsJson: unknown
-  salaryMin: number | null
-  salaryMax: number | null
-  requiredExperience: string | null
-  currency: string
-  closingDate: Date | null
-  status: "DRAFT" | "PUBLISHED" | "CLOSED"
-  draftParentId: string | null
-  draftParent: { id: string; title: string; status: string } | null
-  questions: {
-    id: string
-    question: string
-    type: QuestionType
-    required: boolean
-    order: number
-    options: unknown
-  }[]
-  keywords: string[]
-
-}
-
-interface JobFormProps {
-  job?: ExistingJob
-}
-
 // --- Constants ---
 
-const JOB_TYPE_LABELS: Record<JobType, string> = {
-  FULL_TIME: "Full-time",
-  PART_TIME: "Part-time",
-  CONTRACT: "Contract",
-  INTERNSHIP: "Internship",
-  TEMPORARY: "Temporary",
-}
+import { JobFormStep1 } from "./job-form/JobFormStep1"
+import { JobFormStep2 } from "./job-form/JobFormStep2"
+import { JobFormStep3 } from "./job-form/JobFormStep3"
+import { JobFormStep4 } from "./job-form/JobFormStep4"
+import { JobFormFooter } from "./job-form/JobFormFooter"
+import { BasicDetails, DescriptionDetails, QuestionDraft, ExistingJob, QuestionType, JobType, SalaryMode, Step } from "./job-form/types"
 
-const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
-  SHORT_TEXT: "Short Answer",
-  LONG_TEXT: "Long Answer",
-  SINGLE_CHOICE: "Single Choice",
-  MULTIPLE_CHOICE: "Multiple Choice",
-  YES_NO: "Yes / No",
-  FILE: "File Upload",
-}
-
+export interface JobFormProps { job?: ExistingJob }
+export type { ExistingJob }
 // --- Helpers ---
 
 function toSlug(text: string) {
@@ -208,16 +92,6 @@ function StepIndicator({ current }: { current: Step }) {
   )
 }
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null
-  return (
-    <p className="flex items-center gap-1.5 text-xs text-destructive mt-1.5">
-      <AlertCircle className="size-3 shrink-0" />
-      {message}
-    </p>
-  )
-}
-
 // --- Main Component ---
 
 export function JobForm({ job }: JobFormProps) {
@@ -241,9 +115,18 @@ export function JobForm({ job }: JobFormProps) {
   const [newDeptName, setNewDeptName] = useState("")
   const [isSubmittingDept, setIsSubmittingDept] = useState(false)
 
+  const [includeTemplate, setIncludeTemplate] = useState(!job?.keywords?.includes("__exclude-global-template__"))
+  const [globalTemplateConfig, setGlobalTemplateConfig] = useState<any>(null)
+
   const [isAddingLoc, setIsAddingLoc] = useState(false)
   const [newLocName, setNewLocName] = useState("")
   const [isSubmittingLoc, setIsSubmittingLoc] = useState(false)
+
+  useEffect(() => {
+    getCareersConfig().then(cfg => {
+      setGlobalTemplateConfig(cfg)
+    }).catch(err => console.error(err))
+  }, [])
 
   useEffect(() => {
     async function loadDepts() {
@@ -356,26 +239,26 @@ export function JobForm({ job }: JobFormProps) {
   // --- Step 3: Default fields & custom questions state ---
   const [showResume, setShowResume] = useState(() => {
     if (!job) return true
-    return job.questions.some(q => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+    return job.questions.some((q: any) => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
   })
   const [requireResume, setRequireResume] = useState(() => {
     if (!job) return true
-    const q = job.questions.find(q => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+    const q = job.questions.find((q: any) => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
     return q ? q.required : true
   })
   const [showCoverLetter, setShowCoverLetter] = useState(() => {
     if (!job) return false
-    return job.questions.some(q => q.question.toLowerCase().includes("cover letter"))
+    return job.questions.some((q: any) => q.question.toLowerCase().includes("cover letter"))
   })
   const [requireCoverLetter, setRequireCoverLetter] = useState(() => {
     if (!job) return false
-    const q = job.questions.find(q => q.question.toLowerCase().includes("cover letter"))
+    const q = job.questions.find((q: any) => q.question.toLowerCase().includes("cover letter"))
     return q ? q.required : false
   })
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
     if (!job) return []
-    const screening = job.questions.filter((q) => {
+    const screening = job.questions.filter((q: any) => {
       const lower = q.question.toLowerCase()
       return !lower.includes("resume") && !lower.includes("cv") && !lower.includes("cover letter")
     })
@@ -455,6 +338,13 @@ export function JobForm({ job }: JobFormProps) {
       })
     })
 
+    let finalKeywords = [...keywords]
+    if (!includeTemplate && !finalKeywords.includes("__exclude-global-template__")) {
+      finalKeywords.push("__exclude-global-template__")
+    } else if (includeTemplate) {
+      finalKeywords = finalKeywords.filter(k => k !== "__exclude-global-template__")
+    }
+
     return {
       title: basic.title || "Untitled",
       slug: basic.slug || toSlug(basic.title || "untitled"),
@@ -473,7 +363,7 @@ export function JobForm({ job }: JobFormProps) {
       currency: "INR",
       closingDate: basic.closingDate || null,
       questions: finalQuestions,
-      keywords,
+      keywords: finalKeywords,
     }
   }
 
@@ -545,12 +435,12 @@ export function JobForm({ job }: JobFormProps) {
       step === 1 ? validateStep1() :
       step === 2 ? validateStep2() :
       step === 3 ? validateStep3() : true
-    if (valid) setStep((s) => Math.min(4, s + 1) as Step)
+    if (valid) setStep((s: Step) => Math.min(4, s + 1) as Step)
   }
 
   function goBack() {
     setErrors({})
-    setStep((s) => Math.max(1, s - 1) as Step)
+    setStep((s: Step) => Math.max(1, s - 1) as Step)
   }
 
   // --- Question helpers ---
@@ -578,6 +468,19 @@ export function JobForm({ job }: JobFormProps) {
 
   function updateQuestion(tempId: string, patch: Partial<QuestionDraft>) {
     setQuestions((prev) => prev.map((q) => (q.tempId === tempId ? { ...q, ...patch } : q)))
+  }
+
+  function moveOption(tempId: string, optIdx: number, dir: -1 | 1) {
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.tempId !== tempId) return q
+        const swapIdx = optIdx + dir
+        if (swapIdx < 0 || swapIdx >= q.options.length) return q
+        const nextOpts = [...q.options]
+        ;[nextOpts[optIdx], nextOpts[swapIdx]] = [nextOpts[swapIdx], nextOpts[optIdx]]
+        return { ...q, options: nextOpts }
+      })
+    )
   }
 
   function addOption(tempId: string) {
@@ -724,897 +627,87 @@ export function JobForm({ job }: JobFormProps) {
 
       <StepIndicator current={step} />
 
-      {/* ── Step 1: Basic Details ─────────────────────────────── */}
+      
       {step === 1 && (
-        <div className="space-y-5">
-          <div className="space-y-1 pb-3 border-b border-border/60">
-            <h2 className="text-xl font-bold">Basic Details</h2>
-            <p className="text-sm text-muted-foreground">Essential information about the position.</p>
-          </div>
-
-          {/* Job Title */}
-          <div className="space-y-2">
-            <Label htmlFor="title" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Job Title <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="title"
-              value={basic.title}
-              onChange={(e) => {
-                const title = e.target.value
-                setBasic((b) => ({
-                  ...b,
-                  title,
-                  slug: isEdit || slugEditedRef.current ? b.slug : toSlug(title),
-                }))
-                if (errors.title) setErrors((e) => ({ ...e, title: "" }))
-              }}
-              placeholder="e.g. Senior Frontend Engineer"
-              className="h-9 bg-muted/30 border-border/80 text-sm"
-            />
-            <FieldError message={errors.title} />
-          </div>
-
-          {/* Slug */}
-          <div className="space-y-2">
-            <Label htmlFor="slug" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              URL Slug <span className="text-destructive">*</span>
-            </Label>
-            <div className="flex items-center rounded-md border border-border/80 bg-muted/30 overflow-hidden focus-within:ring-1 focus-within:ring-ring">
-              <span className="px-3 text-xs text-muted-foreground font-mono border-r border-border/60 h-9 flex items-center bg-muted/50 shrink-0">
-                /careers/
-              </span>
-              <input
-                id="slug"
-                type="text"
-                value={basic.slug}
-                onChange={(e) => {
-                  slugEditedRef.current = true
-                  setBasic((b) => ({ ...b, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") }))
-                  if (errors.slug) setErrors((e) => ({ ...e, slug: "" }))
-                }}
-                placeholder="senior-frontend-engineer"
-                className="flex-1 h-9 px-3 text-sm font-mono bg-transparent outline-none"
-              />
-            </div>
-            <FieldError message={errors.slug} />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Department */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="dept" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Department <span className="text-destructive">*</span>
-                </Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsAddingDept(true)}
-                >
-                  <Plus className="size-3.5" />
-                  <span className="sr-only">Add Department</span>
-                </Button>
-              </div>
-              
-              <Select
-                value={basic.department}
-                onValueChange={(val) => {
-                  setBasic((b) => ({ ...b, department: val }))
-                  if (errors.department) setErrors((e) => ({ ...e, department: "" }))
-                }}
-                disabled={isDeptsLoading}
-              >
-                <SelectTrigger id="dept" className="h-9 bg-muted/30 border-border/80 text-sm">
-                  <SelectValue placeholder={isDeptsLoading ? "Loading..." : "Select Department"} />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {departments.length === 0 ? (
-                    <SelectItem value="_empty" disabled>
-                      No departments found
-                    </SelectItem>
-                  ) : (
-                    departments.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
-                    ))
-                  )}
-                  <div className="border-t border-border/60 my-1" />
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-primary font-semibold hover:bg-muted rounded-md transition-colors text-left cursor-pointer"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setIsAddingDept(true)
-                    }}
-                  >
-                    <Plus className="size-3.5" />
-                    Add Department
-                  </button>
-                </SelectContent>
-              </Select>
-              <FieldError message={errors.department} />
-            </div>
-
-            {/* Location */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="location" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Location <span className="text-destructive">*</span>
-                </Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsAddingLoc(true)}
-                >
-                  <Plus className="size-3.5" />
-                  <span className="sr-only">Add Location</span>
-                </Button>
-              </div>
-              
-              <Select
-                value={basic.location}
-                onValueChange={(val) => {
-                  setBasic((b) => ({ ...b, location: val }))
-                  if (errors.location) setErrors((e) => ({ ...e, location: "" }))
-                }}
-                disabled={isLocsLoading}
-              >
-                <SelectTrigger id="location" className="h-9 bg-muted/30 border-border/80 text-sm">
-                  <SelectValue placeholder={isLocsLoading ? "Loading..." : "Select Location"} />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {locations.length === 0 ? (
-                    <SelectItem value="_empty" disabled>
-                      No locations found
-                    </SelectItem>
-                  ) : (
-                    locations.map((loc) => (
-                      <SelectItem key={loc} value={loc}>
-                        {loc}
-                      </SelectItem>
-                    ))
-                  )}
-                  <div className="border-t border-border/60 my-1" />
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-primary font-semibold hover:bg-muted rounded-md transition-colors text-left cursor-pointer"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setIsAddingLoc(true)
-                    }}
-                  >
-                    <Plus className="size-3.5" />
-                    Add Location
-                  </button>
-                </SelectContent>
-              </Select>
-              <FieldError message={errors.location} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Job Type */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Job Type <span className="text-destructive">*</span>
-              </Label>
-              <Select value={basic.jobType} onValueChange={(v) => setBasic((b) => ({ ...b, jobType: v as JobType }))}>
-                <SelectTrigger className="h-9 bg-muted/30 border-border/80 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(JOB_TYPE_LABELS).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Required Experience */}
-            <div className="space-y-2">
-              <Label htmlFor="requiredExperience" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Required Experience <span className="text-muted-foreground/60 font-normal normal-case">(optional, years)</span>
-              </Label>
-              <Input
-                id="requiredExperience"
-                type="text"
-                value={basic.requiredExperience}
-                onChange={(e) => setBasic((b) => ({ ...b, requiredExperience: e.target.value }))}
-                placeholder="e.g. 3, 2-5, or 3+"
-                className="h-9 bg-muted/30 border-border/80 text-sm"
-              />
-              <FieldError message={errors.requiredExperience} />
-            </div>
-
-            {/* Closing Date */}
-            <div className="space-y-2">
-              <Label htmlFor="closingDate" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Closing Date <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
-              </Label>
-              <Input
-                id="closingDate"
-                type="date"
-                value={basic.closingDate}
-                onChange={(e) => setBasic((b) => ({ ...b, closingDate: e.target.value }))}
-                min={new Date().toISOString().split("T")[0]}
-                className="h-9 bg-muted/30 border-border/80 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Salary — INR only */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <IndianRupeeIcon className="size-3" />
-                Salary <span className="text-muted-foreground/60 font-normal normal-case">(optional, INR)</span>
-              </Label>
-              {/* Mode selector */}
-              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40 border border-border/60">
-                {(["none", "single", "range"] as SalaryMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setBasic((b) => ({ ...b, salaryMode: mode }))}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-                      basic.salaryMode === mode
-                        ? "bg-background text-foreground shadow-xs border border-border/60"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {mode === "none" ? "Not specified" : mode === "single" ? "Fixed" : "Range"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {basic.salaryMode === "single" && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-muted-foreground shrink-0">₹</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={basic.salaryValue}
-                  onChange={(e) => setBasic((b) => ({ ...b, salaryValue: e.target.value }))}
-                  placeholder="e.g. 1200000"
-                  className="h-9 bg-muted/30 border-border/80 text-sm max-w-xs"
-                />
-                <span className="text-xs text-muted-foreground">per year</span>
-              </div>
-            )}
-
-            {basic.salaryMode === "range" && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-muted-foreground shrink-0">₹</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={basic.salaryMin}
-                  onChange={(e) => {
-                    setBasic((b) => ({ ...b, salaryMin: e.target.value }))
-                    if (errors.salaryMin) setErrors((e) => ({ ...e, salaryMin: "" }))
-                  }}
-                  placeholder="Min"
-                  className="h-9 bg-muted/30 border-border/80 text-sm"
-                />
-                <span className="text-muted-foreground text-sm shrink-0">–</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={basic.salaryMax}
-                  onChange={(e) => setBasic((b) => ({ ...b, salaryMax: e.target.value }))}
-                  placeholder="Max"
-                  className="h-9 bg-muted/30 border-border/80 text-sm"
-                />
-                <span className="text-xs text-muted-foreground shrink-0">per year</span>
-              </div>
-            )}
-            <FieldError message={errors.salaryMin} />
-          </div>
-        </div>
+        <JobFormStep1
+          basic={basic}
+          setBasic={setBasic}
+          errors={errors}
+          setErrors={setErrors}
+          isEdit={isEdit}
+          slugEditedRef={slugEditedRef}
+          toSlug={toSlug}
+          departments={departments}
+          isDeptsLoading={isDeptsLoading}
+          setIsAddingDept={setIsAddingDept}
+          locations={locations}
+          isLocsLoading={isLocsLoading}
+          setIsAddingLoc={setIsAddingLoc}
+        />
       )}
 
-      {/* ── Step 2: Job Description ───────────────────────────── */}
       {step === 2 && (
-        <div className="space-y-6">
-          <div className="space-y-1 pb-3 border-b border-border/60">
-            <h2 className="text-xl font-bold">Job Description</h2>
-            <p className="text-sm text-muted-foreground">
-              Use the rich text editor for formatting — bullet points, headings, bold text, etc.
-            </p>
-          </div>
-
-          {/* Job Description */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Job Description <span className="text-destructive">*</span>
-            </Label>
-            <div className="rounded-xl border border-border/80 overflow-hidden">
-              <RichTextEditor
-                content={desc.description}
-                contentJson={desc.descriptionJson}
-                onChange={(html, json) => {
-                  setDesc((d) => ({ ...d, description: html, descriptionJson: json }))
-                  if (errors.description) setErrors((e) => ({ ...e, description: "" }))
-                }}
-              />
-            </div>
-            <FieldError message={errors.description} />
-          </div>
-
-          {/* Roles & Responsibilities */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Roles & Responsibilities <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
-            </Label>
-            <div className="rounded-xl border border-border/80 overflow-hidden">
-              <RichTextEditor
-                content={desc.responsibilities}
-                contentJson={desc.responsibilitiesJson}
-                onChange={(html, json) =>
-                  setDesc((d) => ({ ...d, responsibilities: html, responsibilitiesJson: json }))
-                }
-              />
-            </div>
-          </div>
-
-          {/* Requirements */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Requirements & Qualifications <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
-            </Label>
-            <div className="rounded-xl border border-border/80 overflow-hidden">
-              <RichTextEditor
-                content={desc.requirements}
-                contentJson={desc.requirementsJson}
-                onChange={(html, json) =>
-                  setDesc((d) => ({ ...d, requirements: html, requirementsJson: json }))
-                }
-              />
-            </div>
-          </div>
-        </div>
+        <JobFormStep2
+          desc={desc}
+          setDesc={setDesc}
+          errors={errors}
+          setErrors={setErrors}
+          includeTemplate={includeTemplate}
+          setIncludeTemplate={setIncludeTemplate}
+          globalTemplateConfig={globalTemplateConfig}
+        />
       )}
 
-      {/* ── Step 3: Questionnaire ─────────────────────────────── */}
       {step === 3 && (
-        <div className="space-y-6">
-          <div className="space-y-1 pb-3 border-b border-border/60">
-            <h2 className="text-xl font-bold">Questionnaire</h2>
-            <p className="text-sm text-muted-foreground">
-              Configure default application fields and add custom screening questions.
-            </p>
-          </div>
-
-          {/* Default Fields Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Default Fields</h3>
-            <div className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3.5">
-              {/* Name */}
-              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                <div className="space-y-0.5">
-                  <span className="text-sm font-semibold">Full Name</span>
-                  <p className="text-xs text-muted-foreground">Applicant&apos;s full name</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 opacity-60">
-                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
-                    <span className="text-xs text-muted-foreground">Show</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 opacity-60">
-                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
-                    <span className="text-xs text-muted-foreground">Required</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Email */}
-              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                <div className="space-y-0.5">
-                  <span className="text-sm font-semibold">Email</span>
-                  <p className="text-xs text-muted-foreground">Applicant&apos;s email address</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 opacity-60">
-                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
-                    <span className="text-xs text-muted-foreground">Show</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 opacity-60">
-                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
-                    <span className="text-xs text-muted-foreground">Required</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Phone */}
-              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                <div className="space-y-0.5">
-                  <span className="text-sm font-semibold">Phone</span>
-                  <p className="text-xs text-muted-foreground">Applicant&apos;s phone number</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 opacity-60">
-                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
-                    <span className="text-xs text-muted-foreground">Show</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 opacity-60">
-                    <Switch checked={true} disabled={true} onCheckedChange={() => {}} />
-                    <span className="text-xs text-muted-foreground">Required</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Resume / CV */}
-              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                <div className="space-y-0.5">
-                  <span className="text-sm font-semibold">Resume / CV</span>
-                  <p className="text-xs text-muted-foreground">Applicant&apos;s resume document</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5">
-                    <Switch checked={showResume} onCheckedChange={(v) => { setShowResume(v); if (!v) setRequireResume(false) }} />
-                    <span className="text-xs text-muted-foreground">Show</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Switch checked={requireResume} disabled={!showResume} onCheckedChange={setRequireResume} />
-                    <span className="text-xs text-muted-foreground">Required</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cover Letter */}
-              <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                <div className="space-y-0.5">
-                  <span className="text-sm font-semibold">Cover Letter</span>
-                  <p className="text-xs text-muted-foreground">Applicant&apos;s introductory cover letter</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5">
-                    <Switch checked={showCoverLetter} onCheckedChange={(v) => { setShowCoverLetter(v); if (!v) setRequireCoverLetter(false) }} />
-                    <span className="text-xs text-muted-foreground">Show</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Switch checked={requireCoverLetter} disabled={!showCoverLetter} onCheckedChange={setRequireCoverLetter} />
-                    <span className="text-xs text-muted-foreground">Required</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Screening Questions Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Screening Questions</h3>
-
-            {questions.length === 0 ? (
-              <div className="min-h-40 rounded-xl border border-dashed border-border/80 bg-muted/10 flex flex-col items-center justify-center gap-3 p-8 text-center">
-                <ListChecks className="size-8 text-muted-foreground/40" />
-                <div>
-                  <p className="font-semibold text-sm">No custom screening questions</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Applicants will only fill in the enabled default fields.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 mt-1" onClick={addQuestion}>
-                  <Plus className="size-3.5" /> Add Question
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {questions.map((q, i) => (
-                  <div key={q.tempId} className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-bold text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
-                        Q{i + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <Input
-                          value={q.question}
-                          onChange={(e) => {
-                            updateQuestion(q.tempId, { question: e.target.value })
-                            if (errors[`q_${i}`]) setErrors((e) => ({ ...e, [`q_${i}`]: "" }))
-                          }}
-                          placeholder="Enter your question…"
-                          className="h-9 bg-muted/30 border-border/80 text-sm"
-                        />
-                        <FieldError message={errors[`q_${i}`]} />
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-muted"
-                          disabled={i === 0} onClick={() => moveQuestion(q.tempId, "up")} title="Move up">
-                          <ChevronUp className="size-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-muted"
-                          disabled={i === questions.length - 1} onClick={() => moveQuestion(q.tempId, "down")} title="Move down">
-                          <ChevronDown className="size-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="size-7 rounded-lg hover:bg-destructive/10 text-destructive"
-                          onClick={() => removeQuestion(q.tempId)} title="Remove">
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <Select
-                        value={q.type}
-                        onValueChange={(v) => {
-                          updateQuestion(q.tempId, { type: v as QuestionType, options: [], newOption: "" })
-                          if (errors[`q_opts_${i}`]) setErrors((e) => ({ ...e, [`q_opts_${i}`]: "" }))
-                        }}
-                      >
-                        <SelectTrigger className="h-8 w-44 bg-muted/30 border-border/80 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(QUESTION_TYPE_LABELS).map(([val, label]) => (
-                            <SelectItem key={val} value={val} className="text-xs">
-                              {val === "FILE" && <Paperclip className="size-3 inline mr-1.5" />}
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <div className="flex items-center gap-2">
-                        <Switch id={`req_${q.tempId}`} checked={q.required}
-                          onCheckedChange={(v) => updateQuestion(q.tempId, { required: v })} />
-                        <Label htmlFor={`req_${q.tempId}`} className="text-xs text-muted-foreground cursor-pointer">
-                          Required
-                        </Label>
-                      </div>
-
-                      {q.type === "FILE" && (
-                        <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
-                          <Paperclip className="size-3" /> Applicant will upload a file
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Options editor */}
-                    {(q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") && (
-                      <div className="space-y-2 pt-1 border-t border-border/40">
-                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Options</Label>
-                        <div className="flex flex-wrap gap-1.5 min-h-7">
-                          {q.options.length === 0 ? (
-                            <span className="text-xs text-muted-foreground/60 italic">No options yet — type below and press Enter</span>
-                          ) : (
-                            q.options.map((opt) => (
-                              <span key={opt} className="inline-flex items-center gap-1 text-xs bg-muted/60 border border-border/60 px-2.5 py-1 rounded-lg">
-                                {opt}
-                                <button type="button" onClick={() => removeOption(q.tempId, opt)}
-                                  className="text-muted-foreground/60 hover:text-destructive ml-0.5 leading-none" aria-label={`Remove "${opt}"`}>
-                                  ×
-                                </button>
-                              </span>
-                            ))
-                          )}
-                        </div>
-                        <FieldError message={errors[`q_opts_${i}`]} />
-                        <div className="flex gap-2">
-                          <Input
-                            value={q.newOption}
-                            onChange={(e) => updateQuestion(q.tempId, { newOption: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOption(q.tempId) } }}
-                            placeholder="Type an option and press Enter"
-                            className="h-8 bg-muted/30 border-border/80 text-xs"
-                          />
-                          <Button type="button" variant="outline" size="sm"
-                            className="h-8 text-xs shrink-0 border-border/60"
-                            onClick={() => addOption(q.tempId)} disabled={!q.newOption.trim()}>
-                            Add
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-dashed" onClick={addQuestion}>
-                  <Plus className="size-3.5" /> Add Question
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+        <JobFormStep3
+          questions={questions}
+          setQuestions={setQuestions}
+          errors={errors}
+          setErrors={setErrors}
+          showResume={showResume}
+          setShowResume={setShowResume}
+          requireResume={requireResume}
+          setRequireResume={setRequireResume}
+          showCoverLetter={showCoverLetter}
+          setShowCoverLetter={setShowCoverLetter}
+          requireCoverLetter={requireCoverLetter}
+          setRequireCoverLetter={setRequireCoverLetter}
+          addQuestion={addQuestion}
+          removeQuestion={removeQuestion}
+          moveQuestion={moveQuestion}
+          updateQuestion={updateQuestion}
+          addOption={addOption}
+          removeOption={removeOption}
+          moveOption={moveOption}
+        />
       )}
 
-      {/* ── Step 4: Review & Publish ──────────────────────────── */}
       {step === 4 && (
-        <div className="space-y-5">
-          <div className="space-y-1 pb-3 border-b border-border/60">
-            <h2 className="text-xl font-bold">Review & Publish</h2>
-            <p className="text-sm text-muted-foreground">Review everything before saving. Click any section to edit.</p>
-          </div>
-
-          <div className="rounded-xl border border-border/60 bg-card/40 divide-y divide-border/40 overflow-hidden">
-            {/* Position overview */}
-            <div className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Position</p>
-                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-muted-foreground"
-                  onClick={() => { setErrors({}); setStep(1) }}>Edit</Button>
-              </div>
-              <p className="font-bold text-base leading-snug">{basic.title}</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Building2 className="size-3 shrink-0" />{basic.department}</span>
-                <span className="flex items-center gap-1"><MapPin className="size-3 shrink-0" />{basic.location}</span>
-                <span className="flex items-center gap-1"><Briefcase className="size-3 shrink-0" />{JOB_TYPE_LABELS[basic.jobType]}</span>
-                {basic.requiredExperience && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="size-3 shrink-0" />
-                    {basic.requiredExperience}{basic.requiredExperience.toLowerCase().includes("year") || basic.requiredExperience.toLowerCase().includes("yr") ? "" : " years"} Experience
-                  </span>
-                )}
-                {basic.salaryMode === "single" && basic.salaryValue && (
-                  <span className="flex items-center gap-1">
-                    <IndianRupeeIcon className="size-3 shrink-0" />
-                    ₹{Number(basic.salaryValue).toLocaleString("en-IN")} p.a.
-                  </span>
-                )}
-                {basic.salaryMode === "range" && basic.salaryMin && (
-                  <span className="flex items-center gap-1">
-                    <IndianRupeeIcon className="size-3 shrink-0" />
-                    ₹{Number(basic.salaryMin).toLocaleString("en-IN")}
-                    {basic.salaryMax ? ` – ₹${Number(basic.salaryMax).toLocaleString("en-IN")}` : "+"} p.a.
-                  </span>
-                )}
-                {basic.closingDate && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="size-3 shrink-0" />
-                    Closes {new Date(basic.closingDate + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">/careers/{basic.slug}</p>
-            </div>
-
-            {/* Description preview */}
-            <div className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</p>
-                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-muted-foreground"
-                  onClick={() => { setErrors({}); setStep(2) }}>Edit</Button>
-              </div>
-              <div
-                className="text-sm text-foreground/80 line-clamp-3 prose prose-sm dark:prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: desc.description }}
-              />
-              {desc.responsibilities && (
-                <>
-                  <Separator className="my-2 bg-border/40" />
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roles & Responsibilities</p>
-                  <div className="text-xs text-muted-foreground line-clamp-2 prose prose-xs dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: desc.responsibilities }} />
-                </>
-              )}
-              {desc.requirements && (
-                <>
-                  <Separator className="my-2 bg-border/40" />
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Requirements</p>
-                  <div className="text-xs text-muted-foreground line-clamp-2 prose prose-xs dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: desc.requirements }} />
-                </>
-              )}
-            </div>
-
-            {/* Questions summary */}
-            <div className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Questionnaire ({questions.length} question{questions.length !== 1 ? "s" : ""})
-                </p>
-                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-muted-foreground"
-                  onClick={() => { setErrors({}); setStep(3) }}>Edit</Button>
-              </div>
-              {questions.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No questions — applicants fill in basic contact details.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {questions.map((q, i) => (
-                    <li key={q.tempId} className="flex items-start gap-2 text-xs">
-                      <span className="text-muted-foreground/50 shrink-0 mt-0.5 font-mono">{i + 1}.</span>
-                      <span className="text-foreground/80 flex-1">{q.question}</span>
-                      <Badge variant="outline" className="text-[9px] py-0 px-1.5 shrink-0 border-border/60">
-                        {q.type === "FILE" ? <><Paperclip className="size-2.5 inline mr-0.5" />File</> : QUESTION_TYPE_LABELS[q.type]}
-                      </Badge>
-                      {q.required && <span className="text-[9px] text-destructive font-bold shrink-0">*</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Keywords editor */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Keywords ({keywords.length})
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[10px] gap-1 px-2.5 font-bold uppercase tracking-wider border-border/60 shadow-sm"
-                  onClick={async () => {
-                    setIsRegeneratingKeywords(true)
-                    try {
-                      const extracted = await extractKeywordsFromText({
-                        title: basic.title,
-                        department: basic.department,
-                        description: desc.description,
-                        requirements: desc.requirements || undefined,
-                        responsibilities: desc.responsibilities || undefined,
-                        questions: questions.map(q => q.question)
-                      })
-                      setKeywords(extracted)
-                      toast.success("Keywords regenerated successfully!")
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Failed to regenerate keywords")
-                    } finally {
-                      setIsRegeneratingKeywords(false)
-                    }
-                  }}
-                  disabled={isRegeneratingKeywords}
-                >
-                  {isRegeneratingKeywords ? (
-                    <Loader2 className="size-3 animate-spin mr-1" />
-                  ) : (
-                    <Sparkles className="size-3 mr-1 text-primary" />
-                  )}
-                  Regenerate
-                </Button>
-              </div>
-              
-              <div className="flex flex-wrap gap-1.5 min-h-7">
-                {keywords.length === 0 ? (
-                  <span className="text-xs text-muted-foreground/60 italic">No keywords extracted yet — add below or click Regenerate</span>
-                ) : (
-                  keywords.map((kw) => (
-                    <span key={kw} className="inline-flex items-center gap-1 text-xs bg-muted/60 border border-border/60 px-2 py-0.5 rounded-lg text-foreground">
-                      {kw}
-                      <button
-                        type="button"
-                        onClick={() => handleKeywordDeleteClick(kw)}
-                        className="text-muted-foreground/60 hover:text-destructive ml-0.5 leading-none font-bold"
-                        aria-label={`Remove keyword "${kw}"`}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <Input
-                  value={newKeyword}
-                  onChange={(e) => setNewKeyword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      const val = newKeyword.trim()
-                      if (val && !keywords.includes(val)) {
-                        setKeywords(prev => [...prev, val])
-                        setNewKeyword("")
-                      }
-                    }
-                  }}
-                  placeholder="Type custom keyword and press Enter"
-                  className="h-8 bg-muted/30 border-border/80 text-xs"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs shrink-0 border-border/60"
-                  onClick={() => {
-                    const val = newKeyword.trim()
-                    if (val && !keywords.includes(val)) {
-                      setKeywords(prev => [...prev, val])
-                      setNewKeyword("")
-                    }
-                  }}
-                  disabled={!newKeyword.trim()}
-                >
-                  Add
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <JobFormStep4
+          basic={basic}
+          desc={desc}
+          questions={questions}
+          keywords={keywords}
+          setKeywords={setKeywords}
+          setErrors={setErrors}
+          setStep={setStep}
+          handleKeywordDeleteClick={handleKeywordDeleteClick}
+          isRegeneratingKeywords={isRegeneratingKeywords}
+          setIsRegeneratingKeywords={setIsRegeneratingKeywords}
+        />
       )}
 
-      {/* ── Navigation Footer ─────────────────────────────────── */}
-      <div className="flex items-center justify-between pt-4 border-t border-border/40">
-        <Button
-          variant="outline"
-          onClick={step === 1 ? () => router.push("/dashboard/careers") : goBack}
-          className="h-9 text-sm gap-1.5"
-          disabled={isPending}
-        >
-          <ChevronLeft className="size-4" />
-          {step === 1 ? "Cancel" : "Back"}
-        </Button>
-
-        <div className="flex items-center gap-2">
-          {/* Save Draft — always available */}
-          {step < 4 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 text-xs gap-1.5 border-border/60"
-              onClick={handleSaveDraft}
-              disabled={isPending || isSavingDraft}
-              title="Save current progress as draft"
-            >
-              {isSavingDraft && isPending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <SaveIcon className="size-3.5" />
-              )}
-              Save Draft
-            </Button>
-          )}
-
-          {step < 4 ? (
-            <Button onClick={goNext} className="h-9 text-sm gap-1.5 font-semibold shadow-sm" disabled={isPending}>
-              Continue <ChevronRight className="size-4" />
-            </Button>
-          ) : (
-            <>
-              {(!isEdit || job?.status !== "PUBLISHED") && (
-                <Button
-                  variant="outline"
-                  onClick={() => handleSubmit("DRAFT")}
-                  className="h-9 text-sm gap-1.5 font-semibold shadow-sm"
-                  disabled={isPending}
-                >
-                  <SaveIcon className="size-4" /> Save Draft
-                </Button>
-              )}
-              <Button
-                onClick={() => handleSubmit("PUBLISHED")}
-                className="h-9 text-sm gap-1.5 font-semibold shadow-sm min-w-35"
-                disabled={isPending}
-              >
-                {isPending && !isSavingDraft ? (
-                  <><Loader2 className="size-4 animate-spin" />Saving…</>
-                ) : (
-                  <><FileText className="size-4" />{isEdit && job?.status === "PUBLISHED" ? "Save Changes" : "Publish Job"}</>
-                )}
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-      <ConfirmDialog
-        isOpen={deleteKwConfirmOpen}
-        onClose={() => setDeleteKwConfirmOpen(false)}
-        onConfirm={handleKeywordDeleteConfirm}
-        title="Delete Keyword"
-        description={`Are you sure you want to delete the keyword "${kwToDelete || ""}"?`}
-        confirmText="Delete"
-        variant="destructive"
-      />
-      <ConfirmDialog
-        isOpen={unpublishConfirmOpen}
-        onClose={() => setUnpublishConfirmOpen(false)}
-        onConfirm={() => {
-          setUnpublishConfirmOpen(false)
-          executeSaveDraft()
-        }}
-        title="Unpublish Job?"
-        description="Warning: Saving this published job posting as a draft will unpublish it. It will no longer be visible on the public careers page until you publish it again."
-        confirmText="Unpublish & Save"
-        variant="destructive"
+      <JobFormFooter
+        step={step}
+        isEdit={isEdit}
+        jobStatus={job?.status}
+        isPending={isPending}
+        isSavingDraft={isSavingDraft}
+        handleSaveDraft={handleSaveDraft}
+        handleSubmit={handleSubmit}
+        goBack={goBack}
+        goNext={goNext}
+        onCancel={() => router.push("/dashboard/careers")}
       />
 
       {/* Add Department Dialog */}

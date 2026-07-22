@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Plus, Briefcase } from "lucide-react"
 import { Role, ADMIN_ROLES, CAREERS_ACCESS_ROLES } from "@/lib/auth/roles"
 import { JobsToolbar } from "./JobsToolbar"
-import { getJobPostings, updateJobStatus, deleteJobPosting } from "./actions"
+import { getJobPostings, updateJobStatus, deleteJobPosting, getCareersConfig, updateCareersConfig } from "./actions"
 import { CareersTableClient, type Job } from "./CareersTableClient"
+import { GlobalTemplateConfigButton } from "./GlobalTemplateConfigButton"
 
 export const dynamic = "force-dynamic"
 
@@ -36,6 +37,8 @@ export default async function CareersPage({ searchParams }: PageProps) {
     page,
     pageSize: 15,
   })
+
+  const careersConfig = await getCareersConfig()
 
   const canDelete = (ADMIN_ROLES as readonly Role[]).includes(user.role)
 
@@ -70,15 +73,18 @@ export default async function CareersPage({ searchParams }: PageProps) {
             Manage job postings, custom questionnaires, and review applicant responses.
           </p>
         </div>
-        <Button
-          asChild
-          className="gap-2 shadow-md hover:shadow-lg transition-all font-semibold h-10"
-        >
-          <Link href="/dashboard/careers/new">
-            <Plus className="size-4" />
-            Post a Job
-          </Link>
-        </Button>
+        <div className="flex items-center gap-3">
+          <GlobalTemplateConfigButton careersConfig={careersConfig} updateCareersConfig={updateCareersConfig} />
+          <Button
+            asChild
+            className="gap-2 shadow-md hover:shadow-lg transition-all font-semibold h-10"
+          >
+            <Link href="/dashboard/careers/new">
+              <Plus className="size-4" />
+              Post a Job
+            </Link>
+          </Button>
+        </div>
       </div>
 
 

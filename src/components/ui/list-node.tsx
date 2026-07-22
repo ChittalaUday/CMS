@@ -21,7 +21,7 @@ export function ListItemElement({ className, ...props }: PlateElementProps) {
   return (
     <PlateElement
       as="li"
-      className={cn(className, 'my-0')}
+      className={cn(className, 'my-0 plate-list-item')}
       {...props}
     >
       {props.children}

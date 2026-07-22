@@ -119,11 +119,30 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    const client = await prisma.client.findUnique({
+      where: { id: auth.clientId },
+      select: { settings: true }
+    })
+    const settings = (client?.settings as any) || {}
+    const careersConfig = settings.careers || {}
+
+    const jobsResponse = jobs.map(job => {
+      let globalTemplate = null;
+      if (careersConfig.defaultTemplate && !job.keywords?.includes("__exclude-global-template__")) {
+        globalTemplate = careersConfig.defaultTemplate;
+      }
+      return {
+        ...job,
+        globalTemplate,
+        templatePosition: careersConfig.templatePosition || "start",
+      }
+    });
+
     const allowedOrigins = await getAllowedOrigins(auth.clientId)
     const origin = resolveOrigin(request.headers.get("origin"), allowedOrigins)
     return new NextResponse(
       JSON.stringify({
-        jobs,
+        jobs: jobsResponse,
         pagination: {
           total,
           page,

@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     const allowedOrigins = await getAllowedOrigins(auth.clientId)
     const origin = resolveOrigin(request.headers.get("origin"), allowedOrigins)
 
-    return new NextResponse(JSON.stringify({ success: true, application }), {
+    return new NextResponse(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
     })
   } catch (err) {

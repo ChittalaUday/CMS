@@ -56,9 +56,27 @@ export async function GET(
       job.questions = []
     }
 
+    const client = await prisma.client.findUnique({
+      where: { id: auth.clientId },
+      select: { settings: true }
+    })
+    const settings = (client?.settings as any) || {}
+    const careersConfig = settings.careers || {}
+    
+    let globalTemplate = null;
+    if (careersConfig.defaultTemplate && !job.keywords?.includes("__exclude-global-template__")) {
+      globalTemplate = careersConfig.defaultTemplate;
+    }
+
+    const jobResponse = {
+      ...job,
+      globalTemplate,
+      templatePosition: careersConfig.templatePosition || "start",
+    }
+
     const allowedOrigins = await getAllowedOrigins(auth.clientId)
     const origin = resolveOrigin(request.headers.get("origin"), allowedOrigins)
-    return new NextResponse(JSON.stringify({ job }), {
+    return new NextResponse(JSON.stringify({ job: jobResponse }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
     })
   } catch (err) {
