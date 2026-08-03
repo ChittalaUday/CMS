@@ -363,6 +363,7 @@ model Client {
   description String?
   logoUrl     String?
   status      ClientStatus @default(ACTIVE)
+  settings    Json?
   createdById String?
   createdBy   User?        @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
