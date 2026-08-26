@@ -19,7 +19,6 @@ interface JobFormStep4Props {
   
   setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>
   setStep: (step: 1 | 2 | 3 | 4) => void
-  handleKeywordDeleteClick: (kw: string) => void
   
   isRegeneratingKeywords: boolean
   setIsRegeneratingKeywords: (val: boolean) => void
@@ -33,7 +32,6 @@ export function JobFormStep4({
   setKeywords,
   setErrors,
   setStep,
-  handleKeywordDeleteClick,
   isRegeneratingKeywords,
   setIsRegeneratingKeywords
 }: JobFormStep4Props) {
@@ -193,7 +191,7 @@ export function JobFormStep4({
                   {kw}
                   <button
                     type="button"
-                    onClick={() => handleKeywordDeleteClick(kw)}
+                    onClick={() => setKeywords(prev => prev.filter(k => k !== kw))}
                     className="text-muted-foreground/60 hover:text-destructive ml-0.5 leading-none font-bold"
                     aria-label={`Remove keyword "${kw}"`}
                   >

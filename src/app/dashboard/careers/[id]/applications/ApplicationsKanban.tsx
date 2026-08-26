@@ -95,22 +95,39 @@ interface JobPosting {
   keywords: string[]
 }
 
+import { ApplicationsPagination } from "./ApplicationsPagination"
+
 interface ApplicationsKanbanProps {
   applications: Application[]
   job: JobPosting
   search?: string
+  pagination?: {
+    page: number
+    pageSize: number
+    totalCount: number
+    totalPages: number
+  }
+  statusCounts?: Record<string, number>
 }
 
 export function ApplicationsKanban({
   applications: initialApplications,
   job,
   search: propSearch,
+  pagination,
+  statusCounts,
 }: ApplicationsKanbanProps) {
   const [applications, setApplications] = useState<Application[]>(initialApplications)
   const [localSearch, setLocalSearch] = useState("")
   const search = propSearch !== undefined ? propSearch : localSearch
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
   const [mobileTab, setMobileTab] = useState<ApplicationStatus>("NEW")
+
+  const [prevInitial, setPrevInitial] = useState(initialApplications)
+  if (initialApplications !== prevInitial) {
+    setPrevInitial(initialApplications)
+    setApplications(initialApplications)
+  }
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -162,23 +179,6 @@ export function ApplicationsKanban({
     }
     return map
   }, [filteredApplications])
-
-  // Get total counts (ignoring search filter for column indicators)
-  const totalCounts = useMemo(() => {
-    const counts: Record<ApplicationStatus, number> = {
-      NEW: 0,
-      REVIEWING: 0,
-      SHORTLISTED: 0,
-      REJECTED: 0,
-      HIRED: 0,
-    }
-    for (const app of applications) {
-      if (counts[app.status] !== undefined) {
-        counts[app.status]++
-      }
-    }
-    return counts
-  }, [applications])
 
   // Handle manual status update via detail sheet or mobile dropdown
   async function handleStatusUpdate(id: string, newStatus: ApplicationStatus, notes?: string) {
@@ -264,9 +264,9 @@ export function ApplicationsKanban({
 
   return (
     <>
-      {/* Search Bar */}
-      <div className="flex items-center gap-3 justify-between pb-3 border-b border-border/40">
-        {propSearch === undefined ? (
+      {/* Search Bar (standalone mode only) */}
+      {propSearch === undefined && (
+        <div className="flex items-center gap-3 justify-between pb-3 border-b border-border/40">
           <div className="relative max-w-xs flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
@@ -276,13 +276,8 @@ export function ApplicationsKanban({
               className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
             />
           </div>
-        ) : (
-          <div className="flex-1" />
-        )}
-        <p className="text-xs text-muted-foreground shrink-0">
-          {filteredApplications.length} of {applications.length} shown
-        </p>
-      </div>
+        </div>
+      )}
 
       {/* Mobile Tab Selector (shown below md breakpoint) */}
       <div className="flex md:hidden overflow-x-auto gap-1 p-1 bg-muted/35 rounded-xl border border-border/40 shrink-0">
@@ -290,13 +285,12 @@ export function ApplicationsKanban({
           <button
             key={status}
             onClick={() => setMobileTab(status)}
-            className={`flex-1 min-w-[70px] py-1.5 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-center transition-all ${
-              mobileTab === status
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`flex-1 min-w-17.5 py-1.5 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-center transition-all ${mobileTab === status
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
-            {STATUS_CONFIG[status].label} ({totalCounts[status]})
+            {STATUS_CONFIG[status].label} ({statusCounts ? (statusCounts[status] ?? 0) : applications.filter(a => a.status === status).length})
           </button>
         ))}
       </div>
@@ -304,7 +298,7 @@ export function ApplicationsKanban({
       {/* Kanban Board Container */}
       <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={handleDragEnd}>
         {/* Desktop Layout: side-by-side scrollable columns */}
-        <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-1 select-none min-h-[550px] w-full">
+        <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-1 select-none min-h-137.5 w-full">
           {STATUSES.map((status) => (
             <KanbanColumn
               key={status}
@@ -331,6 +325,15 @@ export function ApplicationsKanban({
         </div>
       </DndContext>
 
+      {pagination && (
+        <ApplicationsPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalCount={pagination.totalCount}
+          totalPages={pagination.totalPages}
+        />
+      )}
+
       {/* Application Details Dialog */}
       <ApplicationDetailDialog
         application={selectedApp}
@@ -344,6 +347,18 @@ export function ApplicationsKanban({
             setSelectedApp(updated)
           }
         }}
+        onNavigatePrev={() => {
+          const idx = selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) : -1
+          if (idx > 0) setSelectedApp(filteredApplications[idx - 1])
+        }}
+        onNavigateNext={() => {
+          const idx = selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) : -1
+          if (idx >= 0 && idx < filteredApplications.length - 1) setSelectedApp(filteredApplications[idx + 1])
+        }}
+        hasPrev={selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) > 0 : false}
+        hasNext={selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) < filteredApplications.length - 1 : false}
+        currentIndex={selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) : 0}
+        totalInList={filteredApplications.length}
       />
     </>
   )

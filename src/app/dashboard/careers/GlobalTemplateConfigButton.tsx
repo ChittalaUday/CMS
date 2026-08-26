@@ -2,20 +2,26 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Sparkles, Loader2, CheckCircle2, Settings2 } from "lucide-react"
+import { Loader2, CheckCircle2, Settings2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { RichTextEditor } from "@/components/RichTextEditor"
 
+export interface CareersConfigData {
+  defaultTemplate?: string
+  defaultTemplateJson?: unknown
+  templatePosition?: "start" | "end"
+}
+
 export function GlobalTemplateConfigButton({ careersConfig, updateCareersConfig }: { 
-  careersConfig: any, 
-  updateCareersConfig?: (data: any) => Promise<any> 
+  careersConfig?: CareersConfigData | null, 
+  updateCareersConfig?: (data: CareersConfigData) => Promise<unknown> 
 }) {
   const [configDialogOpen, setConfigDialogOpen] = useState(false)
   const [template, setTemplate] = useState(careersConfig?.defaultTemplate || "")
-  const [templateJson, setTemplateJson] = useState<any>(careersConfig?.defaultTemplateJson || null)
+  const [templateJson, setTemplateJson] = useState<unknown>(careersConfig?.defaultTemplateJson || null)
   const [position, setPosition] = useState<"start" | "end">(careersConfig?.templatePosition || "end")
   const [isSavingConfig, setIsSavingConfig] = useState(false)
 
@@ -58,7 +64,7 @@ export function GlobalTemplateConfigButton({ careersConfig, updateCareersConfig 
               </Select>
             </div>
 
-            <div className="space-y-3 flex-1 flex flex-col overflow-hidden min-h-[300px]">
+            <div className="space-y-3 flex-1 flex flex-col overflow-hidden min-h-75">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Description Content</Label>
               <div className="flex-1 border border-border/80 rounded-md overflow-hidden bg-background">
                 <RichTextEditor

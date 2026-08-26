@@ -16,7 +16,6 @@ import {
 import {
   Check,
   Loader2,
-  AlertCircle,
   Undo2Icon,
   PencilIcon,
 } from "lucide-react"
@@ -42,7 +41,8 @@ import { JobFormStep2 } from "./job-form/JobFormStep2"
 import { JobFormStep3 } from "./job-form/JobFormStep3"
 import { JobFormStep4 } from "./job-form/JobFormStep4"
 import { JobFormFooter } from "./job-form/JobFormFooter"
-import { BasicDetails, DescriptionDetails, QuestionDraft, ExistingJob, QuestionType, JobType, SalaryMode, Step } from "./job-form/types"
+import { BasicDetails, DescriptionDetails, QuestionDraft, ExistingJob, SalaryMode, Step } from "./job-form/types"
+import { CareersConfigData } from "./GlobalTemplateConfigButton"
 
 export interface JobFormProps { job?: ExistingJob }
 export type { ExistingJob }
@@ -116,7 +116,7 @@ export function JobForm({ job }: JobFormProps) {
   const [isSubmittingDept, setIsSubmittingDept] = useState(false)
 
   const [includeTemplate, setIncludeTemplate] = useState(!job?.keywords?.includes("__exclude-global-template__"))
-  const [globalTemplateConfig, setGlobalTemplateConfig] = useState<any>(null)
+  const [globalTemplateConfig, setGlobalTemplateConfig] = useState<CareersConfigData | null>(null)
 
   const [isAddingLoc, setIsAddingLoc] = useState(false)
   const [newLocName, setNewLocName] = useState("")
@@ -124,7 +124,7 @@ export function JobForm({ job }: JobFormProps) {
 
   useEffect(() => {
     getCareersConfig().then(cfg => {
-      setGlobalTemplateConfig(cfg)
+      setGlobalTemplateConfig(cfg ?? null)
     }).catch(err => console.error(err))
   }, [])
 
@@ -236,29 +236,31 @@ export function JobForm({ job }: JobFormProps) {
     requirementsJson: job?.requirementsJson ?? null,
   })
 
+  type JobQuestion = NonNullable<ExistingJob["questions"]>[number]
+
   // --- Step 3: Default fields & custom questions state ---
   const [showResume, setShowResume] = useState(() => {
     if (!job) return true
-    return job.questions.some((q: any) => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+    return job.questions.some((q: JobQuestion) => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
   })
   const [requireResume, setRequireResume] = useState(() => {
     if (!job) return true
-    const q = job.questions.find((q: any) => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
+    const q = job.questions.find((q: JobQuestion) => q.question.toLowerCase().includes("resume") || q.question.toLowerCase().includes("cv"))
     return q ? q.required : true
   })
   const [showCoverLetter, setShowCoverLetter] = useState(() => {
     if (!job) return false
-    return job.questions.some((q: any) => q.question.toLowerCase().includes("cover letter"))
+    return job.questions.some((q: JobQuestion) => q.question.toLowerCase().includes("cover letter"))
   })
   const [requireCoverLetter, setRequireCoverLetter] = useState(() => {
     if (!job) return false
-    const q = job.questions.find((q: any) => q.question.toLowerCase().includes("cover letter"))
+    const q = job.questions.find((q: JobQuestion) => q.question.toLowerCase().includes("cover letter"))
     return q ? q.required : false
   })
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
     if (!job) return []
-    const screening = job.questions.filter((q: any) => {
+    const screening = job.questions.filter((q: JobQuestion) => {
       const lower = q.question.toLowerCase()
       return !lower.includes("resume") && !lower.includes("cv") && !lower.includes("cover letter")
     })
@@ -275,23 +277,7 @@ export function JobForm({ job }: JobFormProps) {
 
   // --- Keywords state ---
   const [keywords, setKeywords] = useState<string[]>(job?.keywords ?? [])
-  const [newKeyword, setNewKeyword] = useState("")
   const [isRegeneratingKeywords, setIsRegeneratingKeywords] = useState(false)
-  const [deleteKwConfirmOpen, setDeleteKwConfirmOpen] = useState(false)
-  const [unpublishConfirmOpen, setUnpublishConfirmOpen] = useState(false)
-  const [kwToDelete, setKwToDelete] = useState<string | null>(null)
-
-  const handleKeywordDeleteClick = (kw: string) => {
-    setKwToDelete(kw)
-    setDeleteKwConfirmOpen(true)
-  }
-
-  const handleKeywordDeleteConfirm = () => {
-    if (kwToDelete) {
-      setKeywords(prev => prev.filter(k => k !== kwToDelete))
-      setKwToDelete(null)
-    }
-  }
 
   // --- Salary helpers ---
   function getSalaryPayload(): { salaryMin: number | null; salaryMax: number | null } {
@@ -505,10 +491,6 @@ export function JobForm({ job }: JobFormProps) {
       toast.error("Please enter a job title before saving as draft.")
       return
     }
-    if (isEdit && job?.status === "PUBLISHED") {
-      setUnpublishConfirmOpen(true)
-      return
-    }
     executeSaveDraft()
   }
 
@@ -691,7 +673,6 @@ export function JobForm({ job }: JobFormProps) {
           setKeywords={setKeywords}
           setErrors={setErrors}
           setStep={setStep}
-          handleKeywordDeleteClick={handleKeywordDeleteClick}
           isRegeneratingKeywords={isRegeneratingKeywords}
           setIsRegeneratingKeywords={setIsRegeneratingKeywords}
         />

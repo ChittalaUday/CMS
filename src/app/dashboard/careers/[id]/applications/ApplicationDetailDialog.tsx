@@ -33,6 +33,8 @@ import {
   Loader2,
   FileText,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 
 import { getAtsScore, getApplicationById } from "../../actions"
@@ -129,6 +131,12 @@ interface ApplicationDetailDialogProps {
   job: JobPosting
   onStatusChange: (id: string, status: ApplicationStatus, notes?: string) => Promise<void>
   onApplicationUpdate?: (app: Application) => void
+  onNavigatePrev?: () => void
+  onNavigateNext?: () => void
+  hasPrev?: boolean
+  hasNext?: boolean
+  currentIndex?: number
+  totalInList?: number
 }
 
 export function ApplicationDetailDialog({
@@ -138,6 +146,12 @@ export function ApplicationDetailDialog({
   job,
   onStatusChange,
   onApplicationUpdate,
+  onNavigatePrev,
+  onNavigateNext,
+  hasPrev,
+  hasNext,
+  currentIndex,
+  totalInList,
 }: ApplicationDetailDialogProps) {
   const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false)
   const [tempNotes, setTempNotes] = useState("")
@@ -290,6 +304,35 @@ export function ApplicationDetailDialog({
             </div>
 
             <div className="flex items-center gap-3 flex-wrap sm:ml-auto">
+              {/* Candidate Prev/Next Navigator */}
+              {onNavigatePrev && onNavigateNext && totalInList && totalInList > 1 && (
+                <div className="flex items-center border border-border/60 rounded-lg p-0.5 bg-muted/40 shrink-0 mr-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 rounded-md"
+                    disabled={!hasPrev}
+                    onClick={onNavigatePrev}
+                    title="Previous Candidate"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <span className="text-[11px] font-mono px-2 text-muted-foreground select-none">
+                    {(currentIndex ?? 0) + 1} / {totalInList}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 rounded-md"
+                    disabled={!hasNext}
+                    onClick={onNavigateNext}
+                    title="Next Candidate"
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              )}
+
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span
                   className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
@@ -649,7 +692,7 @@ export function ApplicationDetailDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="w-full h-full bg-muted/20 rounded-lg overflow-hidden relative border border-border/40 flex flex-col min-h-[400px]">
+                  <div className="w-full h-full bg-muted/20 rounded-lg overflow-hidden relative border border-border/40 flex flex-col min-h-100">
                     {application.resumeUrl ? (
                       <div className="w-full h-full flex flex-col">
                         <PdfViewer url={application.resumeUrl} useProxy={true} />
@@ -686,7 +729,7 @@ export function ApplicationDetailDialog({
               value={tempNotes}
               onChange={(e) => setTempNotes(e.target.value)}
               placeholder="Candidate background details, interview evaluation, feedback..."
-              className="min-h-[120px] text-xs bg-muted/20 border-border/85 resize-y focus:ring-1 focus:ring-primary"
+              className="min-h-30 text-xs bg-muted/20 border-border/85 resize-y focus:ring-1 focus:ring-primary"
             />
 
             <div className="flex justify-end gap-2 pt-2 border-t border-border/40">

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, AlertCircle, IndianRupeeIcon, Calendar } from "lucide-react"
+import { Plus, AlertCircle, IndianRupeeIcon } from "lucide-react"
 import { BasicDetails, JobType, SalaryMode, JOB_TYPE_LABELS } from "./types"
 
 function FieldError({ message }: { message?: string }) {

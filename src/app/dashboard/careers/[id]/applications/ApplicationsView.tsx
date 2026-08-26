@@ -52,6 +52,8 @@ import {
   FileText,
   Briefcase,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { updateApplicationStatus, getAtsScore, getApplicationById } from "../../actions"
 import { evaluateSearchQuery } from "@/lib/careers/search-parser"
@@ -101,10 +103,21 @@ interface JobPosting {
   keywords: string[]
 }
 
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { ApplicationsPagination } from "./ApplicationsPagination"
+
 interface ApplicationsViewProps {
   applications: Application[]
   job: JobPosting
   search?: string
+  pagination?: {
+    page: number
+    pageSize: number
+    totalCount: number
+    totalPages: number
+  }
+  statusCounts?: Record<string, number>
+  currentStatus?: string
 }
 
 const STATUS_CONFIG: Record<
@@ -147,7 +160,18 @@ const ALLOWED_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
   REJECTED: ["REVIEWING"],
 }
 
-export function ApplicationsView({ applications: initial, job, search: propSearch }: ApplicationsViewProps) {
+export function ApplicationsView({
+  applications: initial,
+  job,
+  search: propSearch,
+  pagination,
+  statusCounts,
+  currentStatus,
+}: ApplicationsViewProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [applications, setApplications] = useState(initial)
   const [localSearch, setLocalSearch] = useState("")
   const search = propSearch !== undefined ? propSearch : localSearch
@@ -158,6 +182,12 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false)
   const [tempNotes, setTempNotes] = useState("")
+
+  const [prevInitial, setPrevInitial] = useState(initial)
+  if (initial !== prevInitial) {
+    setPrevInitial(initial)
+    setApplications(initial)
+  }
 
   const filtered = applications.filter((a) => {
     const matchesSearch =
@@ -171,27 +201,45 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
         extractedLocation: a.extractedLocation || null,
         extractedEducation: a.extractedEducation || null,
       })
-    const matchesStatus = statusFilter === "ALL" || a.status === statusFilter
+    const matchesStatus =
+      currentStatus && currentStatus !== "ALL"
+        ? true
+        : statusFilter === "ALL" || a.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  // Status counts for the stat cards
-  const counts = applications.reduce(
+  // Status counts for the stat cards (use server statusCounts if provided, fallback to client counts)
+  const counts = statusCounts ?? applications.reduce(
     (acc, a) => {
       acc[a.status] = (acc[a.status] ?? 0) + 1
+      acc.ALL = (acc.ALL ?? 0) + 1
       return acc
     },
-    {} as Record<string, number>
+    { ALL: applications.length } as Record<string, number>
   )
 
+  const activeStatus = currentStatus || statusFilter
+
   const statCards = [
-    { key: "ALL" as const,         label: "Total",      count: applications.length,      dotColor: "bg-foreground",    cardColor: statusFilter === "ALL" ? "border-primary bg-primary/5" : "border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/5" },
-    { key: "NEW" as const,         label: "New",        count: counts["NEW"] ?? 0,        dotColor: "bg-blue-500",      cardColor: statusFilter === "NEW" ? "border-blue-500 bg-blue-500/5" : "border-border/60 bg-card/40 hover:border-blue-500/40 hover:bg-blue-500/5" },
-    { key: "REVIEWING" as const,   label: "Reviewing",  count: counts["REVIEWING"] ?? 0,  dotColor: "bg-yellow-500",    cardColor: statusFilter === "REVIEWING" ? "border-yellow-500 bg-yellow-500/5" : "border-border/60 bg-card/40 hover:border-yellow-500/40 hover:bg-yellow-500/5" },
-    { key: "SHORTLISTED" as const, label: "Shortlisted",count: counts["SHORTLISTED"] ?? 0,dotColor: "bg-purple-500",    cardColor: statusFilter === "SHORTLISTED" ? "border-purple-500 bg-purple-500/5" : "border-border/60 bg-card/40 hover:border-purple-500/40 hover:bg-purple-500/5" },
-    { key: "REJECTED" as const,    label: "Rejected",   count: counts["REJECTED"] ?? 0,   dotColor: "bg-red-500",       cardColor: statusFilter === "REJECTED" ? "border-red-500 bg-red-500/5" : "border-border/60 bg-card/40 hover:border-red-500/40 hover:bg-red-500/5" },
-    { key: "HIRED" as const,       label: "Hired",      count: counts["HIRED"] ?? 0,      dotColor: "bg-emerald-500",   cardColor: statusFilter === "HIRED" ? "border-emerald-500 bg-emerald-500/5" : "border-border/60 bg-card/40 hover:border-emerald-500/40 hover:bg-emerald-500/5" },
+    { key: "ALL" as const, label: "Total", count: counts["ALL"] ?? 0, dotColor: "bg-foreground", cardColor: activeStatus === "ALL" ? "border-primary bg-primary/5" : "border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/5" },
+    { key: "NEW" as const, label: "New", count: counts["NEW"] ?? 0, dotColor: "bg-blue-500", cardColor: activeStatus === "NEW" ? "border-blue-500 bg-blue-500/5" : "border-border/60 bg-card/40 hover:border-blue-500/40 hover:bg-blue-500/5" },
+    { key: "REVIEWING" as const, label: "Reviewing", count: counts["REVIEWING"] ?? 0, dotColor: "bg-yellow-500", cardColor: activeStatus === "REVIEWING" ? "border-yellow-500 bg-yellow-500/5" : "border-border/60 bg-card/40 hover:border-yellow-500/40 hover:bg-yellow-500/5" },
+    { key: "SHORTLISTED" as const, label: "Shortlisted", count: counts["SHORTLISTED"] ?? 0, dotColor: "bg-purple-500", cardColor: activeStatus === "SHORTLISTED" ? "border-purple-500 bg-purple-500/5" : "border-border/60 bg-card/40 hover:border-purple-500/40 hover:bg-purple-500/5" },
+    { key: "REJECTED" as const, label: "Rejected", count: counts["REJECTED"] ?? 0, dotColor: "bg-red-500", cardColor: activeStatus === "REJECTED" ? "border-red-500 bg-red-500/5" : "border-border/60 bg-card/40 hover:border-red-500/40 hover:bg-red-500/5" },
+    { key: "HIRED" as const, label: "Hired", count: counts["HIRED"] ?? 0, dotColor: "bg-emerald-500", cardColor: activeStatus === "HIRED" ? "border-emerald-500 bg-emerald-500/5" : "border-border/60 bg-card/40 hover:border-emerald-500/40 hover:bg-emerald-500/5" },
   ]
+
+  function handleStatCardClick(key: ApplicationStatus | "ALL") {
+    setStatusFilter(key)
+    const params = new URLSearchParams(searchParams.toString())
+    if (key === "ALL") {
+      params.delete("status")
+    } else {
+      params.set("status", key)
+    }
+    params.delete("page")
+    router.push(`${pathname}?${params.toString()}`)
+  }
 
   function handleUpdateStatus(id: string, status: ApplicationStatus, internalNotes?: string) {
     setUpdatingId(id)
@@ -242,7 +290,7 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
           setSelectedModel((prev) => prev || models[0].name)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   // Cancel any in-flight poll when the drawer closes
@@ -290,16 +338,16 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
               prev.map((a) =>
                 a.id === selected.id
                   ? {
-                      ...a,
-                      atsStatus: "COMPLETED",
-                      atsScore: app.atsScore,
-                      atsConfidence: app.atsConfidence,
-                      atsJustification: app.atsJustification,
-                      extractedSkills: app.extractedSkills || [],
-                      extractedExperience: app.extractedExperience ?? null,
-                      extractedLocation: app.extractedLocation ?? null,
-                      extractedEducation: app.extractedEducation ?? null,
-                    }
+                    ...a,
+                    atsStatus: "COMPLETED",
+                    atsScore: app.atsScore,
+                    atsConfidence: app.atsConfidence,
+                    atsJustification: app.atsJustification,
+                    extractedSkills: app.extractedSkills || [],
+                    extractedExperience: app.extractedExperience ?? null,
+                    extractedLocation: app.extractedLocation ?? null,
+                    extractedEducation: app.extractedEducation ?? null,
+                  }
                   : a
               )
             )
@@ -340,6 +388,22 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
     setIsNotesDialogOpen(false)
   }
 
+  const selectedIndex = selected ? filtered.findIndex((a) => a.id === selected.id) : -1
+  const hasPrevCandidate = selectedIndex > 0
+  const hasNextCandidate = selectedIndex >= 0 && selectedIndex < filtered.length - 1
+
+  function handlePrevCandidate() {
+    if (hasPrevCandidate) {
+      openDrawer(filtered[selectedIndex - 1])
+    }
+  }
+
+  function handleNextCandidate() {
+    if (hasNextCandidate) {
+      openDrawer(filtered[selectedIndex + 1])
+    }
+  }
+
 
   return (
     <>
@@ -348,7 +412,7 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
         {statCards.map((card) => (
           <button
             key={card.key}
-            onClick={() => setStatusFilter(card.key)}
+            onClick={() => handleStatCardClick(card.key)}
             className={`group rounded-xl border p-3 flex flex-col items-start gap-1 text-left transition-all duration-150 cursor-pointer relative overflow-hidden ${card.cardColor}`}
           >
             <div className="flex items-center justify-between w-full">
@@ -365,9 +429,9 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
         ))}
       </div>
 
-      {/* Search + count row */}
-      <div className="flex items-center gap-3 justify-between">
-        {propSearch === undefined ? (
+      {/* Search + count row (standalone mode only) */}
+      {propSearch === undefined && (
+        <div className="flex items-center gap-3 justify-between">
           <div className="relative max-w-xs flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
@@ -377,17 +441,12 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
               className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
             />
           </div>
-        ) : (
-          <div className="flex-1" />
-        )}
-        <p className="text-xs text-muted-foreground shrink-0">
-          {filtered.length} of {applications.length} shown
-        </p>
-      </div>
+        </div>
+      )}
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="min-h-[200px] rounded-xl border border-dashed border-border/80 bg-muted/10 flex flex-col items-center justify-center gap-2 p-8 text-center">
+        <div className="min-h-50 rounded-xl border border-dashed border-border/80 bg-muted/10 flex flex-col items-center justify-center gap-2 p-8 text-center">
           <User className="size-7 text-muted-foreground/40" />
           <p className="font-semibold text-sm">No applications match your filter</p>
           <p className="text-xs text-muted-foreground">Try changing the status filter or search term.</p>
@@ -439,13 +498,13 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                             <p className="font-semibold text-sm text-foreground leading-snug">
                               {app.applicantName}
                             </p>
-                            <p className="text-xs text-muted-foreground truncate max-w-[160px]">
+                            <p className="text-xs text-muted-foreground truncate max-w-40">
                               {app.applicantEmail}
                             </p>
                             {app.notes && (
                               <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
                                 <MessageSquare className="size-3 shrink-0" />
-                                <span className="truncate max-w-[160px]" title={app.notes}>
+                                <span className="truncate max-w-40" title={app.notes}>
                                   {app.notes}
                                 </span>
                               </p>
@@ -479,13 +538,12 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                         )}
                         {app.atsStatus === "COMPLETED" && app.atsScore !== null && (
                           <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                              app.atsScore >= 70
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${app.atsScore >= 70
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                                 : app.atsScore >= 40
-                                ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
-                                : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-                            }`}
+                                  ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                                  : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                              }`}
                             title={app.atsJustification || ""}
                           >
                             {app.atsScore}% Match
@@ -616,8 +674,17 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
         </div>
       )}
 
+      {pagination && (
+        <ApplicationsPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalCount={pagination.totalCount}
+          totalPages={pagination.totalPages}
+        />
+      )}
+
       <Dialog open={!!selected} onOpenChange={(open) => { if (!open) setSelected(null) }}>
-        <DialogContent 
+        <DialogContent
           aria-describedby={undefined}
           className="max-w-[96vw] w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-5 gap-4 overflow-hidden bg-background"
         >
@@ -652,12 +719,40 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap sm:ml-auto">
+                  {/* Candidate Prev/Next Navigator */}
+                  {filtered.length > 1 && (
+                    <div className="flex items-center border border-border/60 rounded-lg p-0.5 bg-muted/40 shrink-0 mr-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 rounded-md"
+                        disabled={!hasPrevCandidate}
+                        onClick={handlePrevCandidate}
+                        title="Previous Candidate"
+                      >
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <span className="text-[11px] font-mono px-2 text-muted-foreground select-none">
+                        {selectedIndex + 1} / {filtered.length}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 rounded-md"
+                        disabled={!hasNextCandidate}
+                        onClick={handleNextCandidate}
+                        title="Next Candidate"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Status update control */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span
-                      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                        STATUS_CONFIG[selected.status].classes
-                      }`}
+                      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${STATUS_CONFIG[selected.status].classes
+                        }`}
                     >
                       <span
                         className={`size-1.5 rounded-full ${STATUS_CONFIG[selected.status].dotColor}`}
@@ -720,13 +815,13 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                       <p className="font-bold text-sm text-foreground">{job.title}</p>
                       <p className="text-muted-foreground mt-0.5">{job.department} • {job.location}</p>
                     </div>
-                    
+
                     {job.description && (
                       <div className="space-y-1">
                         <p className="font-semibold text-muted-foreground uppercase tracking-wider">Description</p>
-                        <div 
+                        <div
                           className="prose prose-sm dark:prose-invert text-foreground/80 max-w-none text-xs line-clamp-10"
-                          dangerouslySetInnerHTML={{ __html: job.description }} 
+                          dangerouslySetInnerHTML={{ __html: job.description }}
                         />
                       </div>
                     )}
@@ -734,9 +829,9 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                     {job.requirements && (
                       <div className="space-y-1">
                         <p className="font-semibold text-muted-foreground uppercase tracking-wider">Requirements</p>
-                        <div 
+                        <div
                           className="prose prose-sm dark:prose-invert text-foreground/80 max-w-none text-xs"
-                          dangerouslySetInnerHTML={{ __html: job.requirements }} 
+                          dangerouslySetInnerHTML={{ __html: job.requirements }}
                         />
                       </div>
                     )}
@@ -744,9 +839,9 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                     {job.responsibilities && (
                       <div className="space-y-1">
                         <p className="font-semibold text-muted-foreground uppercase tracking-wider">Responsibilities</p>
-                        <div 
+                        <div
                           className="prose prose-sm dark:prose-invert text-foreground/80 max-w-none text-xs"
-                          dangerouslySetInnerHTML={{ __html: job.responsibilities }} 
+                          dangerouslySetInnerHTML={{ __html: job.responsibilities }}
                         />
                       </div>
                     )}
@@ -857,22 +952,20 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                     <div className="flex bg-muted/65 p-1 rounded-lg border border-border/40">
                       <button
                         onClick={() => setActiveTab("ai")}
-                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                          activeTab === "ai"
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${activeTab === "ai"
                             ? "bg-background text-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
-                        }`}
+                          }`}
                       >
                         <Sparkles className="size-3.5" />
                         AI Analysis
                       </button>
                       <button
                         onClick={() => setActiveTab("pdf")}
-                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                          activeTab === "pdf"
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${activeTab === "pdf"
                             ? "bg-background text-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
-                        }`}
+                          }`}
                       >
                         <FileText className="size-3.5" />
                         Document Viewer
@@ -1035,7 +1128,7 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
                         )}
                       </div>
                     ) : (
-                      <div className="w-full h-full bg-muted/20 rounded-lg overflow-hidden relative border border-border/40 flex flex-col min-h-[400px]">
+                      <div className="w-full h-full bg-muted/20 rounded-lg overflow-hidden relative border border-border/40 flex flex-col min-h-100">
                         {selected.resumeUrl ? (
                           <div className="w-full h-full flex flex-col">
                             <PdfViewer url={selected.resumeUrl} useProxy={true} />
@@ -1075,7 +1168,7 @@ export function ApplicationsView({ applications: initial, job, search: propSearc
               value={tempNotes}
               onChange={(e) => setTempNotes(e.target.value)}
               placeholder="Candidate background details, interview evaluation, feedback..."
-              className="min-h-[120px] text-xs bg-muted/20 border-border/85 resize-y focus:ring-1 focus:ring-primary"
+              className="min-h-30 text-xs bg-muted/20 border-border/85 resize-y focus:ring-1 focus:ring-primary"
             />
 
             <div className="flex justify-end gap-2 pt-2 border-t border-border/40">

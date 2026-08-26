@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 
 interface PageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ status?: string; search?: string; page?: string }>
+  searchParams: Promise<{ status?: string; search?: string; page?: string; pageSize?: string }>
 }
 
 export default async function ApplicationsPage({ params, searchParams }: PageProps) {
@@ -26,12 +26,19 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
   const job = await getJobPostingById(id)
   if (!job) notFound()
 
-  const { applications } = await getApplications(id, {
-    status: sp.status,
-    search: sp.search,
-    page: sp.page ? parseInt(sp.page, 10) : 1,
-    pageSize: 50,
+  const page = sp.page ? Math.max(1, parseInt(sp.page, 10)) : 1
+  const pageSize = sp.pageSize ? Math.max(1, parseInt(sp.pageSize, 10)) : 20
+  const status = sp.status
+  const search = sp.search
+
+  const { applications, totalCount, totalPages, statusCounts } = await getApplications(id, {
+    status,
+    search,
+    page,
+    pageSize,
   })
+
+  const hasAnyApplications = (statusCounts?.ALL ?? 0) > 0
 
   return (
     <div className="space-y-5 w-full px-1 py-3">
@@ -64,13 +71,12 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
                 {job.location}
               </span>
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                  job.status === "PUBLISHED"
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${job.status === "PUBLISHED"
                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                     : job.status === "DRAFT"
-                    ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
-                    : "bg-muted/60 text-muted-foreground border-border/60"
-                }`}
+                      ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20"
+                      : "bg-muted/60 text-muted-foreground border-border/60"
+                  }`}
               >
                 {job.status}
               </span>
@@ -91,8 +97,8 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
       </div>
 
       {/* Applications table (includes stat cards + search) */}
-      {applications.length === 0 ? (
-        <div className="min-h-[300px] rounded-2xl border border-dashed border-border/80 bg-muted/10 flex flex-col justify-center items-center text-center p-8">
+      {!hasAnyApplications && !search && !status ? (
+        <div className="min-h-75 rounded-2xl border border-dashed border-border/80 bg-muted/10 flex flex-col justify-center items-center text-center p-8">
           <div className="size-16 rounded-full bg-muted flex items-center justify-center mb-5 shadow-inner">
             <Users className="size-8 text-muted-foreground/60" />
           </div>
@@ -104,7 +110,19 @@ export default async function ApplicationsPage({ params, searchParams }: PagePro
           </p>
         </div>
       ) : (
-        <ApplicationsWrapper applications={applications} job={job} />
+        <ApplicationsWrapper
+          applications={applications}
+          job={job}
+          pagination={{
+            page,
+            pageSize,
+            totalCount,
+            totalPages,
+          }}
+          statusCounts={statusCounts}
+          currentStatus={status || "ALL"}
+          currentSearch={search || ""}
+        />
       )}
     </div>
   )

@@ -67,7 +67,7 @@ export function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-full md:flex-1 md:min-w-[200px] rounded-2xl border bg-muted/20 p-4 min-h-[500px] transition-all duration-200 ${
+      className={`flex flex-col w-full md:flex-1 md:min-w-50 rounded-2xl border bg-muted/20 p-4 min-h-125 transition-all duration-200 ${
         isOver
           ? "border-primary bg-primary/5 ring-1 ring-primary/20"
           : "border-border/50"
@@ -94,12 +94,12 @@ export function KanbanColumn({
         items={applications.map((app) => app.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[calc(100vh-320px)] md:max-h-[600px] min-h-[150px]">
+        <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[calc(100vh-320px)] md:max-h-150 min-h-37.5">
           {applications.length === 0 ? (
-            <div className="h-full min-h-[150px] flex flex-col items-center justify-center text-center p-4 border border-dashed border-border/60 rounded-xl bg-card/10 text-muted-foreground gap-1.5 transition-all">
+            <div className="h-full min-h-37.5 flex flex-col items-center justify-center text-center p-4 border border-dashed border-border/60 rounded-xl bg-card/10 text-muted-foreground gap-1.5 transition-all">
               <Users className="size-5 opacity-40" />
               <p className="text-[11px] font-medium">No candidates</p>
-              <p className="text-[9px] opacity-75 max-w-[150px]">
+              <p className="text-[9px] opacity-75 max-w-37.5">
                 Drag cards here to update status.
               </p>
             </div>

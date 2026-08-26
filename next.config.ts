@@ -20,9 +20,15 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    remotePatterns: r2PublicUrl
-      ? [{ protocol: r2PublicUrl.protocol.replace(":", "") as "http" | "https", hostname: r2PublicUrl.hostname }]
-      : [],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.r2.dev",
+      },
+      ...(r2PublicUrl
+        ? [{ protocol: r2PublicUrl.protocol.replace(":", "") as "http" | "https", hostname: r2PublicUrl.hostname }]
+        : []),
+    ],
   },
 };
 

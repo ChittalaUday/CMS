@@ -52,38 +52,79 @@ interface JobPosting {
   keywords: string[]
 }
 
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+
 interface ApplicationsWrapperProps {
   applications: Application[]
   job: JobPosting
+  pagination: {
+    page: number
+    pageSize: number
+    totalCount: number
+    totalPages: number
+  }
+  statusCounts: Record<string, number>
+  currentStatus: string
+  currentSearch: string
 }
 
 export function ApplicationsWrapper({
   applications,
   job,
+  pagination,
+  statusCounts,
+  currentStatus,
+  currentSearch,
 }: ApplicationsWrapperProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [view, setView] = useState<ViewMode>("board")
-  const [search, setSearch] = useState("")
+  const [search, setSearch] = useState(currentSearch)
   const [mounted, setMounted] = useState(false)
 
   // Retrieve view mode preference from localStorage on client-side mount
   useEffect(() => {
     const savedView = localStorage.getItem("applications_view_mode") as ViewMode
     if (savedView && (savedView === "board" || savedView === "table")) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading localStorage (external system, unavailable during SSR) on mount, not derived state
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading localStorage on mount
       setView(savedView)
     }
     setMounted(true)
   }, [])
+
+  const [prevCurrentSearch, setPrevCurrentSearch] = useState(currentSearch)
+  if (currentSearch !== prevCurrentSearch) {
+    setPrevCurrentSearch(currentSearch)
+    setSearch(currentSearch)
+  }
+
+  // Debounced update of search parameter in URL
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (search !== currentSearch) {
+        const params = new URLSearchParams(searchParams.toString())
+        if (search.trim()) {
+          params.set("search", search.trim())
+        } else {
+          params.delete("search")
+        }
+        params.delete("page")
+        router.push(`${pathname}?${params.toString()}`)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search, currentSearch, pathname, router, searchParams])
 
   function handleViewChange(mode: ViewMode) {
     setView(mode)
     localStorage.setItem("applications_view_mode", mode)
   }
 
-  // To prevent hydration flickering mismatch, we show a loading skeletons structure on SSR
   if (!mounted) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center text-muted-foreground/60 gap-2">
+      <div className="min-h-100 flex items-center justify-center text-muted-foreground/60 gap-2">
         <Loader2 className="size-5 animate-spin" />
         <span className="text-xs">Loading applications...</span>
       </div>
@@ -92,7 +133,7 @@ export function ApplicationsWrapper({
 
   return (
     <div className="space-y-4">
-      {/* Page Layout View Toggle Header bar (with search in same line) */}
+      {/* View Toggle Header Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-2 border-b border-border/60">
         {/* Search Bar */}
         <div className="relative max-w-xs flex-1 w-full sm:w-auto">
@@ -100,7 +141,7 @@ export function ApplicationsWrapper({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search applicants by name, skills..."
+            placeholder="Search applicants by name, email..."
             className="h-8 pl-8 text-xs bg-muted/30 border-border/60"
           />
         </div>
@@ -137,11 +178,24 @@ export function ApplicationsWrapper({
         </div>
       </div>
 
-      {/* Renders the selected layout mode */}
+      {/* Renders selected layout mode */}
       {view === "board" ? (
-        <ApplicationsKanban applications={applications} job={job} search={search} />
+        <ApplicationsKanban
+          applications={applications}
+          job={job}
+          search={search}
+          pagination={pagination}
+          statusCounts={statusCounts}
+        />
       ) : (
-        <ApplicationsView applications={applications} job={job} search={search} />
+        <ApplicationsView
+          applications={applications}
+          job={job}
+          search={search}
+          pagination={pagination}
+          statusCounts={statusCounts}
+          currentStatus={currentStatus}
+        />
       )}
     </div>
   )

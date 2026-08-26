@@ -123,8 +123,8 @@ export async function GET(request: NextRequest) {
       where: { id: auth.clientId },
       select: { settings: true }
     })
-    const settings = (client?.settings as any) || {}
-    const careersConfig = settings.careers || {}
+    const settings = (client?.settings as Record<string, unknown> | null) || {}
+    const careersConfig = (settings.careers as { defaultTemplate?: string; templatePosition?: string } | null) || {}
 
     const jobsResponse = jobs.map(job => {
       let globalTemplate = null;

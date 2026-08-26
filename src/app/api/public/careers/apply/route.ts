@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const application = await submitApplication({
+    await submitApplication({
       jobId,
       applicantName,
       applicantEmail,

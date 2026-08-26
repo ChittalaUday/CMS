@@ -285,7 +285,7 @@ export async function getJobPostingById(id: string) {
 export async function getJobPostingBySlug(slug: string) {
   const user = await getSession().catch(() => null)
 
-  let job: any = null
+  let job: (Prisma.JobPostingGetPayload<{ include: { questions: { orderBy: { order: "asc" } } } }>) | null = null
   let finalClientId: string | null = null
 
   if (user && user.role === Role.SUPER_ADMIN) {
@@ -294,7 +294,7 @@ export async function getJobPostingBySlug(slug: string) {
       where: { slug },
       include: { questions: { orderBy: { order: "asc" } } },
     })
-    finalClientId = job?.clientId
+    finalClientId = job?.clientId ?? null
   } else if (user && user.clientId) {
     // Client admins can preview their own client's jobs regardless of status.
     // Non-admins (HR) may only preview published jobs, or drafts they created themselves.
@@ -318,7 +318,7 @@ export async function getJobPostingBySlug(slug: string) {
       },
       include: { questions: { orderBy: { order: "asc" } } },
     })
-    finalClientId = apiClientId || job?.clientId
+    finalClientId = apiClientId || job?.clientId || null
   }
 
   if (job && finalClientId) {
@@ -326,8 +326,8 @@ export async function getJobPostingBySlug(slug: string) {
       where: { id: finalClientId },
       select: { settings: true },
     })
-    const settings = (client?.settings as any) || {}
-    const careersConfig = settings.careers || {}
+    const settings = (client?.settings as Record<string, unknown> | null) || {}
+    const careersConfig = (settings.careers as { defaultTemplate?: string; templatePosition?: string } | null) || {}
     if (careersConfig.defaultTemplate) {
       if (careersConfig.templatePosition === "start") {
         job.description = `${careersConfig.defaultTemplate}<br><br>${job.description}`
@@ -544,14 +544,14 @@ export async function createDraftOf(publishedJobId: string) {
 
       questions: source.questions.length
         ? {
-            create: source.questions.map((q) => ({
-              question: q.question,
-              type: q.type,
-              required: q.required,
-              order: q.order,
-              options: q.options ?? undefined,
-            })),
-          }
+          create: source.questions.map((q) => ({
+            question: q.question,
+            type: q.type,
+            required: q.required,
+            order: q.order,
+            options: q.options ?? undefined,
+          })),
+        }
         : undefined,
     },
   })
@@ -617,14 +617,14 @@ export async function publishDraft(draftId: string) {
 
         questions: draft.questions.length
           ? {
-              create: draft.questions.map((q) => ({
-                question: q.question,
-                type: q.type,
-                required: q.required,
-                order: q.order,
-                options: q.options ?? undefined,
-              })),
-            }
+            create: draft.questions.map((q) => ({
+              question: q.question,
+              type: q.type,
+              required: q.required,
+              order: q.order,
+              options: q.options ?? undefined,
+            })),
+          }
           : undefined,
       },
     })
@@ -633,13 +633,13 @@ export async function publishDraft(draftId: string) {
     revalidatePath("/dashboard/careers")
     return { id: draft.draftParentId }
   } else {
-    await prisma.jobPosting.update({ 
-      where: { id: draftId }, 
-      data: { 
+    await prisma.jobPosting.update({
+      where: { id: draftId },
+      data: {
         status: "PUBLISHED",
         keywords: draft.keywords,
         keywordStatus: draft.keywordStatus
-      } 
+      }
     })
     revalidatePath("/dashboard/careers")
     return { id: draftId }
@@ -685,7 +685,16 @@ export async function getApplications(
     ]
   }
 
-  const [applications, totalCount] = await Promise.all([
+  // Base search condition for status breakdown across all applications for this job
+  const baseWhere: Prisma.JobApplicationWhereInput = { jobId }
+  if (params.search?.trim()) {
+    baseWhere.OR = [
+      { applicantName: { contains: params.search.trim(), mode: "insensitive" } },
+      { applicantEmail: { contains: params.search.trim(), mode: "insensitive" } },
+    ]
+  }
+
+  const [applications, totalCount, statusGroup] = await Promise.all([
     prisma.jobApplication.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -700,9 +709,35 @@ export async function getApplications(
       },
     }),
     prisma.jobApplication.count({ where }),
+    prisma.jobApplication.groupBy({
+      by: ["status"],
+      where: baseWhere,
+      _count: { status: true },
+    }),
   ])
 
-  return { applications, totalCount, page, pageSize, totalPages: Math.ceil(totalCount / pageSize) }
+  const statusCounts: Record<string, number> = {
+    ALL: 0,
+    NEW: 0,
+    REVIEWING: 0,
+    SHORTLISTED: 0,
+    REJECTED: 0,
+    HIRED: 0,
+  }
+
+  for (const item of statusGroup) {
+    statusCounts[item.status] = item._count.status
+    statusCounts.ALL += item._count.status
+  }
+
+  return {
+    applications,
+    totalCount,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+    statusCounts,
+  }
 }
 
 export async function getApplicationById(id: string) {
@@ -828,7 +863,7 @@ export async function submitApplication(data: ApplicationSubmitInput) {
           : undefined,
       },
     })
-    
+
     // Asynchronously trigger Ollama ATS queue processing without blocking submission response
     processQueue().catch((err) => console.error("Error in background ATS queue worker:", err))
 
@@ -973,13 +1008,13 @@ export async function triggerQueueWorker() {
 
 export async function resetFailedQueueItems() {
   await requireCareersAccess()
-  
+
   // 1. Reset failed application scans
   const failedApps = await prisma.jobApplication.findMany({
     where: { atsStatus: QueueStatus.FAILED },
     select: { id: true }
   })
-  
+
   await prisma.jobApplication.updateMany({
     where: { atsStatus: QueueStatus.FAILED },
     data: { atsStatus: QueueStatus.PENDING, atsScore: null, atsJustification: null },
@@ -998,7 +1033,7 @@ export async function resetFailedQueueItems() {
 
   // Re-enqueue to active queues
   const { enqueueAtsScorer, enqueueKeywordGeneration } = await import("@/lib/careers/ats-queue")
-  
+
   for (const app of failedApps) {
     enqueueAtsScorer(app.id)
   }
@@ -1048,7 +1083,7 @@ Respond with ONLY a comma-separated list of the extracted keywords (e.g. "React,
 
 export async function updateJobKeywords(jobId: string, keywords: string[]) {
   await assertJobOwnership(jobId)
-  
+
   const updated = await prisma.jobPosting.update({
     where: { id: jobId },
     data: {
@@ -1056,10 +1091,10 @@ export async function updateJobKeywords(jobId: string, keywords: string[]) {
       keywordStatus: QueueStatus.COMPLETED
     }
   })
-  
+
   revalidatePath("/dashboard/careers")
   revalidatePath("/dashboard/careers/queue")
-  
+
   return updated
 }
 
@@ -1152,7 +1187,7 @@ export async function getCareerLocations() {
 export async function createCareerDepartment(name: string) {
   await requireCareersAccess()
   const clientId = await getClientScope()
-  
+
   try {
     const newDept = await prisma.careerDepartment.create({
       data: {
@@ -1169,7 +1204,7 @@ export async function createCareerDepartment(name: string) {
 export async function createCareerLocation(name: string) {
   await requireCareersAccess()
   const clientId = await getClientScope()
-  
+
   try {
     const newLoc = await prisma.careerLocation.create({
       data: {
@@ -1188,24 +1223,24 @@ export async function createCareerLocation(name: string) {
 export async function getCareersConfig() {
   const user = await requireCareersAccess()
   if (!user.clientId) return null
-  
+
   const client = await prisma.client.findUnique({
     where: { id: user.clientId },
     select: { settings: true }
   })
   if (!client?.settings) return null
-  
-  const settings = client.settings as any
+
+  const settings = client.settings as Record<string, unknown>
   return settings.careers as {
     defaultTemplate?: string
-    defaultTemplateJson?: any
+    defaultTemplateJson?: unknown
     templatePosition?: "start" | "end"
   } | undefined
 }
 
 export async function updateCareersConfig(config: {
   defaultTemplate?: string
-  defaultTemplateJson?: any
+  defaultTemplateJson?: unknown
   templatePosition?: "start" | "end"
 }) {
   const user = await requireCareersAdmin()
@@ -1216,20 +1251,20 @@ export async function updateCareersConfig(config: {
     select: { settings: true }
   })
 
-  let settings = (client?.settings as any) || {}
+  let settings = (client?.settings as Record<string, unknown> | null) || {}
   if (typeof settings !== "object") settings = {}
 
   settings = {
     ...settings,
     careers: {
-      ...((settings.careers as any) || {}),
+      ...((settings.careers as Record<string, unknown> | null) || {}),
       ...config
     }
   }
 
   await prisma.client.update({
     where: { id: user.clientId },
-    data: { settings }
+    data: { settings: settings as Prisma.InputJsonObject }
   })
 
   revalidatePath("/dashboard/careers")

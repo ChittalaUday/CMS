@@ -60,8 +60,8 @@ export async function GET(
       where: { id: auth.clientId },
       select: { settings: true }
     })
-    const settings = (client?.settings as any) || {}
-    const careersConfig = settings.careers || {}
+    const settings = (client?.settings as Record<string, unknown> | null) || {}
+    const careersConfig = (settings.careers as { defaultTemplate?: string; templatePosition?: string } | null) || {}
     
     let globalTemplate = null;
     if (careersConfig.defaultTemplate && !job.keywords?.includes("__exclude-global-template__")) {

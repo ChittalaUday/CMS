@@ -7,6 +7,8 @@ import { Sparkles, AlertCircle } from "lucide-react"
 import { RichTextEditor } from "@/components/RichTextEditor"
 import { DescriptionDetails } from "./types"
 
+import { CareersConfigData } from "../GlobalTemplateConfigButton"
+
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
   return (
@@ -24,7 +26,7 @@ interface JobFormStep2Props {
   setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>
   includeTemplate: boolean
   setIncludeTemplate: (val: boolean) => void
-  globalTemplateConfig: any
+  globalTemplateConfig: CareersConfigData | null
 }
 
 export function JobFormStep2({
@@ -62,12 +64,12 @@ export function JobFormStep2({
             </Label>
           </div>
         </div>
-        {includeTemplate && globalTemplateConfig?.defaultTemplate && globalTemplateConfig.templatePosition === "start" && (
+        {includeTemplate && Boolean(globalTemplateConfig?.defaultTemplate) && globalTemplateConfig?.templatePosition === "start" && (
           <div className="rounded-xl border border-border/80 overflow-hidden p-4 bg-muted/10 text-sm text-muted-foreground article-body opacity-80 pointer-events-none mb-4">
             <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
               <Sparkles className="size-3" /> About Company Description (Prepended Preview)
             </div>
-            <div dangerouslySetInnerHTML={{ __html: globalTemplateConfig.defaultTemplate }} />
+            <div dangerouslySetInnerHTML={{ __html: globalTemplateConfig.defaultTemplate! }} />
           </div>
         )}
         <div className="rounded-xl border border-border/80 overflow-hidden flex flex-col">
@@ -115,12 +117,12 @@ export function JobFormStep2({
           />
         </div>
       </div>
-      {includeTemplate && globalTemplateConfig?.defaultTemplate && globalTemplateConfig.templatePosition === "end" && (
+      {includeTemplate && Boolean(globalTemplateConfig?.defaultTemplate) && globalTemplateConfig?.templatePosition === "end" && (
         <div className="rounded-xl border border-border/80 overflow-hidden p-4 bg-muted/10 text-sm text-muted-foreground article-body opacity-80 pointer-events-none">
           <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
             <Sparkles className="size-3" /> About Company Description (Appended Preview)
           </div>
-          <div dangerouslySetInnerHTML={{ __html: globalTemplateConfig.defaultTemplate }} />
+          <div dangerouslySetInnerHTML={{ __html: globalTemplateConfig.defaultTemplate! }} />
         </div>
       )}
     </div>
