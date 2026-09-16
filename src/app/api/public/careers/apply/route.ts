@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
       const job = await prisma.jobPosting.findFirst({
         where: { id: jobId, clientId: auth.clientId },
-        include: { questions: true },
+        include: { questions: { where: { isDeleted: false } } },
       })
       if (!job) {
         return NextResponse.json({ error: "Job posting not found" }, { status: 404 })

@@ -264,7 +264,7 @@ export async function getJobPostingById(id: string) {
       createdBy: { select: { id: true, name: true, email: true } },
       draftParent: { select: { id: true, title: true, status: true } },
       drafts: { select: { id: true, title: true, status: true, updatedAt: true } },
-      questions: { orderBy: { order: "asc" } },
+      questions: { where: { isDeleted: false }, orderBy: { order: "asc" } },
       _count: { select: { applications: true } },
     },
   })
@@ -292,7 +292,7 @@ export async function getJobPostingBySlug(slug: string) {
     // Super admin can see any job status of any client
     job = await prisma.jobPosting.findFirst({
       where: { slug },
-      include: { questions: { orderBy: { order: "asc" } } },
+      include: { questions: { where: { isDeleted: false }, orderBy: { order: "asc" } } },
     })
     finalClientId = job?.clientId ?? null
   } else if (user && user.clientId) {
@@ -305,7 +305,7 @@ export async function getJobPostingBySlug(slug: string) {
         clientId: user.clientId,
         ...(isClientAdmin ? {} : { OR: [{ status: "PUBLISHED" }, { createdById: user.id }] }),
       },
-      include: { questions: { orderBy: { order: "asc" } } },
+      include: { questions: { where: { isDeleted: false }, orderBy: { order: "asc" } } },
     })
     finalClientId = user.clientId
   } else {
@@ -316,7 +316,7 @@ export async function getJobPostingBySlug(slug: string) {
         status: "PUBLISHED",
         ...(apiClientId ? { clientId: apiClientId } : {}),
       },
-      include: { questions: { orderBy: { order: "asc" } } },
+      include: { questions: { where: { isDeleted: false }, orderBy: { order: "asc" } } },
     })
     finalClientId = apiClientId || job?.clientId || null
   }
@@ -415,7 +415,58 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
   const slug = data.slug?.trim() || toSlug(data.title)
 
   try {
-    await prisma.jobQuestion.deleteMany({ where: { jobId: id } })
+    if (data.questions !== undefined) {
+      const existingQuestions = await prisma.jobQuestion.findMany({
+        where: { jobId: id },
+        select: { id: true },
+      })
+      const incomingIds = new Set(data.questions.filter((q) => q.id).map((q) => q.id as string))
+      const toSoftDelete = existingQuestions
+        .filter((eq) => !incomingIds.has(eq.id))
+        .map((eq) => eq.id)
+
+      if (toSoftDelete.length > 0) {
+        await prisma.jobQuestion.updateMany({
+          where: { id: { in: toSoftDelete } },
+          data: { isDeleted: true, deletedAt: new Date() },
+        })
+      }
+
+      for (const q of data.questions) {
+        if (q.id && existingQuestions.some((eq) => eq.id === q.id)) {
+          await prisma.jobQuestion.update({
+            where: { id: q.id },
+            data: {
+              question: q.question,
+              type: q.type,
+              required: q.required,
+              order: q.order,
+              options:
+                (q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") && q.options?.length
+                  ? q.options
+                  : undefined,
+              isDeleted: false,
+              deletedAt: null,
+            },
+          })
+        } else {
+          await prisma.jobQuestion.create({
+            data: {
+              jobId: id,
+              question: q.question,
+              type: q.type,
+              required: q.required,
+              order: q.order,
+              options:
+                (q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") && q.options?.length
+                  ? q.options
+                  : undefined,
+              isDeleted: false,
+            },
+          })
+        }
+      }
+    }
 
     const job = await prisma.jobPosting.update({
       where: { id },
@@ -436,12 +487,8 @@ export async function updateJobPosting(id: string, data: JobPostingInput) {
         requiredExperience: data.requiredExperience ?? null,
         currency: data.currency || "INR",
         closingDate: data.closingDate ? new Date(data.closingDate) : null,
-        questions: data.questions?.length
-          ? { create: buildQuestionsCreate(data.questions) }
-          : undefined,
         keywords: data.keywords ?? undefined,
         ...(data.keywords ? { keywordStatus: QueueStatus.COMPLETED } : {}),
-
       },
     })
     if (!data.keywords && (!existing?.keywords || existing.keywords.length === 0)) {
@@ -591,10 +638,55 @@ export async function publishDraft(draftId: string) {
   if (draft.status !== "DRAFT") throw new Error("Only drafts can be published this way.")
 
   if (draft.draftParentId) {
-    await prisma.jobQuestion.deleteMany({ where: { jobId: draft.draftParentId } })
+    const parentJobId = draft.draftParentId
+    const existingQuestions = await prisma.jobQuestion.findMany({
+      where: { jobId: parentJobId },
+      select: { id: true, question: true, type: true },
+    })
+
+    const draftQuestionTexts = new Set(draft.questions.map((q) => q.question))
+    const toSoftDelete = existingQuestions
+      .filter((eq) => !draftQuestionTexts.has(eq.question))
+      .map((eq) => eq.id)
+
+    if (toSoftDelete.length > 0) {
+      await prisma.jobQuestion.updateMany({
+        where: { id: { in: toSoftDelete } },
+        data: { isDeleted: true, deletedAt: new Date() },
+      })
+    }
+
+    // Copy draft questions to parent
+    for (const q of draft.questions) {
+      const match = existingQuestions.find((eq) => eq.question === q.question && eq.type === q.type)
+      if (match) {
+        await prisma.jobQuestion.update({
+          where: { id: match.id },
+          data: {
+            required: q.required,
+            order: q.order,
+            options: q.options ?? undefined,
+            isDeleted: false,
+            deletedAt: null,
+          },
+        })
+      } else {
+        await prisma.jobQuestion.create({
+          data: {
+            jobId: parentJobId,
+            question: q.question,
+            type: q.type,
+            required: q.required,
+            order: q.order,
+            options: q.options ?? undefined,
+            isDeleted: false,
+          },
+        })
+      }
+    }
 
     await prisma.jobPosting.update({
-      where: { id: draft.draftParentId },
+      where: { id: parentJobId },
       data: {
         title: draft.title,
         department: draft.department,
@@ -614,18 +706,6 @@ export async function publishDraft(draftId: string) {
         status: "PUBLISHED",
         keywords: draft.keywords,
         keywordStatus: draft.keywordStatus,
-
-        questions: draft.questions.length
-          ? {
-            create: draft.questions.map((q) => ({
-              question: q.question,
-              type: q.type,
-              required: q.required,
-              order: q.order,
-              options: q.options ?? undefined,
-            })),
-          }
-          : undefined,
       },
     })
 
@@ -832,7 +912,7 @@ export async function submitApplication(data: ApplicationSubmitInput) {
 
   const job = await prisma.jobPosting.findUnique({
     where: { id: data.jobId },
-    include: { questions: true },
+    include: { questions: { where: { isDeleted: false } } },
   })
   if (!job) throw new Error("This job posting no longer exists.")
   if (job.status !== "PUBLISHED") throw new Error("This job posting is no longer accepting applications.")

@@ -8,8 +8,6 @@ import { isAIConfigured } from "@/lib/ai/ai-config"
 
 // Auto-healing and queue recovery loader
 export async function initializeQueues() {
-  console.log("[Queue] Scanning database for pending tasks...")
-
   // Auto-healing: Reset any jobs stuck in 'PROCESSING' for more than 5 minutes back to 'PENDING'
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
   
@@ -69,7 +67,6 @@ export async function initializeQueues() {
     })
 
     if (idleJobs.length > 0) {
-      console.log(`[Queue] Auto-healing ${idleJobs.length} IDLE jobs to PENDING for keyword extraction.`)
       await prisma.jobPosting.updateMany({
         where: { id: { in: idleJobs.map(j => j.id) } },
         data: { keywordStatus: QueueStatus.PENDING }
@@ -93,7 +90,6 @@ export async function initializeQueues() {
   }
 
   if (appsQueued > 0 || jobsQueued > 0) {
-    console.log(`[Queue] Loaded ${appsQueued} new pending applications, ${jobsQueued} new pending jobs into active queues.`)
     queueEvents.emit("change")
   }
 }
@@ -185,7 +181,6 @@ export async function processJobKeywords(jobId: string) {
 // Queue Enqueuers (Deduplicated execution wrappers)
 export function enqueueAtsScorer(applicationId: string, model?: string) {
   if (!isAIConfigured()) {
-    console.log(`[Queue] AI is disabled (ENABLE_AI != true). Skipping ATS scoring for application ${applicationId}.`)
     return
   }
   if (activeAtsTaskIds.has(applicationId)) return
@@ -204,7 +199,6 @@ export function enqueueAtsScorer(applicationId: string, model?: string) {
 
 export function enqueueKeywordGeneration(jobId: string) {
   if (!isAIConfigured()) {
-    console.log(`[Queue] AI is disabled (ENABLE_AI != true). Skipping keyword extraction for job ${jobId}.`)
     return
   }
   if (activeKeywordTaskIds.has(jobId)) return

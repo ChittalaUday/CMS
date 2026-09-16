@@ -308,9 +308,12 @@ model JobQuestion {
   order     Int          @default(0)
   options   Json?
   answers   JobAnswer[]
+  isDeleted Boolean      @default(false)
+  deletedAt DateTime?
   createdAt DateTime     @default(now())
 
   @@index([jobId])
+  @@index([isDeleted])
 }
 
 model JobApplication {

@@ -34,6 +34,7 @@ export async function GET(
       },
       include: {
         questions: {
+          where: { isDeleted: false },
           orderBy: { order: "asc" },
           select: {
             id: true,
