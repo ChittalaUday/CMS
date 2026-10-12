@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef, useEffect } from "react"
+import { useState, useTransition, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -11,13 +11,25 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Check,
   Loader2,
   Undo2Icon,
   PencilIcon,
+  AlertCircle,
 } from "lucide-react"
 import {
   createJobPosting,
@@ -30,6 +42,7 @@ import {
   createCareerDepartment,
   createCareerLocation,
   getCareersConfig,
+  checkJobSlugAvailability,
   type JobPostingInput,
   type QuestionInput,
 } from "./actions"
@@ -44,13 +57,11 @@ import { JobFormFooter } from "./job-form/JobFormFooter"
 import { BasicDetails, DescriptionDetails, QuestionDraft, ExistingJob, SalaryMode, Step } from "./job-form/types"
 import { CareersConfigData } from "./GlobalTemplateConfigButton"
 
+import { toSlug } from "@/lib/careers/slug-helper"
+
 export interface JobFormProps { job?: ExistingJob }
 export type { ExistingJob }
 // --- Helpers ---
-
-function toSlug(text: string) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "")
-}
 
 function inferSalaryMode(min: number | null, max: number | null): SalaryMode {
   if (!min && !max) return "none"
@@ -223,8 +234,139 @@ export function JobForm({ job }: JobFormProps) {
     salaryMax: initialSalaryMode === "range" ? (job?.salaryMax?.toString() ?? "") : "",
     requiredExperience: job?.requiredExperience?.toString() ?? "",
     closingDate: job?.closingDate ? new Date(job.closingDate).toISOString().split("T")[0] : "",
-
   })
+
+  // --- Slug availability & auto-suggestion state ---
+  const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "unavailable">("idle")
+  const [suggestedSlug, setSuggestedSlug] = useState<string | null>(null)
+  const [slugConflictDialog, setSlugConflictDialog] = useState<{
+    isOpen: boolean
+    conflictSlug: string
+    suggestion: string
+  }>({
+    isOpen: false,
+    conflictSlug: "",
+    suggestion: "",
+  })
+  const slugCacheRef = useRef<Map<string, { available: boolean; suggestedSlug?: string }>>(new Map())
+
+  const performSlugCheck = useCallback(async (
+    targetSlug: string,
+    options?: { showConfirmDialogOnConflict?: boolean }
+  ): Promise<{ available: boolean; suggestedSlug?: string }> => {
+    const clean = toSlug(targetSlug)
+    if (!clean) {
+      setSlugStatus("idle")
+      return { available: true }
+    }
+
+    const cacheKey = `${clean}_${job?.id ?? "new"}`
+    if (slugCacheRef.current.has(cacheKey)) {
+      const cached = slugCacheRef.current.get(cacheKey)!
+      setSlugStatus(cached.available ? "available" : "unavailable")
+      setSuggestedSlug(cached.suggestedSlug ?? null)
+      if (!cached.available) {
+        setErrors((prev) => ({
+          ...prev,
+          slug: "This URL slug is already taken. Please choose a different slug or accept the suggestion.",
+        }))
+        if (options?.showConfirmDialogOnConflict && cached.suggestedSlug) {
+          setSlugConflictDialog({
+            isOpen: true,
+            conflictSlug: clean,
+            suggestion: cached.suggestedSlug,
+          })
+        }
+      } else {
+        setErrors((prev) => {
+          if (!prev.slug) return prev
+          const next = { ...prev }
+          delete next.slug
+          return next
+        })
+      }
+      return cached
+    }
+
+    setSlugStatus("checking")
+    try {
+      const res = await checkJobSlugAvailability(clean, job?.id)
+      slugCacheRef.current.set(cacheKey, res)
+
+      if (res.available) {
+        setSlugStatus("available")
+        setSuggestedSlug(null)
+        setErrors((prev) => {
+          if (!prev.slug) return prev
+          const next = { ...prev }
+          delete next.slug
+          return next
+        })
+      } else {
+        setSlugStatus("unavailable")
+        setSuggestedSlug(res.suggestedSlug ?? null)
+        setErrors((prev) => ({
+          ...prev,
+          slug: "This URL slug is already taken. Please choose a different slug or accept the suggestion.",
+        }))
+        if (options?.showConfirmDialogOnConflict && res.suggestedSlug) {
+          setSlugConflictDialog({
+            isOpen: true,
+            conflictSlug: clean,
+            suggestion: res.suggestedSlug,
+          })
+        }
+      }
+      return res
+    } catch {
+      setSlugStatus("idle")
+      return { available: true }
+    }
+  }, [job])
+
+  const handleTitleBlur = useCallback(() => {
+    if (!basic.title.trim()) return
+    const candidateSlug = basic.slug?.trim() || toSlug(basic.title)
+    if (!candidateSlug) return
+    performSlugCheck(candidateSlug, { showConfirmDialogOnConflict: true })
+  }, [basic, performSlugCheck])
+
+  const handleSlugBlur = useCallback(() => {
+    const candidateSlug = basic.slug?.trim() || toSlug(basic.title)
+    if (!candidateSlug) return
+    performSlugCheck(candidateSlug, { showConfirmDialogOnConflict: false })
+  }, [basic, performSlugCheck])
+
+  const handleApplySuggestedSlug = useCallback((suggestion: string) => {
+    slugEditedRef.current = true
+    setBasic((prev) => ({ ...prev, slug: suggestion }))
+    setSlugStatus("available")
+    setSuggestedSlug(null)
+    setSlugConflictDialog({ isOpen: false, conflictSlug: "", suggestion: "" })
+    setErrors((prev) => {
+      if (!prev.slug) return prev
+      const next = { ...prev }
+      delete next.slug
+      return next
+    })
+    toast.success(`URL slug updated to /careers/${suggestion}`)
+  }, [])
+
+  // --- Debounced background slug check while typing title or slug ---
+  useEffect(() => {
+    const candidate = basic.slug?.trim() || toSlug(basic.title)
+    const timer = setTimeout(() => {
+      if (!candidate) {
+        setSlugStatus("idle")
+        setSuggestedSlug(null)
+        return
+      }
+      // Check in background without forcing modal popup while typing
+      performSlugCheck(candidate, { showConfirmDialogOnConflict: false })
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [basic.title, basic.slug, performSlugCheck])
 
   // --- Step 2 state ---
   const [desc, setDesc] = useState<DescriptionDetails>({
@@ -355,7 +497,7 @@ export function JobForm({ job }: JobFormProps) {
 
   // --- Validation ---
 
-  function validateStep1(): boolean {
+  async function validateStep1(): Promise<boolean> {
     const errs: Record<string, string> = {}
     if (!basic.title.trim()) errs.title = "Job title is required."
     if (!basic.slug.trim()) errs.slug = "URL slug is required."
@@ -375,6 +517,14 @@ export function JobForm({ job }: JobFormProps) {
         errs.requiredExperience = "Experience must be a number (e.g. 3), range (e.g. 2-5), or format like 3+ years."
       }
     }
+
+    if (basic.slug.trim() && Object.keys(errs).length === 0) {
+      const check = await performSlugCheck(basic.slug.trim(), { showConfirmDialogOnConflict: true })
+      if (!check.available) {
+        errs.slug = "This URL slug is already taken. Please choose a different slug or accept the suggestion."
+      }
+    }
+
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -416,9 +566,9 @@ export function JobForm({ job }: JobFormProps) {
 
   // --- Navigation ---
 
-  function goNext() {
+  async function goNext() {
     const valid =
-      step === 1 ? validateStep1() :
+      step === 1 ? await validateStep1() :
       step === 2 ? validateStep2() :
       step === 3 ? validateStep3() : true
     if (valid) setStep((s: Step) => Math.min(4, s + 1) as Step)
@@ -625,6 +775,11 @@ export function JobForm({ job }: JobFormProps) {
           locations={locations}
           isLocsLoading={isLocsLoading}
           setIsAddingLoc={setIsAddingLoc}
+          slugStatus={slugStatus}
+          suggestedSlug={suggestedSlug}
+          onTitleBlur={handleTitleBlur}
+          onSlugBlur={handleSlugBlur}
+          onApplySuggestedSlug={handleApplySuggestedSlug}
         />
       )}
 
@@ -696,6 +851,9 @@ export function JobForm({ job }: JobFormProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Department</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Add a new department name to your workspace list.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -731,6 +889,9 @@ export function JobForm({ job }: JobFormProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Location</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Add a new location name to your workspace list.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -760,6 +921,61 @@ export function JobForm({ job }: JobFormProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Slug Conflict Confirmation Dialog */}
+      <AlertDialog
+        open={slugConflictDialog.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSlugConflictDialog((prev) => ({ ...prev, isOpen: false }))
+          }
+        }}
+      >
+        <AlertDialogContent className="data-[size=default]:sm:max-w-lg sm:max-w-lg max-w-[calc(100vw-2rem)] p-5">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-base font-bold">
+              <AlertCircle className="size-5 text-amber-500 shrink-0" />
+              URL Slug Already Exists
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground pt-1 space-y-3" asChild>
+              <div>
+                <p>
+                  A job posting with the URL slug{" "}
+                  <code className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs break-all">
+                    /careers/{slugConflictDialog.conflictSlug}
+                  </code>{" "}
+                  already exists in your workspace.
+                </p>
+
+                <div className="rounded-lg border border-border/80 bg-muted/40 p-3 space-y-1 font-mono text-xs">
+                  <div className="flex items-center justify-between text-muted-foreground text-[11px] font-sans font-medium uppercase tracking-wider">
+                    <span>Recommended Unique Slug</span>
+                    <span className="text-emerald-500 font-semibold font-mono">Available</span>
+                  </div>
+                  <div className="text-foreground font-semibold break-all text-sm">
+                    /careers/{slugConflictDialog.suggestion}
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Would you like to automatically use this recommended slug?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-3 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">
+              Keep & Edit Manually
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handleApplySuggestedSlug(slugConflictDialog.suggestion)}
+              className="w-full sm:w-auto font-semibold"
+            >
+              Use Suggested Slug
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

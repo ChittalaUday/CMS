@@ -46,3 +46,7 @@ next-env.d.ts
 # local uploads folder
 /public/uploads
 
+# database backups
+/backups
+*.dump
+

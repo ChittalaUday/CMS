@@ -16,6 +16,7 @@ import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
 import { getClientIdFromRequestHeaders } from "@/lib/auth/api-auth"
 import { sanitizePlainText, checkForSqlInjection } from "@/lib/utils/sanitize"
 import { z } from "zod"
+import { parseSlugBase, generateNextAvailableSlug, toSlug } from "@/lib/careers/slug-helper"
 
 const MAX_DRAFTS = 10
 
@@ -80,9 +81,9 @@ function handlePrismaError(err: unknown, context?: string): never {
     if (isDev) console.error(`[Careers DB Error]${context ? ` ${context}` : ""}`, err.code, err.message)
     switch (err.code) {
       case "P2002": {
-        const fields = (err.meta?.target as string[] | undefined) ?? []
-        if (fields.includes("slug")) {
-          throw new Error("A job posting with this URL slug already exists. Please change the title slightly.")
+        const targetStr = JSON.stringify(err.meta?.target || "")
+        if (targetStr.toLowerCase().includes("slug")) {
+          throw new Error("A job posting with this URL slug already exists. Please choose a different title or URL slug.")
         }
         throw new Error("A record with these details already exists.")
       }
@@ -106,10 +107,7 @@ function handlePrismaError(err: unknown, context?: string): never {
   throw new Error("An unexpected error occurred. Please try again.")
 }
 
-// --- Slug helper ---
-function toSlug(text: string) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "")
-}
+// --- Slug helper imported from @/lib/careers/slug-helper ---
 
 // --- Types ---
 
@@ -351,6 +349,61 @@ function buildQuestionsCreate(questions: QuestionInput[]) {
         ? q.options
         : undefined,
   }))
+}
+
+export async function checkJobSlugAvailability(
+  slug: string,
+  excludeJobId?: string
+): Promise<{ available: boolean; suggestedSlug?: string }> {
+  try {
+    await requireCareersAccess()
+    const clientId = await requireClientScope()
+
+    const cleanSlug = toSlug(slug)
+    if (!cleanSlug) {
+      return { available: true }
+    }
+
+    const existing = await prisma.jobPosting.findFirst({
+      where: {
+        slug: cleanSlug,
+        clientId,
+        ...(excludeJobId ? { id: { not: excludeJobId } } : {}),
+      },
+      select: { id: true },
+    })
+
+    if (!existing) {
+      return { available: true }
+    }
+
+    // Slug is already taken: parse base to find all relevant variations
+    const { base } = parseSlugBase(cleanSlug)
+
+    const conflicts = await prisma.jobPosting.findMany({
+      where: {
+        clientId,
+        slug: {
+          startsWith: base,
+        },
+        ...(excludeJobId ? { id: { not: excludeJobId } } : {}),
+      },
+      select: { slug: true },
+    })
+
+    const suggestedSlug = generateNextAvailableSlug(
+      cleanSlug,
+      conflicts.map((c) => c.slug)
+    )
+
+    return {
+      available: false,
+      suggestedSlug,
+    }
+  } catch (err) {
+    console.error("[checkJobSlugAvailability error]", err)
+    return { available: true }
+  }
 }
 
 export async function createJobPosting(data: JobPostingInput) {

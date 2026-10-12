@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, AlertCircle, IndianRupeeIcon } from "lucide-react"
+import { Plus, AlertCircle, IndianRupeeIcon, CheckCircle2, Loader2, Sparkles } from "lucide-react"
 import { BasicDetails, JobType, SalaryMode, JOB_TYPE_LABELS } from "./types"
 
 function FieldError({ message }: { message?: string }) {
@@ -40,6 +40,12 @@ interface JobFormStep1Props {
   locations: string[]
   isLocsLoading: boolean
   setIsAddingLoc: (val: boolean) => void
+
+  slugStatus: "idle" | "checking" | "available" | "unavailable"
+  suggestedSlug: string | null
+  onTitleBlur: () => void
+  onSlugBlur: () => void
+  onApplySuggestedSlug: (suggested: string) => void
 }
 
 export function JobFormStep1({
@@ -55,7 +61,12 @@ export function JobFormStep1({
   setIsAddingDept,
   locations,
   isLocsLoading,
-  setIsAddingLoc
+  setIsAddingLoc,
+  slugStatus,
+  suggestedSlug,
+  onTitleBlur,
+  onSlugBlur,
+  onApplySuggestedSlug
 }: JobFormStep1Props) {
   return (
     <div className="space-y-5">
@@ -80,7 +91,9 @@ export function JobFormStep1({
               slug: isEdit || slugEditedRef.current ? b.slug : toSlug(title),
             }))
             if (errors.title) setErrors((e) => ({ ...e, title: "" }))
+            if (errors.slug) setErrors((e) => ({ ...e, slug: "" }))
           }}
+          onBlur={onTitleBlur}
           placeholder="e.g. Senior Frontend Engineer"
           className="h-9 bg-muted/30 border-border/80 text-sm"
         />
@@ -89,10 +102,36 @@ export function JobFormStep1({
 
       {/* Slug */}
       <div className="space-y-2">
-        <Label htmlFor="slug" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          URL Slug <span className="text-destructive">*</span>
-        </Label>
-        <div className="flex items-center rounded-md border border-border/80 bg-muted/30 overflow-hidden focus-within:ring-1 focus-within:ring-ring">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="slug" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            URL Slug <span className="text-destructive">*</span>
+          </Label>
+          <div className="flex items-center gap-1.5 text-xs">
+            {slugStatus === "checking" && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                Checking...
+              </span>
+            )}
+            {slugStatus === "available" && (
+              <span className="inline-flex items-center gap-1 text-emerald-500 font-medium">
+                <CheckCircle2 className="size-3.5" />
+                Available
+              </span>
+            )}
+            {slugStatus === "unavailable" && (
+              <span className="inline-flex items-center gap-1 text-destructive font-medium">
+                <AlertCircle className="size-3.5" />
+                Already taken
+              </span>
+            )}
+          </div>
+        </div>
+        <div className={`flex items-center rounded-md border bg-muted/30 overflow-hidden focus-within:ring-1 transition-colors ${
+          slugStatus === "unavailable" ? "border-destructive/80 focus-within:ring-destructive" :
+          slugStatus === "available" ? "border-emerald-500/60 focus-within:ring-emerald-500" :
+          "border-border/80 focus-within:ring-ring"
+        }`}>
           <span className="px-3 text-xs text-muted-foreground font-mono border-r border-border/60 h-9 flex items-center bg-muted/50 shrink-0">
             /careers/
           </span>
@@ -105,11 +144,38 @@ export function JobFormStep1({
               setBasic((b) => ({ ...b, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") }))
               if (errors.slug) setErrors((e) => ({ ...e, slug: "" }))
             }}
+            onBlur={onSlugBlur}
             placeholder="senior-frontend-engineer"
             className="flex-1 h-9 px-3 text-sm font-mono bg-transparent outline-none"
           />
         </div>
-        <FieldError message={errors.slug} />
+
+        {/* Inline Suggestion Banner for Conflict */}
+        {slugStatus === "unavailable" && suggestedSlug && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-xs mt-1.5 min-w-0">
+            <div className="flex items-center gap-2 text-destructive min-w-0">
+              <AlertCircle className="size-4 shrink-0" />
+              <span className="break-all">
+                Slug <strong className="font-mono">/careers/{basic.slug}</strong> already exists.
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-xs font-semibold bg-background border-destructive/30 hover:bg-destructive/15 hover:text-destructive shrink-0 gap-1 self-start sm:self-auto"
+              onClick={() => onApplySuggestedSlug(suggestedSlug)}
+            >
+              <Sparkles className="size-3 text-amber-500 shrink-0" />
+              Use Suggested Slug
+            </Button>
+          </div>
+        )}
+  
+        {/* Prevent duplicate error message below banner */}
+        {!(slugStatus === "unavailable" && suggestedSlug) && (
+          <FieldError message={errors.slug} />
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
