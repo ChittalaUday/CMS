@@ -1,0 +1,100 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+    env:
+      # Placeholder values so `prisma generate` / `next build` can run without real secrets.
+      DATABASE_URL: postgresql://user:pass@localhost:5432/ci
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run lint
+      - run: npm run build
+
+  deploy:
+    name: Deploy to EC2
+    needs: ci
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Self-hosted runner on the EC2 box. Only this job (main-branch pushes) runs on it, never PR code.
+    runs-on: [self-hosted, linux, x64]
+    environment: production
+    steps:
+      - name: Deploy
+        working-directory: /home/ubuntu/projects/Niruthi-CMS/niruthi-cms-2.0
+        run: |
+          set -e
+          git fetch origin main
+          git reset --hard origin/main
+          docker compose up -d --build --force-recreate
+          docker image prune -f
+          docker compose ps
+
+  notify:
+    name: Notify Teams
+    needs: [ci, deploy]
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Teams
+        env:
+          WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          CI_RESULT: ${{ needs.ci.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then echo "TEAMS_WEBHOOK_URL not set, skipping"; exit 0; fi
+
+          if [ "$DEPLOY_RESULT" = "success" ]; then
+            STATUS="✅ Deployed successfully"; COLOR="Good"
+          elif [ "$CI_RESULT" != "success" ]; then
+            STATUS="❌ CI failed (not deployed)"; COLOR="Attention"
+          else
+            STATUS="❌ Deploy $DEPLOY_RESULT"; COLOR="Attention"
+          fi
+
+          jq -n \
+            --arg status "$STATUS" --arg color "$COLOR" \
+            --arg repo "$REPO" --arg actor "$ACTOR" \
+            --arg sha "${SHA:0:7}" --arg msg "$(echo "$COMMIT_MSG" | head -n1)" \
+            --arg url "$RUN_URL" '
+            {type:"message", attachments:[{
+              contentType:"application/vnd.microsoft.card.adaptive",
+              content:{
+                "$schema":"http://adaptivecards.io/schemas/adaptive-card.json",
+                type:"AdaptiveCard", version:"1.4",
+                body:[
+                  {type:"TextBlock", text:$status, weight:"Bolder", size:"Medium", color:$color},
+                  {type:"FactSet", facts:[
+                    {title:"Repo", value:$repo},
+                    {title:"By", value:$actor},
+                    {title:"Commit", value:"\($sha) \($msg)"}
+                  ]}
+                ],
+                actions:[{type:"Action.OpenUrl", title:"View run", url:$url}]
+              }}]}' \
+          | curl -fsS -H "Content-Type: application/json" -d @- "$WEBHOOK_URL"
