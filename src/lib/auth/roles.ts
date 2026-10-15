@@ -18,6 +18,9 @@ export const BLOG_ACCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.EDITOR] as 
 /** Roles that can manage comparisons (admin + editor). */
 export const COMPARISONS_ACCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.EDITOR] as const
 
+/** Roles that can view website analytics. Managing tracked sites is ADMIN_ROLES only. */
+export const ANALYTICS_ACCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.EDITOR] as const
+
 /** Roles that can access careers management. */
 export const CAREERS_ACCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] as const
 

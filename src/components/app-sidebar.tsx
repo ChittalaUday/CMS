@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useTransition } from "react"
 import type { Role } from "@/generated/prisma/enums"
-import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, COMPARISONS_ACCESS_ROLES, isDeveloper } from "@/lib/auth/roles"
+import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, COMPARISONS_ACCESS_ROLES, ANALYTICS_ACCESS_ROLES, isDeveloper } from "@/lib/auth/roles"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -23,6 +23,7 @@ import {
   ImageIcon,
   BriefcaseIcon,
   ColumnsIcon,
+  BarChart3Icon,
   SettingsIcon,
   LogOutIcon,
   Building2,
@@ -51,6 +52,7 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
   const canAccessBlogs = (BLOG_ACCESS_ROLES as readonly Role[]).includes(user.role)
   const canAccessCareers = (CAREERS_ACCESS_ROLES as readonly Role[]).includes(user.role)
   const canAccessComparisons = (COMPARISONS_ACCESS_ROLES as readonly Role[]).includes(user.role)
+  const canAccessAnalytics = (ANALYTICS_ACCESS_ROLES as readonly Role[]).includes(user.role)
   const isSuperAdmin = user.role === "SUPER_ADMIN"
   const isDevRole = isDeveloper(user.role)
   const [isPending, startTransition] = useTransition()
@@ -110,6 +112,15 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
                 title: "Comparisons",
                 url: "/dashboard/comparisons",
                 icon: <ColumnsIcon className="size-4" />,
+              },
+            ]
+          : []),
+        ...(canAccessAnalytics
+          ? [
+              {
+                title: "Analytics",
+                url: "/dashboard/analytics",
+                icon: <BarChart3Icon className="size-4" />,
               },
             ]
           : []),
