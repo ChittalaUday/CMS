@@ -131,6 +131,28 @@ async function run() {
     assert.strictEqual(await prisma.comparisonOption.count({ where: { comparisonId: created.id } }), 0);
     assert.strictEqual(await prisma.comparisonCriterion.count({ where: { comparisonId: created.id } }), 0);
     console.log("✓ Test 7: delete cascades options, criteria and cells");
+
+    // 8. Unknown ids report "not found" (not a grid error); extra cells are rejected, not dropped
+    await rejects(() => setComparisonPublished(clientA.id, "does-not-exist", true), /not found/i);
+    await rejects(
+      () =>
+        createComparison(clientA.id, {
+          title: "Too many cells",
+          slug: `too-many-${stamp}`,
+          options: [{ label: "X" }, { label: "Y" }],
+          criteria: [{ label: "r", values: ["1", "2", "3"] }],
+        }),
+      /more cells than there are columns/
+    );
+    // Grid writes keep order and alignment with many rows (batched inserts)
+    const big = await createComparison(clientA.id, {
+      title: "Big",
+      slug: `big-${stamp}`,
+      options: Array.from({ length: 8 }, (_, i) => ({ label: `O${i}` })),
+      criteria: Array.from({ length: 60 }, (_, r) => ({ label: `R${r}`, values: Array.from({ length: 8 }, (_, c) => `${r}:${c}`) })),
+    });
+    assert.strictEqual(await prisma.comparisonCell.count({ where: { criterion: { comparisonId: big.id } } }), 480);
+    console.log("✓ Test 8: unknown id, cell-count check, 60x8 batched write");
   } finally {
     await prisma.comparison.deleteMany({ where: { clientId: { in: [clientA.id, clientB.id] } } });
     await prisma.client.deleteMany({ where: { id: { in: [clientA.id, clientB.id] } } });

@@ -49,6 +49,10 @@ export const comparisonInputSchema = z
       )
       .max(COMPARISON_LIMITS.maxCriteria),
   })
+  .refine((v) => v.criteria.every((c) => c.values.length <= v.options.length), {
+    message: "A row has more cells than there are columns",
+    path: ["criteria"],
+  })
   .refine((v) => !v.published || (v.options.length >= 2 && v.criteria.length >= 1), {
     message: "A published comparison needs at least 2 columns and 1 row",
     path: ["published"],

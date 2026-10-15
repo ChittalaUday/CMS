@@ -271,6 +271,66 @@ export const API_REGISTRY: ApiCategory[] = [
       },
     ],
   },
+  {
+    id: "comparisons",
+    label: "Comparisons",
+    description: "Side-by-side comparison tables for your SEO pages",
+    scopes: [
+      {
+        id: "read:comparisons",
+        permission: "read",
+        label: "Read comparisons",
+        description: "Fetch published comparison tables and render them on your website",
+        endpoints: [
+          {
+            method: "GET",
+            path: "/api/public/comparisons",
+            summary: "List published comparisons (summary only, without the table grid)",
+            queryParams: [
+              { name: "page", type: "number", required: false, description: "Page number for pagination (defaults to 1)" },
+              { name: "limit", type: "number", required: false, description: "Max results per page (defaults to 50, max 100)" },
+            ],
+            responseExample: {
+              comparisons: [
+                {
+                  id: "cmrde6rmv000801rzpwrvvyst",
+                  slug: "private-limited-vs-llp",
+                  title: "Private Limited vs LLP",
+                  description: "Which structure suits your business?",
+                  updatedAt: "2026-10-15T10:00:00.000Z",
+                  optionLabels: ["Private Limited", "LLP"],
+                },
+              ],
+              pagination: { total: 1, page: 1, limit: 50, totalPages: 1 },
+            },
+          },
+          {
+            method: "GET",
+            path: "/api/public/comparisons/:slug",
+            summary: "Get one published comparison with its full table",
+            responseExample: {
+              comparison: {
+                id: "cmrde6rmv000801rzpwrvvyst",
+                slug: "private-limited-vs-llp",
+                title: "Private Limited vs LLP",
+                description: "Which structure suits your business?",
+                disclaimer: "General guidance only.",
+                seoTitle: null,
+                seoDescription: null,
+                relatedServiceSlugs: ["company-registration"],
+                updatedAt: "2026-10-15T10:00:00.000Z",
+                options: [
+                  { id: "opt1", label: "Private Limited", linkSlug: "private-limited-registration" },
+                  { id: "opt2", label: "LLP", linkSlug: null },
+                ],
+                criteria: [{ id: "crit1", label: "Minimum members", values: ["2", "2"] }],
+              },
+            },
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

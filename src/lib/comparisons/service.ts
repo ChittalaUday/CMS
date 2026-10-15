@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { comparisonInputSchema, type ComparisonInput } from "./schema"
@@ -33,20 +34,12 @@ function isUniqueViolation(err: unknown) {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002"
 }
 
-/** Writes options, criteria and cells. Cells are always built from `values[i]`, padded with "" so every criterion has exactly one cell per option. */
+/** Writes options, criteria and cells in three batched inserts (ids generated up front). Cells are padded with "" so every criterion has exactly one cell per option. */
 async function writeGrid(tx: Tx, comparisonId: string, data: ReturnType<typeof parse>) {
-  const [options, criteria] = await Promise.all([
-    Promise.all(
-      data.options.map((o, position) =>
-        tx.comparisonOption.create({ data: { comparisonId, label: o.label, linkSlug: o.linkSlug, position } })
-      )
-    ),
-    Promise.all(
-      data.criteria.map((c, position) =>
-        tx.comparisonCriterion.create({ data: { comparisonId, label: c.label, position } })
-      )
-    ),
-  ])
+  const options = data.options.map((o, position) => ({ id: randomUUID(), comparisonId, label: o.label, linkSlug: o.linkSlug, position }))
+  const criteria = data.criteria.map((c, position) => ({ id: randomUUID(), comparisonId, label: c.label, position }))
+  if (options.length > 0) await tx.comparisonOption.createMany({ data: options })
+  if (criteria.length > 0) await tx.comparisonCriterion.createMany({ data: criteria })
   const cells = criteria.flatMap((criterion, r) =>
     options.map((option, c) => ({
       criterionId: criterion.id,
@@ -116,17 +109,17 @@ export async function deleteComparison(clientId: string | null, id: string) {
 }
 
 export async function setComparisonPublished(clientId: string | null, id: string, published: boolean) {
-  if (published) {
-    const [options, criteria] = await Promise.all([
-      prisma.comparisonOption.count({ where: { comparisonId: id, comparison: scopeWhere(clientId) } }),
-      prisma.comparisonCriterion.count({ where: { comparisonId: id, comparison: scopeWhere(clientId) } }),
-    ])
-    if (options < 2 || criteria < 1) {
-      throw new ComparisonError("A published comparison needs at least 2 columns and 1 row.")
-    }
-  }
   return prisma.$transaction(async (tx) => {
     await requireOwned(tx, id, clientId)
+    if (published) {
+      const [options, criteria] = await Promise.all([
+        tx.comparisonOption.count({ where: { comparisonId: id } }),
+        tx.comparisonCriterion.count({ where: { comparisonId: id } }),
+      ])
+      if (options < 2 || criteria < 1) {
+        throw new ComparisonError("A published comparison needs at least 2 columns and 1 row.")
+      }
+    }
     return tx.comparison.update({ where: { id }, data: { published } })
   })
 }

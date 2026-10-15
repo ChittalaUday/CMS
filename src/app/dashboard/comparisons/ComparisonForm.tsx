@@ -134,6 +134,8 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
     [fields, serviceSlugs, options, criteria]
   )
   const [baseline, setBaseline] = useState(() => snapshot(initial))
+  // Snapshot of what was actually sent, so edits made while a save is in flight stay "unsaved".
+  const sentRef = useRef("")
   const dirty = snapshot(current) !== baseline
 
   const onError = ({ error }: { error: { serverError?: string } }) =>
@@ -142,7 +144,7 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
   const create = useAction(createComparisonAction, {
     onSuccess: ({ data }) => {
       toast.success("Comparison created")
-      setBaseline(snapshot(current))
+      setBaseline(sentRef.current)
       router.replace(`/dashboard/comparisons/${data?.id}/edit`)
     },
     onError,
@@ -150,7 +152,7 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
   const update = useAction(updateComparisonAction, {
     onSuccess: () => {
       toast.success("Comparison saved")
-      setBaseline(snapshot(current))
+      setBaseline(sentRef.current)
     },
     onError,
   })
@@ -202,7 +204,8 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
 
   const onSlugChange = (raw: string) => {
     slugEditedRef.current = true
-    const slug = raw.toLowerCase().replace(/[^a-z0-9-]+/g, "-")
+    // Keep a single trailing hyphen while typing ("a-" -> "a-b"); save() trims it.
+    const slug = raw.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-{2,}/g, "-").replace(/^-+/, "")
     setField("slug", slug)
     scheduleSlugCheck(slug)
   }
@@ -246,7 +249,10 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
   // ── Save ────────────────────────────────────────────────────────────────
 
   const save = () => {
-    const result = comparisonInputSchema.safeParse(current)
+    const trimmedSlug = fields.slug.replace(/-+$/, "")
+    if (trimmedSlug !== fields.slug) setField("slug", trimmedSlug)
+    const toSend = { ...current, slug: trimmedSlug }
+    const result = comparisonInputSchema.safeParse(toSend)
     if (!result.success) {
       const next: Record<string, string> = {}
       for (const issue of result.error.issues) {
@@ -258,6 +264,7 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
       return
     }
     setErrors({})
+    sentRef.current = snapshot(toSend)
     if (comparisonId) update.execute({ id: comparisonId, data: result.data })
     else create.execute(result.data)
   }
