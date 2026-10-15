@@ -45,6 +45,7 @@ async function run() {
   const schema = await import("../../src/lib/analytics/schema");
   const umami = await import("../../src/lib/analytics/umami");
   const sites = await import("../../src/lib/analytics/sites");
+  const roles = await import("../../src/lib/auth/roles");
 
   console.log("=================================================");
   console.log("        RUNNING ANALYTICS UNIT SUITE             ");
@@ -58,6 +59,12 @@ async function run() {
   assert.strictEqual(schema.normalizeDomain("https://user:pw@example.com/x"), "example.com", "userinfo is stripped");
   assert.ok(schema.siteInputSchema.safeParse({ name: "x", domain: "example.xn--p1ai" }).success, "punycode TLD is valid");
   console.log("✓ Test 1: domain normalisation and validation");
+
+  // Access: admins only. Editors (content team) must not see traffic numbers.
+  const access = roles.ANALYTICS_ACCESS_ROLES as readonly string[];
+  assert.deepStrictEqual([...access].sort(), ["ADMIN", "SUPER_ADMIN"]);
+  assert.ok(!access.includes("EDITOR") && !access.includes("HR") && !access.includes("DEVELOPER"));
+  console.log("✓ Test 1b: analytics access is Super Admin and Admin only");
 
   // 2. Ranges and percent change
   const r = schema.resolveRange("30d", 1_000_000_000_000);
