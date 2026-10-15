@@ -1,0 +1,652 @@
+[
+  {
+    "slug": "business-structures",
+    "title": "Business structures: which one suits you?",
+    "description": "The common ways to set up a business in India side by side: ownership, liability, compliance load and what each is usually chosen for.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Proprietorship",
+        "serviceSlug": "proprietorship-registration"
+      },
+      {
+        "label": "Partnership firm",
+        "serviceSlug": "partnership-firm-registration"
+      },
+      {
+        "label": "LLP",
+        "serviceSlug": "llp-registration"
+      },
+      {
+        "label": "One Person Company",
+        "serviceSlug": "one-person-company-registration"
+      },
+      {
+        "label": "Private Limited",
+        "serviceSlug": "private-limited-company-registration"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Separate legal entity",
+        "values": [
+          "Generally no",
+          "Generally no (the firm is not separate from its partners)",
+          "Yes",
+          "Yes",
+          "Yes"
+        ]
+      },
+      {
+        "label": "Ownership",
+        "values": [
+          "Single owner",
+          "Partners (at least two)",
+          "Partners (at least two, one a designated partner pair)",
+          "One member, with a nominee named",
+          "Shareholders (at least two), run by directors"
+        ]
+      },
+      {
+        "label": "Liability",
+        "values": [
+          "Generally unlimited",
+          "Generally unlimited, shared by the partners",
+          "Generally limited to the agreed contribution, subject to law",
+          "Generally limited to the shares held, subject to law",
+          "Generally limited to the shares held, subject to law"
+        ]
+      },
+      {
+        "label": "Registration",
+        "values": [
+          "No single incorporation step; business registrations such as GST or Udyam as needed",
+          "Partnership deed; registration with the Registrar of Firms is optional but advisable",
+          "Incorporated with the Ministry of Corporate Affairs (MCA)",
+          "Incorporated with the MCA; open to eligible resident individuals only",
+          "Incorporated with the MCA"
+        ]
+      },
+      {
+        "label": "Compliance intensity",
+        "values": [
+          "Typically lower",
+          "Typically lower to moderate",
+          "Moderate",
+          "Moderate to higher",
+          "Typically higher"
+        ]
+      },
+      {
+        "label": "Raising outside money",
+        "values": [
+          "Owner funds and loans; no equity investors",
+          "Partner capital and loans; no equity investors",
+          "Partner contributions and loans; cannot issue shares",
+          "Owner funds and loans; limited route to outside investors",
+          "Can issue shares to investors, which suits venture-style funding"
+        ]
+      },
+      {
+        "label": "Common consideration",
+        "values": [
+          "Simple owner-run activity",
+          "Small ventures run by people who trust each other",
+          "Professional or partner venture that wants limited liability",
+          "Solo founder who wants a company structure",
+          "Scalable corporate ownership"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "private-limited-company-registration",
+      "one-person-company-registration",
+      "section-8-company-registration",
+      "llp-registration",
+      "partnership-firm-registration",
+      "proprietorship-registration",
+      "startup-india-dpiit-recognition",
+      "private-limited-to-opc-conversion",
+      "llp-to-private-limited-conversion",
+      "partnership-or-proprietorship-to-company-conversion",
+      "llp-partner-changes",
+      "business-and-financial-advisory",
+      "corporate-and-regulatory-advisory"
+    ]
+  },
+  {
+    "slug": "engagement-types",
+    "title": "One-time assignment vs retainer",
+    "description": "How Zenith can work with you: a single assignment, or an ongoing monthly or annual arrangement.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "One-time assignment"
+      },
+      {
+        "label": "Monthly retainer"
+      },
+      {
+        "label": "Annual retainer"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Best suited for",
+        "values": [
+          "A specific registration, filing or advisory matter",
+          "Recurring accounting and monthly compliance",
+          "Longer-term compliance oversight"
+        ]
+      },
+      {
+        "label": "Scope",
+        "values": [
+          "Defined deliverables",
+          "Recurring monthly scope",
+          "Agreed annual or periodic scope"
+        ]
+      },
+      {
+        "label": "Pricing",
+        "values": [
+          "Customised quotation",
+          "Monthly agreement",
+          "Annual agreement or agreed schedule"
+        ]
+      },
+      {
+        "label": "Client updates",
+        "values": [
+          "Milestone-based",
+          "Recurring and milestone-based",
+          "Calendar-based and milestone-based"
+        ]
+      },
+      {
+        "label": "Payment terms",
+        "values": [
+          "As agreed in the quotation",
+          "As agreed in the agreement",
+          "As agreed in the agreement"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "bookkeeping-and-accounting",
+      "mis-budgeting-and-forecasting",
+      "virtual-cfo-services",
+      "company-annual-filing",
+      "opc-annual-compliance",
+      "llp-annual-filing",
+      "payroll-processing",
+      "employee-full-and-final-settlement",
+      "professional-tax-registration",
+      "hr-compliance-and-policy-support",
+      "business-and-financial-advisory"
+    ]
+  },
+  {
+    "slug": "compliance-approach",
+    "title": "Reactive vs proactive compliance",
+    "description": "What changes when someone tracks your obligations for you instead of you chasing them.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Reactive approach"
+      },
+      {
+        "label": "Zenith's intended approach"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Due dates",
+        "values": [
+          "The client discovers the approaching date",
+          "A client-specific calendar and reminders"
+        ]
+      },
+      {
+        "label": "Missing inputs",
+        "values": [
+          "The client is asked repeatedly",
+          "Document requests and documented follow-ups"
+        ]
+      },
+      {
+        "label": "Delays",
+        "values": [
+          "Escalation happens after the issue arises",
+          "Urgency-based escalation"
+        ]
+      },
+      {
+        "label": "After filing",
+        "values": [
+          "The acknowledgement may be overlooked",
+          "Explanation, document handover and a feedback request"
+        ]
+      },
+      {
+        "label": "Status visibility",
+        "values": [
+          "Ad hoc enquiries",
+          "Milestone updates through the preferred channel"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "gst-return-filing",
+      "gst-annual-return-gstr-9",
+      "tds-return-filing",
+      "income-tax-notice-response",
+      "form-15ca-15cb-foreign-remittance",
+      "company-annual-filing",
+      "opc-annual-compliance",
+      "director-kyc-dir-3",
+      "director-appointment",
+      "director-resignation",
+      "din-reactivation",
+      "llp-annual-filing",
+      "registered-office-change",
+      "authorised-capital-increase",
+      "company-name-change",
+      "moa-and-aoa-amendment",
+      "share-transfer",
+      "commencement-of-business",
+      "board-and-shareholder-documentation",
+      "charge-creation-and-satisfaction",
+      "company-closure-strike-off",
+      "llp-winding-up",
+      "strike-off-company-revival",
+      "pf-return-filing",
+      "esi-return-filing",
+      "professional-tax-return-filing",
+      "corporate-and-regulatory-advisory"
+    ]
+  },
+  {
+    "slug": "audit-bookkeeping-tax-filing",
+    "title": "Audit vs bookkeeping vs tax filing",
+    "description": "Four pieces of work that are often confused: what each is for, what you get, and who does it.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Bookkeeping",
+        "serviceSlug": "bookkeeping-and-accounting"
+      },
+      {
+        "label": "Financial statement preparation",
+        "serviceSlug": "financial-statements-preparation"
+      },
+      {
+        "label": "Tax return filing",
+        "serviceSlug": "business-and-proprietor-itr-filing"
+      },
+      {
+        "label": "Statutory audit",
+        "serviceSlug": "statutory-audit"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Primary purpose",
+        "values": [
+          "Record and reconcile financial transactions",
+          "Present financial position and performance",
+          "Report prescribed tax information",
+          "Independent examination within legal scope"
+        ]
+      },
+      {
+        "label": "Typical output",
+        "values": [
+          "Up-to-date ledgers and reconciliations",
+          "Financial statements and schedules",
+          "Filed return and acknowledgement",
+          "Auditor's report by an eligible independent professional"
+        ]
+      },
+      {
+        "label": "How often",
+        "values": [
+          "Ongoing, usually monthly",
+          "Each financial year",
+          "Each tax year",
+          "Each financial year, where the law requires it"
+        ]
+      },
+      {
+        "label": "Who does it",
+        "values": [
+          "Accounting team or accountants",
+          "Accountants, reviewed by a qualified professional",
+          "Return preparer, with professional review",
+          "Only an authorised independent professional"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "individual-itr-filing",
+      "business-and-proprietor-itr-filing",
+      "partnership-and-llp-tax-return",
+      "company-itr-6-filing",
+      "tax-planning-advisory",
+      "tax-audit",
+      "bookkeeping-and-accounting",
+      "accounts-cleanup-and-reconciliation",
+      "financial-statements-preparation",
+      "statutory-audit"
+    ]
+  },
+  {
+    "slug": "gst-regular-vs-composition",
+    "title": "GST: regular scheme vs composition scheme",
+    "description": "The two ways a small taxpayer can be registered under GST and what changes in practice.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Regular taxpayer",
+        "serviceSlug": "gst-registration"
+      },
+      {
+        "label": "Composition scheme",
+        "serviceSlug": "gst-return-filing"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Who it suits",
+        "values": [
+          "Any registered business; mandatory above the turnover thresholds and for inter-state sellers",
+          "Small suppliers of goods, restaurants and some service providers under the prescribed turnover limits"
+        ]
+      },
+      {
+        "label": "Tax payment",
+        "values": [
+          "Charges GST at the applicable rate on each invoice",
+          "Pays a small fixed percentage of turnover and does not charge GST separately on invoices"
+        ]
+      },
+      {
+        "label": "Input tax credit",
+        "values": [
+          "Can claim credit on eligible purchases",
+          "Cannot claim input tax credit"
+        ]
+      },
+      {
+        "label": "Inter-state sales",
+        "values": [
+          "Allowed",
+          "Not allowed for goods"
+        ]
+      },
+      {
+        "label": "Returns",
+        "values": [
+          "Monthly or quarterly returns (GSTR-1 and GSTR-3B) and an annual return",
+          "Quarterly statement-cum-challan (CMP-08) and an annual return (GSTR-4)"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "gst-registration",
+      "gst-return-filing"
+    ]
+  },
+  {
+    "slug": "itr-form-selection",
+    "title": "Which ITR form applies to you?",
+    "description": "A quick way to see which income tax return form individuals and small businesses usually file.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "ITR-1 (Sahaj)",
+        "serviceSlug": "individual-itr-filing"
+      },
+      {
+        "label": "ITR-2",
+        "serviceSlug": "individual-itr-filing"
+      },
+      {
+        "label": "ITR-3",
+        "serviceSlug": "business-and-proprietor-itr-filing"
+      },
+      {
+        "label": "ITR-4 (Sugam)",
+        "serviceSlug": "business-and-proprietor-itr-filing"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Who files it",
+        "values": [
+          "Resident individuals with simple income within the prescribed limit",
+          "Individuals and HUFs without business or professional income",
+          "Individuals and HUFs with business or professional income",
+          "Resident individuals, HUFs and firms (not LLPs) opting for presumptive taxation"
+        ]
+      },
+      {
+        "label": "Typical income",
+        "values": [
+          "Salary or pension, one house property, interest and similar income",
+          "Salary, several properties, capital gains, foreign income or assets",
+          "Business or profession income, with books of account",
+          "Presumptive business or professional income"
+        ]
+      },
+      {
+        "label": "Business income",
+        "values": [
+          "Not allowed",
+          "Not allowed",
+          "Allowed, including where books and an audit are needed",
+          "Only under the presumptive schemes"
+        ]
+      },
+      {
+        "label": "Books of account",
+        "values": [
+          "Not needed",
+          "Not needed",
+          "Usually needed",
+          "Not needed under the presumptive schemes"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "individual-itr-filing",
+      "business-and-proprietor-itr-filing",
+      "revised-and-belated-itr",
+      "tax-computation-and-advance-tax",
+      "tax-planning-advisory"
+    ]
+  },
+  {
+    "slug": "pf-vs-esi",
+    "title": "EPF vs ESIC",
+    "description": "The two main payroll-linked social security schemes for employees, side by side.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "EPF (Provident Fund)",
+        "serviceSlug": "pf-registration"
+      },
+      {
+        "label": "ESIC (Employees State Insurance)",
+        "serviceSlug": "esi-registration"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "What it provides",
+        "values": [
+          "Retirement savings, a pension scheme and insurance cover",
+          "Medical care, sickness, maternity and disability benefits"
+        ]
+      },
+      {
+        "label": "When an employer is covered",
+        "values": [
+          "Generally when 20 or more people are employed, and voluntarily below that",
+          "Generally when 10 or more people are employed in a covered area, up to the wage limit"
+        ]
+      },
+      {
+        "label": "Wage limit for coverage",
+        "values": [
+          "Mandatory for wages up to the EPF wage ceiling; higher wages by option",
+          "Employees earning up to the ESIC wage limit"
+        ]
+      },
+      {
+        "label": "Contributions",
+        "values": [
+          "Both employee and employer pay a percentage of wages",
+          "Both employee and employer pay a percentage of wages, the employer share being larger"
+        ]
+      },
+      {
+        "label": "Regular filing",
+        "values": [
+          "Monthly contribution and electronic return (ECR), generally by the 15th of the next month",
+          "Monthly contribution, generally by the 15th of the next month"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "pf-registration",
+      "esi-registration"
+    ]
+  },
+  {
+    "slug": "trademark-vs-copyright",
+    "title": "Trademark, copyright, patent and design",
+    "description": "Which kind of intellectual property protects which kind of asset.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Trademark",
+        "serviceSlug": "trademark-registration"
+      },
+      {
+        "label": "Copyright",
+        "serviceSlug": "copyright-registration"
+      },
+      {
+        "label": "Patent"
+      },
+      {
+        "label": "Design"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "What it protects",
+        "values": [
+          "Brand names, logos and other marks that identify your goods or services",
+          "Original written, artistic, musical, film and software works",
+          "New inventions",
+          "The visual appearance of a product"
+        ]
+      },
+      {
+        "label": "Registry",
+        "values": [
+          "Trade Marks Registry",
+          "Copyright Office",
+          "Patent Office",
+          "Designs Registry"
+        ]
+      },
+      {
+        "label": "Is registration needed?",
+        "values": [
+          "Optional, but registration gives statutory rights and easier enforcement",
+          "Protection arises on creation; registration is optional but is useful evidence",
+          "Yes, a patent exists only once it is granted",
+          "Yes, protection comes from registration"
+        ]
+      },
+      {
+        "label": "How long it lasts",
+        "values": [
+          "Ten years, renewable",
+          "Generally the creator's lifetime plus a fixed number of years after, depending on the work",
+          "Twenty years from the filing date",
+          "Ten years, extendable once"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "trademark-registration",
+      "copyright-registration"
+    ]
+  },
+  {
+    "slug": "audit-types",
+    "title": "Statutory audit, tax audit and internal audit",
+    "description": "Three audits with different legal bases, owners and outputs.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Statutory audit",
+        "serviceSlug": "statutory-audit"
+      },
+      {
+        "label": "Tax audit",
+        "serviceSlug": "tax-audit"
+      },
+      {
+        "label": "Internal audit",
+        "serviceSlug": "internal-audit-and-process-review"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Legal basis",
+        "values": [
+          "Companies Act (and the LLP Act for LLPs above the prescribed limits)",
+          "Income-tax Act, Section 44AB, above the prescribed turnover or receipts limits",
+          "Companies Act, Section 138, for the prescribed classes of company; otherwise by choice"
+        ]
+      },
+      {
+        "label": "Who must have one",
+        "values": [
+          "Companies, and LLPs above the prescribed limits",
+          "Businesses and professionals above the prescribed limits, or under certain presumptive-tax conditions",
+          "Prescribed companies; any business that wants a controls review"
+        ]
+      },
+      {
+        "label": "Who performs it",
+        "values": [
+          "An independent authorised professional",
+          "an authorised professional",
+          "an authorised professional, cost accountant or other professional appointed by the board"
+        ]
+      },
+      {
+        "label": "Main output",
+        "values": [
+          "The auditor's report on the financial statements",
+          "The tax audit report (Form 3CA or 3CB with Form 3CD)",
+          "Internal audit reports and recommendations to management"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "tax-audit",
+      "professional-certificates",
+      "auditor-appointment-adt-1",
+      "statutory-audit",
+      "internal-audit-and-process-review",
+      "due-diligence-and-project-reports"
+    ]
+  }
+]

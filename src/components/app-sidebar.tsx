@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useTransition } from "react"
 import type { Role } from "@/generated/prisma/enums"
-import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, isDeveloper } from "@/lib/auth/roles"
+import { ADMIN_ROLES, BLOG_ACCESS_ROLES, CAREERS_ACCESS_ROLES, COMPARISONS_ACCESS_ROLES, isDeveloper } from "@/lib/auth/roles"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -22,6 +22,7 @@ import {
   BookOpenIcon,
   ImageIcon,
   BriefcaseIcon,
+  ColumnsIcon,
   SettingsIcon,
   LogOutIcon,
   Building2,
@@ -49,6 +50,7 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
   const isAdmin = (ADMIN_ROLES as readonly Role[]).includes(user.role)
   const canAccessBlogs = (BLOG_ACCESS_ROLES as readonly Role[]).includes(user.role)
   const canAccessCareers = (CAREERS_ACCESS_ROLES as readonly Role[]).includes(user.role)
+  const canAccessComparisons = (COMPARISONS_ACCESS_ROLES as readonly Role[]).includes(user.role)
   const isSuperAdmin = user.role === "SUPER_ADMIN"
   const isDevRole = isDeveloper(user.role)
   const [isPending, startTransition] = useTransition()
@@ -99,6 +101,15 @@ export function AppSidebar({ user, clients = [], activeClientId = null, activeCl
                 title: "Media Library",
                 url: "/dashboard/media",
                 icon: <ImageIcon className="size-4" />,
+              },
+            ]
+          : []),
+        ...(canAccessComparisons
+          ? [
+              {
+                title: "Comparisons",
+                url: "/dashboard/comparisons",
+                icon: <ColumnsIcon className="size-4" />,
               },
             ]
           : []),

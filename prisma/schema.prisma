@@ -379,6 +379,7 @@ model Client {
   securityConfig ClientSecurityConfig?
   careerDepartments CareerDepartment[] @relation("ClientDepartments")
   careerLocations   CareerLocation[]   @relation("ClientLocations")
+  comparisons       Comparison[]
 
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -394,7 +395,7 @@ model ClientApiKey {
   name        String
   keyHash     String    @unique
   keyPrefix   String
-  scopes      String[]  @default(["read:blogs", "read:careers", "write:applications"])
+  scopes      String[]  @default(["read:blogs", "read:careers", "read:comparisons", "write:applications"])
   lastUsedAt  DateTime?
   expiresAt   DateTime?
   revokedAt   DateTime?
@@ -404,6 +405,66 @@ model ClientApiKey {
 
   @@index([clientId])
   @@index([keyHash])
+}
+
+model Comparison {
+  id                  String   @id @default(cuid())
+  title               String
+  slug                String
+  description         String?
+  disclaimer          String?
+  published           Boolean  @default(false)
+  seoTitle            String?
+  seoDescription      String?
+  relatedServiceSlugs String[] @default([])
+  position            Int      @default(0)
+  clientId            String?
+  client              Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  options  ComparisonOption[]
+  criteria ComparisonCriterion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([slug, clientId])
+  @@index([clientId])
+  @@index([published])
+  @@index([position])
+}
+
+model ComparisonOption {
+  id           String           @id @default(cuid())
+  comparisonId String
+  comparison   Comparison       @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  label        String
+  linkSlug     String?
+  position     Int              @default(0)
+  cells        ComparisonCell[]
+
+  @@index([comparisonId])
+}
+
+model ComparisonCriterion {
+  id           String           @id @default(cuid())
+  comparisonId String
+  comparison   Comparison       @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  label        String
+  position     Int              @default(0)
+  cells        ComparisonCell[]
+
+  @@index([comparisonId])
+}
+
+model ComparisonCell {
+  criterionId String
+  criterion   ComparisonCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  optionId    String
+  option      ComparisonOption    @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  value       String
+
+  @@id([criterionId, optionId])
+  @@index([optionId])
 }
 
 // Per-client security configuration — rate limits, CORS, IP rules, key caps
