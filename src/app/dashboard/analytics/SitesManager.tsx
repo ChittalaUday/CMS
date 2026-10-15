@@ -79,6 +79,11 @@ export function SitesManager({ sites, trackerUrl, canManage }: Props) {
         <CardDescription>Each site gets a snippet. Add it once to the site&apos;s layout and visits show up here.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {!trackerUrl && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+            <code className="font-mono">UMAMI_PUBLIC_URL</code> isn&apos;t set on the server, so tracking snippets can&apos;t be generated yet.
+          </p>
+        )}
         {sites.length === 0 ? (
           <p className="text-sm text-muted-foreground">No sites yet.</p>
         ) : (
@@ -97,14 +102,14 @@ export function SitesManager({ sites, trackerUrl, canManage }: Props) {
                     </Button>
                   )}
                 </div>
-                <div className="flex items-start gap-2">
+                {trackerUrl && <div className="flex items-start gap-2">
                   <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded-md bg-muted px-2 py-1.5 font-mono text-xs">
                     {snippet(trackerUrl, site.websiteId)}
                   </code>
                   <Button type="button" variant="outline" size="icon" className="size-8 shrink-0" aria-label={`Copy snippet for ${site.name}`} onClick={() => copy(site)}>
                     {copied === site.websiteId ? <Check className="size-4" /> : <Copy className="size-4" />}
                   </Button>
-                </div>
+                </div>}
               </li>
             ))}
           </ul>

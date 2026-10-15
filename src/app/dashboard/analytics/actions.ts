@@ -40,7 +40,11 @@ export const removeSiteAction = actionClient
   .action(async ({ parsedInput }) => {
     await requireAnalyticsAdmin()
     const clientId = await requireClientScope()
-    await removeSite(clientId, parsedInput.websiteId)
+    try {
+      await removeSite(clientId, parsedInput.websiteId)
+    } catch (err) {
+      return friendly(err)
+    }
     revalidatePath("/dashboard/analytics")
     return { ok: true }
   })

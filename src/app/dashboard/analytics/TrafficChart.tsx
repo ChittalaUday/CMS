@@ -10,9 +10,13 @@ const CONFIG = {
 
 export type TrafficPoint = { x: string; pageviews: number; visitors: number }
 
-export function TrafficChart({ data, unit }: { data: TrafficPoint[]; unit: "hour" | "day" }) {
+export function TrafficChart({ data, unit, timeZone }: { data: TrafficPoint[]; unit: "hour" | "day"; timeZone: string }) {
+  // Same zone Umami buckets in, so a bucket never lands on the wrong date for viewers elsewhere.
   const fmt = (iso: unknown) =>
-    new Date(String(iso)).toLocaleString("en-IN", unit === "hour" ? { hour: "numeric", minute: undefined } : { month: "short", day: "numeric" })
+    new Date(String(iso)).toLocaleString(
+      "en-IN",
+      unit === "hour" ? { timeZone, month: "short", day: "numeric", hour: "numeric" } : { timeZone, month: "short", day: "numeric" }
+    )
 
   if (data.every((d) => d.pageviews === 0)) {
     return <p className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">No traffic in this period yet.</p>

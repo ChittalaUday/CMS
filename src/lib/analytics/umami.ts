@@ -13,14 +13,24 @@ export const isUmamiConfigured = () =>
 /** Public URL browsers load the tracker from (differs from UMAMI_URL, which is the internal address). */
 export const umamiPublicUrl = () => (process.env.UMAMI_PUBLIC_URL ?? "").replace(/\/+$/, "")
 
-const TIMEZONE = process.env.ANALYTICS_TIMEZONE ?? "Asia/Kolkata"
+/** Umami buckets time series in this zone; the UI must label them in the same zone. */
+export const ANALYTICS_TIMEZONE = process.env.ANALYTICS_TIMEZONE ?? "Asia/Kolkata"
 const TOKEN_TTL_MS = 30 * 60_000
 
 let cached: { token: string; at: number } | null = null
+// Concurrent callers (the page fires several requests at once) share one login instead of N.
+let loginInFlight: Promise<string> | null = null
 
 const base = () => (process.env.UMAMI_URL ?? "").replace(/\/+$/, "")
 
-async function login(): Promise<string> {
+function login(): Promise<string> {
+  loginInFlight ??= doLogin().finally(() => {
+    loginInFlight = null
+  })
+  return loginInFlight
+}
+
+async function doLogin(): Promise<string> {
   if (!isUmamiConfigured()) throw new UmamiError("Analytics is not configured (UMAMI_* env vars).")
   const res = await fetch(`${base()}/api/auth/login`, {
     method: "POST",
@@ -71,7 +81,7 @@ export const getStats = (id: string, w: Window) => request<SiteStats>(`/api/webs
 
 export const getPageviews = (id: string, w: Window, unit: "hour" | "day") =>
   request<{ pageviews: SeriesPoint[]; sessions: SeriesPoint[] }>(
-    `/api/websites/${id}/pageviews?${qs(w, { unit, timezone: TIMEZONE })}`
+    `/api/websites/${id}/pageviews?${qs(w, { unit, timezone: ANALYTICS_TIMEZONE })}`
   )
 
 export const getMetrics = (id: string, w: Window, type: MetricType, limit = 8) =>
@@ -87,7 +97,15 @@ export const createWebsite = (name: string, domain: string) =>
   })
 
 /** Existing Umami website for a domain, so re-adding a site reuses its history instead of duplicating it. */
-export const findWebsiteByDomain = (domain: string) =>
-  request<{ data: { id: string; name: string; domain: string }[] }>(`/api/websites?pageSize=100`).then(
-    (r) => r.data.find((w) => w.domain === domain) ?? null
-  )
+export async function findWebsiteByDomain(domain: string) {
+  const pageSize = 100
+  for (let page = 1; page <= 50; page++) {
+    const { data } = await request<{ data: { id: string; name: string; domain: string }[] }>(
+      `/api/websites?page=${page}&pageSize=${pageSize}`
+    )
+    const hit = data.find((w) => w.domain === domain)
+    if (hit) return hit
+    if (data.length < pageSize) return null
+  }
+  return null
+}

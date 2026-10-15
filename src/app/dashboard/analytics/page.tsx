@@ -8,7 +8,9 @@ import { ADMIN_ROLES, type Role } from "@/lib/auth/roles"
 import { getClientScope } from "@/lib/utils/client-context"
 import { RANGES, percentChange, resolveRange, type AnalyticsSite, type RangeKey } from "@/lib/analytics/schema"
 import { getClientSites, listAllClientSites } from "@/lib/analytics/sites"
+import logger from "@/lib/utils/logger"
 import {
+  ANALYTICS_TIMEZONE,
   getActiveVisitors,
   getMetrics,
   getPageviews,
@@ -46,8 +48,15 @@ const countryName = (code: string) => {
 const duration = (seconds: number) =>
   seconds >= 60 ? `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s` : `${Math.round(seconds)}s`
 
-const rows = (data: MetricRow[], label: (x: string) => string = (x) => x) =>
-  data.map((d) => ({ label: label(d.x || "Direct / none"), value: d.y }))
+const rows = (data: MetricRow[], fallback: string, label: (x: string) => string = (x) => x) =>
+  data.map((d) => ({ label: d.x ? label(d.x) : fallback, value: d.y }))
+
+/** Umami calls must not take the page down, but failures are logged so a bad password or id is diagnosable. */
+const guarded = <T,>(p: Promise<T>, what: string): Promise<T | null> =>
+  p.catch((err) => {
+    logger.error({ err, what }, "analytics request failed")
+    return null
+  })
 
 function Empty({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
@@ -144,7 +153,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
     const overview = await Promise.all(
       groups.map(async (g) => ({
         ...g,
-        stats: await Promise.all(g.sites.map((s) => getStats(s.websiteId, range).catch(() => null))),
+        stats: await Promise.all(g.sites.map((s) => guarded(getStats(s.websiteId, range), "overview stats"))),
       }))
     )
     return (
@@ -186,13 +195,13 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
 
   const w = { startAt: range.startAt, endAt: range.endAt }
   const [stats, series, pagesR, refsR, countriesR, devicesR, live] = await Promise.all([
-    getStats(selected.websiteId, w).catch(() => null),
-    getPageviews(selected.websiteId, w, range.unit).catch(() => null),
-    getMetrics(selected.websiteId, w, "path").catch(() => null),
-    getMetrics(selected.websiteId, w, "referrer").catch(() => null),
-    getMetrics(selected.websiteId, w, "country").catch(() => null),
-    getMetrics(selected.websiteId, w, "device").catch(() => null),
-    getActiveVisitors(selected.websiteId).catch(() => null),
+    guarded(getStats(selected.websiteId, w), "stats"),
+    guarded(getPageviews(selected.websiteId, w, range.unit), "pageviews"),
+    guarded(getMetrics(selected.websiteId, w, "path"), "metrics path"),
+    guarded(getMetrics(selected.websiteId, w, "referrer"), "metrics referrer"),
+    guarded(getMetrics(selected.websiteId, w, "country"), "metrics country"),
+    guarded(getMetrics(selected.websiteId, w, "device"), "metrics device"),
+    guarded(getActiveVisitors(selected.websiteId), "active"),
   ])
 
   const chart: TrafficPoint[] = series
@@ -246,15 +255,15 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
               <p className="text-xs text-muted-foreground">Last {range.label}</p>
             </CardHeader>
             <CardContent>
-              <TrafficChart data={chart} unit={range.unit} />
+              <TrafficChart data={chart} unit={range.unit} timeZone={ANALYTICS_TIMEZONE} />
             </CardContent>
           </Card>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <BreakdownCard title="Top pages" rows={pagesR && rows(pagesR)} />
-            <BreakdownCard title="Referrers" rows={refsR && rows(refsR)} empty="No referrers yet." />
-            <BreakdownCard title="Countries" rows={countriesR && rows(countriesR, countryName)} />
-            <BreakdownCard title="Devices" rows={devicesR && rows(devicesR, (x) => x.charAt(0).toUpperCase() + x.slice(1))} />
+            <BreakdownCard title="Top pages" rows={pagesR && rows(pagesR, "Unknown")} />
+            <BreakdownCard title="Referrers" rows={refsR && rows(refsR, "Direct / none")} empty="No referrers yet." />
+            <BreakdownCard title="Countries" rows={countriesR && rows(countriesR, "Unknown", countryName)} />
+            <BreakdownCard title="Devices" rows={devicesR && rows(devicesR, "Unknown", (x) => x.charAt(0).toUpperCase() + x.slice(1))} />
           </div>
         </>
       )}

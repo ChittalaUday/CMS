@@ -24,7 +24,15 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     return json({ error: "expired" }, 401);
   }
   if (url.includes("/stats")) return json({ pageviews: 10, visitors: 4, visits: 5, bounces: 1, totaltime: 50, comparison: { pageviews: 5, visitors: 2, visits: 5, bounces: 1, totaltime: 50 } });
-  if (url.includes("/api/websites?pageSize") ) return json({ data: [{ id: "existing-site", name: "Already there", domain: "existing.example.com" }] });
+  if (url.includes("/api/websites?page=")) {
+    const page = Number(new URL(url).searchParams.get("page"));
+    return json({
+      data:
+        page === 1
+          ? Array.from({ length: 100 }, (_, i) => ({ id: `filler-${i}`, name: "f", domain: `filler-${i}.example.com` }))
+          : [{ id: "existing-site", name: "Already there", domain: "existing.example.com" }],
+    });
+  }
   if (url.endsWith("/api/websites") && init?.method === "POST") {
     const { name, domain } = JSON.parse(String(init.body));
     return json({ id: `site-${nextWebsiteId++}`, name, domain });
@@ -47,6 +55,8 @@ async function run() {
   assert.strictEqual(schema.siteInputSchema.parse({ name: " Zenith ", domain: "https://zenithfilings.com/" }).domain, "zenithfilings.com");
   assert.ok(!schema.siteInputSchema.safeParse({ name: "x", domain: "not a domain" }).success);
   assert.ok(!schema.siteInputSchema.safeParse({ name: "", domain: "a.com" }).success);
+  assert.strictEqual(schema.normalizeDomain("https://user:pw@example.com/x"), "example.com", "userinfo is stripped");
+  assert.ok(schema.siteInputSchema.safeParse({ name: "x", domain: "example.xn--p1ai" }).success, "punycode TLD is valid");
   console.log("✓ Test 1: domain normalisation and validation");
 
   // 2. Ranges and percent change
@@ -69,8 +79,9 @@ async function run() {
 
   // 4. Umami client: one login reused, 401 triggers a single re-login and retry
   const w = { startAt: 1, endAt: 2 };
-  const stats = await umami.getStats("abc", w);
-  assert.strictEqual(stats.pageviews, 10);
+  const [first] = await Promise.all([umami.getStats("abc", w), umami.getStats("abc", w), umami.getStats("abc", w)]);
+  assert.strictEqual(first.pageviews, 10);
+  assert.strictEqual(logins, 1, "three parallel cold calls share a single login");
   await umami.getStats("abc", w);
   assert.strictEqual(logins, 1, "token is cached");
   assert.ok(calls.at(-1)!.url.includes("/api/websites/abc/stats?startAt=1&endAt=2"));
@@ -79,7 +90,7 @@ async function run() {
   await umami.getStats("abc", w);
   assert.strictEqual(logins, 2, "expired token is replaced once");
   assert.strictEqual(calls.at(-1)!.auth, "Bearer token-2");
-  console.log("✓ Test 4: Umami client caches the token and retries once on 401");
+  console.log("✓ Test 4: Umami client shares one login, caches the token and retries once on 401");
 
   // 5. Site registry: add, duplicate guard, preserves other settings keys, remove, overview
   const stamp = Date.now();
@@ -98,12 +109,31 @@ async function run() {
     assert.ok(all.some((g) => g.client.id === client.id && g.sites.length === 1), "appears in the all-clients overview");
     const reused = await sites.addSite(client.id, { name: "Reuse", domain: "existing.example.com" });
     assert.strictEqual(reused.websiteId, "existing-site", "an existing Umami website for the domain is reused, not duplicated");
+    // Another client must not be able to claim a website this client already has linked.
+    const other = await prisma.client.create({ data: { name: `Other ${stamp}`, slug: `an-other-${stamp}` } });
+    try {
+      await assert.rejects(
+        () => sites.addSite(other.id, { name: "Steal", domain: "existing.example.com" }),
+        /already tracked by another client/
+      );
+      assert.deepStrictEqual(await sites.getClientSites(other.id), [], "nothing was linked to the other client");
+      // Parallel adds of the same new domain: exactly one wins.
+      const results = await Promise.allSettled([
+        sites.addSite(other.id, { name: "Race", domain: "race.example.com" }),
+        sites.addSite(other.id, { name: "Race", domain: "race.example.com" }),
+      ]);
+      assert.strictEqual(results.filter((r) => r.status === "fulfilled").length, 1, "double submit adds the site once");
+      assert.strictEqual((await sites.getClientSites(other.id)).length, 1);
+      await assert.rejects(() => sites.removeSite("no-such-client", "x"), /Client not found/);
+    } finally {
+      await prisma.client.delete({ where: { id: other.id } });
+    }
     await sites.removeSite(client.id, reused.websiteId);
     await sites.removeSite(client.id, added.websiteId);
     assert.deepStrictEqual(await sites.getClientSites(client.id), []);
     const after = await prisma.client.findUnique({ where: { id: client.id }, select: { settings: true } });
     assert.deepStrictEqual((after!.settings as Record<string, unknown>).careers, { keep: "me" }, "still preserved after remove");
-    console.log("✓ Test 5: site registry add / duplicate / overview / remove keep other settings");
+    console.log("✓ Test 5: registry add / reuse (paginated lookup) / cross-client guard / double-submit / remove keep other settings");
   } finally {
     await prisma.client.delete({ where: { id: client.id } });
   }

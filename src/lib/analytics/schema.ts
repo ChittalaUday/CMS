@@ -18,7 +18,7 @@ export function resolveRange(key: unknown, now = Date.now()) {
   return { key: k, ...RANGES[k], startAt: now - RANGES[k].ms, endAt: now }
 }
 
-const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/
+const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+([a-z]{2,}|xn--[a-z0-9-]{1,59})$/
 
 /** "https://WWW.Example.com/path?x" -> "www.example.com" (Umami stores a bare hostname). */
 export function normalizeDomain(input: string): string {
@@ -27,6 +27,7 @@ export function normalizeDomain(input: string): string {
     .toLowerCase()
     .replace(/^[a-z]+:\/\//, "")
     .replace(/[/?#].*$/, "")
+    .replace(/^[^@]*@/, "")
     .replace(/:\d+$/, "")
 }
 
