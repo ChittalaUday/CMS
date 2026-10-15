@@ -33,6 +33,8 @@ const routeMap: Record<string, string> = {
   account: "Account",
   queue: "Queue",
   applications: "Applications",
+  "api-docs": "API Docs",
+  "api-tokens": "API Tokens",
 }
 
 const getLabel = (segment: string) => {

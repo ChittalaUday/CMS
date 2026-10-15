@@ -4,6 +4,7 @@ import type { Role } from "@/generated/prisma/enums"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar"
 import Link from "next/link"
+import { generateInitialsAvatar, getInitials } from "@/lib/utils/avatar"
 
 export function NavUser({
   user,
@@ -16,9 +17,8 @@ export function NavUser({
   }
 }) {
   const displayName = user.name || user.email.split("@")[0]
-  const avatarUrl =
-    user.avatarUrl ||
-    `https://avatar.iran.liara.run/username?username=${encodeURIComponent(displayName)}`
+  const initials = getInitials(displayName)
+  const avatarUrl = user.avatarUrl || generateInitialsAvatar(displayName)
 
   return (
     <SidebarMenu>
@@ -28,7 +28,7 @@ export function NavUser({
             <Avatar className="h-8 w-8 rounded-lg">
               <AvatarImage src={avatarUrl} alt={displayName} />
               <AvatarFallback className="rounded-lg">
-                {displayName.substring(0, 2).toUpperCase()}
+                {initials}
               </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">

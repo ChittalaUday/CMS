@@ -127,7 +127,7 @@ export default async function proxy(req: NextRequest) {
       ? "'self' 'unsafe-inline' 'unsafe-eval'"
       : "'self' 'unsafe-inline'"
 
-  const imgSrc = ["'self'", "data:", "blob:", "https://avatar.iran.liara.run", r2Origin]
+  const imgSrc = ["'self'", "data:", "blob:", r2Origin]
     .filter(Boolean)
     .join(" ")
 

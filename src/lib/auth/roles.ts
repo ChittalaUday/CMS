@@ -28,6 +28,9 @@ export const MANAGEABLE_BY_ADMIN = [Role.HR, Role.EDITOR, Role.DEVELOPER] as con
 /** DEVELOPER: read-only API docs access only — no CMS content access. */
 export const DEVELOPER_ROLES = [Role.DEVELOPER] as const
 
+/** Roles that can view API documentation (admins and developers only). */
+export const API_DOCS_ACCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.DEVELOPER] as const
+
 // ── Predicate helpers ────────────────────────────────────────────────────────
 
 export function isAdmin(role: Role): boolean {
@@ -52,6 +55,10 @@ export function isSuperAdmin(role: Role): boolean {
 
 export function isDeveloper(role: Role): boolean {
   return role === Role.DEVELOPER
+}
+
+export function canAccessApiDocs(role: Role): boolean {
+  return (API_DOCS_ACCESS_ROLES as readonly Role[]).includes(role)
 }
 
 export const CLIENT_USER_ROLES = [Role.ADMIN, Role.HR, Role.EDITOR, Role.DEVELOPER] as const

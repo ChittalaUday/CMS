@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   DndContext,
   useSensor,
@@ -19,8 +19,7 @@ import { ApplicationDetailDialog } from "./ApplicationDetailDialog"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { toast } from "sonner"
-import { evaluateSearchQuery } from "@/lib/careers/search-parser"
-import { updateApplicationStatus } from "../../actions"
+import { updateApplicationStatus, getApplications } from "../../actions"
 
 type ApplicationStatus = "NEW" | "REVIEWING" | "SHORTLISTED" | "REJECTED" | "HIRED"
 const STATUSES: ApplicationStatus[] = ["NEW", "REVIEWING", "SHORTLISTED", "REJECTED", "HIRED"]
@@ -52,6 +51,8 @@ const STATUS_CONFIG: Record<
   REJECTED: { label: "Rejected", dotColor: "bg-red-500" },
   HIRED: { label: "Hired", dotColor: "bg-emerald-500" },
 }
+
+const COLUMN_PAGE_SIZE = 5
 
 interface Answer {
   id: string
@@ -95,8 +96,6 @@ interface JobPosting {
   keywords: string[]
 }
 
-import { ApplicationsPagination } from "./ApplicationsPagination"
-
 interface ApplicationsKanbanProps {
   applications: Application[]
   job: JobPosting
@@ -114,20 +113,152 @@ export function ApplicationsKanban({
   applications: initialApplications,
   job,
   search: propSearch,
-  pagination,
   statusCounts,
 }: ApplicationsKanbanProps) {
-  const [applications, setApplications] = useState<Application[]>(initialApplications)
   const [localSearch, setLocalSearch] = useState("")
   const search = propSearch !== undefined ? propSearch : localSearch
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
   const [mobileTab, setMobileTab] = useState<ApplicationStatus>("NEW")
 
+  // Per-column page state
+  const [columnPages, setColumnPages] = useState<Record<ApplicationStatus, number>>({
+    NEW: 1,
+    REVIEWING: 1,
+    SHORTLISTED: 1,
+    REJECTED: 1,
+    HIRED: 1,
+  })
+
+  // Group initial applications by status
+  const groupedInitial = useMemo(() => {
+    const map: Record<ApplicationStatus, Application[]> = {
+      NEW: [],
+      REVIEWING: [],
+      SHORTLISTED: [],
+      REJECTED: [],
+      HIRED: [],
+    }
+    for (const app of initialApplications) {
+      if (map[app.status]) {
+        map[app.status].push(app)
+      }
+    }
+    return map
+  }, [initialApplications])
+
+  // Items per column
+  const [columnItems, setColumnItems] = useState<Record<ApplicationStatus, Application[]>>(() => ({
+    NEW: groupedInitial.NEW.slice(0, COLUMN_PAGE_SIZE),
+    REVIEWING: groupedInitial.REVIEWING.slice(0, COLUMN_PAGE_SIZE),
+    SHORTLISTED: groupedInitial.SHORTLISTED.slice(0, COLUMN_PAGE_SIZE),
+    REJECTED: groupedInitial.REJECTED.slice(0, COLUMN_PAGE_SIZE),
+    HIRED: groupedInitial.HIRED.slice(0, COLUMN_PAGE_SIZE),
+  }))
+
+  // Totals per column
+  const [columnTotals, setColumnTotals] = useState<Record<ApplicationStatus, number>>(() => ({
+    NEW: statusCounts?.NEW ?? groupedInitial.NEW.length,
+    REVIEWING: statusCounts?.REVIEWING ?? groupedInitial.REVIEWING.length,
+    SHORTLISTED: statusCounts?.SHORTLISTED ?? groupedInitial.SHORTLISTED.length,
+    REJECTED: statusCounts?.REJECTED ?? groupedInitial.REJECTED.length,
+    HIRED: statusCounts?.HIRED ?? groupedInitial.HIRED.length,
+  }))
+
+  // Loading state per column
+  const [columnLoading, setColumnLoading] = useState<Record<ApplicationStatus, boolean>>({
+    NEW: false,
+    REVIEWING: false,
+    SHORTLISTED: false,
+    REJECTED: false,
+    HIRED: false,
+  })
+
   const [prevInitial, setPrevInitial] = useState(initialApplications)
   if (initialApplications !== prevInitial) {
     setPrevInitial(initialApplications)
-    setApplications(initialApplications)
+    setColumnItems({
+      NEW: groupedInitial.NEW.slice(0, COLUMN_PAGE_SIZE),
+      REVIEWING: groupedInitial.REVIEWING.slice(0, COLUMN_PAGE_SIZE),
+      SHORTLISTED: groupedInitial.SHORTLISTED.slice(0, COLUMN_PAGE_SIZE),
+      REJECTED: groupedInitial.REJECTED.slice(0, COLUMN_PAGE_SIZE),
+      HIRED: groupedInitial.HIRED.slice(0, COLUMN_PAGE_SIZE),
+    })
+    setColumnTotals({
+      NEW: statusCounts?.NEW ?? groupedInitial.NEW.length,
+      REVIEWING: statusCounts?.REVIEWING ?? groupedInitial.REVIEWING.length,
+      SHORTLISTED: statusCounts?.SHORTLISTED ?? groupedInitial.SHORTLISTED.length,
+      REJECTED: statusCounts?.REJECTED ?? groupedInitial.REJECTED.length,
+      HIRED: statusCounts?.HIRED ?? groupedInitial.HIRED.length,
+    })
   }
+
+  // Fetch fresh data per column on mount if incomplete or when search changes
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchColumns() {
+      const needFetch =
+        Boolean(search.trim()) ||
+        STATUSES.some((st) => (statusCounts?.[st] ?? 0) > groupedInitial[st].length)
+
+      if (!needFetch) return
+
+      setColumnLoading({
+        NEW: true,
+        REVIEWING: true,
+        SHORTLISTED: true,
+        REJECTED: true,
+        HIRED: true,
+      })
+
+      const results = await Promise.all(
+        STATUSES.map((status) =>
+          getApplications(job.id, {
+            status,
+            page: 1,
+            pageSize: COLUMN_PAGE_SIZE,
+            search: search.trim() || undefined,
+          }).catch(() => null)
+        )
+      )
+
+      if (cancelled) return
+
+      const newItems: Partial<Record<ApplicationStatus, Application[]>> = {}
+      const newTotals: Partial<Record<ApplicationStatus, number>> = {}
+
+      STATUSES.forEach((status, idx) => {
+        const res = results[idx]
+        if (res) {
+          newItems[status] = res.applications
+          newTotals[status] = res.totalCount
+        }
+      })
+
+      setColumnItems((prev) => ({ ...prev, ...newItems }))
+      setColumnTotals((prev) => ({ ...prev, ...newTotals }))
+      setColumnPages({
+        NEW: 1,
+        REVIEWING: 1,
+        SHORTLISTED: 1,
+        REJECTED: 1,
+        HIRED: 1,
+      })
+      setColumnLoading({
+        NEW: false,
+        REVIEWING: false,
+        SHORTLISTED: false,
+        REJECTED: false,
+        HIRED: false,
+      })
+    }
+
+    fetchColumns()
+
+    return () => {
+      cancelled = true
+    }
+  }, [job.id, search, groupedInitial, statusCounts])
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -147,52 +278,84 @@ export function ApplicationsKanban({
     })
   )
 
-  // Filter application cards by search bar
-  const filteredApplications = useMemo(() => {
-    return applications.filter((a) => {
-      if (!search.trim()) return true
-      return evaluateSearchQuery(search, {
-        applicantName: a.applicantName,
-        applicantEmail: a.applicantEmail,
-        coverLetter: a.coverLetter,
-        extractedSkills: a.extractedSkills || [],
-        extractedExperience: a.extractedExperience || 0,
-        extractedLocation: a.extractedLocation || null,
-        extractedEducation: a.extractedEducation || null,
+  // Handle column page change
+  async function handleColumnPageChange(status: ApplicationStatus, newPage: number) {
+    setColumnPages((prev) => ({ ...prev, [status]: newPage }))
+    setColumnLoading((prev) => ({ ...prev, [status]: true }))
+    try {
+      const res = await getApplications(job.id, {
+        status,
+        page: newPage,
+        pageSize: COLUMN_PAGE_SIZE,
+        search: search.trim() || undefined,
       })
-    })
-  }, [applications, search])
-
-  // Group applications by status
-  const grouped = useMemo(() => {
-    const map: Record<ApplicationStatus, Application[]> = {
-      NEW: [],
-      REVIEWING: [],
-      SHORTLISTED: [],
-      REJECTED: [],
-      HIRED: [],
+      setColumnItems((prev) => ({ ...prev, [status]: res.applications }))
+      setColumnTotals((prev) => ({ ...prev, [status]: res.totalCount }))
+    } catch (err: unknown) {
+      toast.error((err as Error).message || `Failed to load page ${newPage} for ${STATUS_CONFIG[status].label}`)
+    } finally {
+      setColumnLoading((prev) => ({ ...prev, [status]: false }))
     }
-    for (const app of filteredApplications) {
-      if (map[app.status]) {
-        map[app.status].push(app)
-      }
-    }
-    return map
-  }, [filteredApplications])
+  }
 
   // Handle manual status update via detail sheet or mobile dropdown
   async function handleStatusUpdate(id: string, newStatus: ApplicationStatus, notes?: string) {
-    const original = applications.find((a) => a.id === id)
-    if (!original) return
+    let original: Application | undefined
+    let oldStatus: ApplicationStatus | null = null
+
+    for (const status of STATUSES) {
+      const found = columnItems[status]?.find((a) => a.id === id)
+      if (found) {
+        original = found
+        oldStatus = status
+        break
+      }
+    }
+
+    if (!original || !oldStatus) {
+      if (selectedApp?.id === id) {
+        original = selectedApp
+        oldStatus = selectedApp.status
+      } else {
+        return
+      }
+    }
+
+    if (oldStatus === newStatus) {
+      if (notes !== undefined) {
+        setColumnItems((prev) => ({
+          ...prev,
+          [oldStatus!]: (prev[oldStatus!] || []).map((a) => (a.id === id ? { ...a, notes } : a)),
+        }))
+        if (selectedApp?.id === id) {
+          setSelectedApp((prev) => (prev ? { ...prev, notes } : null))
+        }
+        await updateApplicationStatus(id, newStatus, notes)
+      }
+      return
+    }
+
+    const updatedApp: Application = {
+      ...original,
+      status: newStatus,
+      notes: notes !== undefined ? notes : original.notes,
+    }
 
     // Optimistic Update
-    setApplications((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: newStatus, notes: notes !== undefined ? notes : a.notes } : a))
-    )
+    setColumnItems((prev) => ({
+      ...prev,
+      [oldStatus!]: (prev[oldStatus!] || []).filter((a) => a.id !== id),
+      [newStatus]: [updatedApp, ...(prev[newStatus] || [])].slice(0, COLUMN_PAGE_SIZE),
+    }))
+
+    setColumnTotals((prev) => ({
+      ...prev,
+      [oldStatus!]: Math.max(0, (prev[oldStatus!] ?? 1) - 1),
+      [newStatus]: (prev[newStatus] ?? 0) + 1,
+    }))
+
     if (selectedApp?.id === id) {
-      setSelectedApp((prev) =>
-        prev ? { ...prev, status: newStatus, notes: notes !== undefined ? notes : prev.notes } : null
-      )
+      setSelectedApp(updatedApp)
     }
 
     try {
@@ -200,9 +363,16 @@ export function ApplicationsKanban({
       toast.success(`Application updated to ${STATUS_CONFIG[newStatus].label}.`)
     } catch (err: unknown) {
       // Revert
-      setApplications((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status: original.status, notes: original.notes } : a))
-      )
+      setColumnItems((prev) => ({
+        ...prev,
+        [oldStatus!]: [original!, ...(prev[oldStatus!] || [])],
+        [newStatus]: (prev[newStatus] || []).filter((a) => a.id !== id),
+      }))
+      setColumnTotals((prev) => ({
+        ...prev,
+        [oldStatus!]: (prev[oldStatus!] ?? 0) + 1,
+        [newStatus]: Math.max(0, (prev[newStatus] ?? 1) - 1),
+      }))
       if (selectedApp?.id === id) {
         setSelectedApp(original)
       }
@@ -219,8 +389,18 @@ export function ApplicationsKanban({
     const target = over.id as string
 
     // Find active application
-    const app = applications.find((a) => a.id === applicationId)
-    if (!app) return
+    let app: Application | undefined
+    let sourceStatus: ApplicationStatus | null = null
+
+    for (const status of STATUSES) {
+      const found = columnItems[status]?.find((a) => a.id === applicationId)
+      if (found) {
+        app = found
+        sourceStatus = status
+        break
+      }
+    }
+    if (!app || !sourceStatus) return
 
     // Determine target status
     let targetStatus: ApplicationStatus | null = null
@@ -230,37 +410,62 @@ export function ApplicationsKanban({
       targetStatus = target as ApplicationStatus
     } else {
       // Dropped over another card, find that card's status
-      const overApp = applications.find((a) => a.id === target)
-      if (overApp) {
-        targetStatus = overApp.status
+      for (const status of STATUSES) {
+        const found = columnItems[status]?.find((a) => a.id === target)
+        if (found) {
+          targetStatus = status
+          break
+        }
       }
     }
 
-    if (!targetStatus || targetStatus === app.status) return
+    if (!targetStatus || targetStatus === sourceStatus) return
 
-    const allowed = ALLOWED_TRANSITIONS[app.status]
+    const allowed = ALLOWED_TRANSITIONS[sourceStatus]
     if (!allowed.includes(targetStatus)) {
-      toast.error(`Cannot move ${STATUS_CONFIG[app.status].label} → ${STATUS_CONFIG[targetStatus].label}.`)
+      toast.error(`Cannot move ${STATUS_CONFIG[sourceStatus].label} → ${STATUS_CONFIG[targetStatus].label}.`)
       return
     }
 
+    const originalApp = app
+    const updatedApp: Application = { ...app, status: targetStatus }
+
     // Optimistic update
-    const originalStatus = app.status
-    setApplications((prev) =>
-      prev.map((a) => (a.id === applicationId ? { ...a, status: targetStatus! } : a))
-    )
+    setColumnItems((prev) => ({
+      ...prev,
+      [sourceStatus]: (prev[sourceStatus] || []).filter((a) => a.id !== applicationId),
+      [targetStatus]: [updatedApp, ...(prev[targetStatus] || [])].slice(0, COLUMN_PAGE_SIZE),
+    }))
+
+    setColumnTotals((prev) => ({
+      ...prev,
+      [sourceStatus]: Math.max(0, (prev[sourceStatus] ?? 1) - 1),
+      [targetStatus]: (prev[targetStatus] ?? 0) + 1,
+    }))
 
     try {
       await updateApplicationStatus(applicationId, targetStatus, app.notes ?? undefined)
       toast.success(`Candidate moved to ${STATUS_CONFIG[targetStatus].label}.`)
     } catch (err: unknown) {
       // Revert optimistic update
-      setApplications((prev) =>
-        prev.map((a) => (a.id === applicationId ? { ...a, status: originalStatus } : a))
-      )
+      setColumnItems((prev) => ({
+        ...prev,
+        [sourceStatus]: [originalApp, ...(prev[sourceStatus] || [])],
+        [targetStatus]: (prev[targetStatus] || []).filter((a) => a.id !== applicationId),
+      }))
+      setColumnTotals((prev) => ({
+        ...prev,
+        [sourceStatus]: (prev[sourceStatus] ?? 0) + 1,
+        [targetStatus]: Math.max(0, (prev[targetStatus] ?? 1) - 1),
+      }))
       toast.error((err as Error).message || "Failed to move candidate status.")
     }
   }
+
+  // Flatten currently visible applications across columns for detail dialog navigation
+  const allVisibleApps = useMemo(() => {
+    return STATUSES.flatMap((status) => columnItems[status] || [])
+  }, [columnItems])
 
   return (
     <>
@@ -285,12 +490,13 @@ export function ApplicationsKanban({
           <button
             key={status}
             onClick={() => setMobileTab(status)}
-            className={`flex-1 min-w-17.5 py-1.5 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-center transition-all ${mobileTab === status
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-              }`}
+            className={`flex-1 min-w-17.5 py-1.5 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-center transition-all ${
+              mobileTab === status
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
-            {STATUS_CONFIG[status].label} ({statusCounts ? (statusCounts[status] ?? 0) : applications.filter(a => a.status === status).length})
+            {STATUS_CONFIG[status].label} ({columnTotals[status] ?? 0})
           </button>
         ))}
       </div>
@@ -299,17 +505,27 @@ export function ApplicationsKanban({
       <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={handleDragEnd}>
         {/* Desktop Layout: side-by-side scrollable columns */}
         <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-1 select-none min-h-137.5 w-full">
-          {STATUSES.map((status) => (
-            <KanbanColumn
-              key={status}
-              status={status}
-              label={STATUS_CONFIG[status].label}
-              dotColor={STATUS_CONFIG[status].dotColor}
-              applications={grouped[status]}
-              onViewDetails={setSelectedApp}
-              onStatusChange={handleStatusUpdate}
-            />
-          ))}
+          {STATUSES.map((status) => {
+            const totalCount = columnTotals[status] ?? 0
+            const totalPages = Math.max(1, Math.ceil(totalCount / COLUMN_PAGE_SIZE))
+            return (
+              <KanbanColumn
+                key={status}
+                status={status}
+                label={STATUS_CONFIG[status].label}
+                dotColor={STATUS_CONFIG[status].dotColor}
+                applications={columnItems[status] || []}
+                totalCount={totalCount}
+                page={columnPages[status] ?? 1}
+                pageSize={COLUMN_PAGE_SIZE}
+                totalPages={totalPages}
+                isLoading={columnLoading[status]}
+                onPageChange={(newPage) => handleColumnPageChange(status, newPage)}
+                onViewDetails={setSelectedApp}
+                onStatusChange={handleStatusUpdate}
+              />
+            )
+          })}
         </div>
 
         {/* Mobile Layout: show only the selected tab's column */}
@@ -318,21 +534,18 @@ export function ApplicationsKanban({
             status={mobileTab}
             label={STATUS_CONFIG[mobileTab].label}
             dotColor={STATUS_CONFIG[mobileTab].dotColor}
-            applications={grouped[mobileTab]}
+            applications={columnItems[mobileTab] || []}
+            totalCount={columnTotals[mobileTab] ?? 0}
+            page={columnPages[mobileTab] ?? 1}
+            pageSize={COLUMN_PAGE_SIZE}
+            totalPages={Math.max(1, Math.ceil((columnTotals[mobileTab] ?? 0) / COLUMN_PAGE_SIZE))}
+            isLoading={columnLoading[mobileTab]}
+            onPageChange={(newPage) => handleColumnPageChange(mobileTab, newPage)}
             onViewDetails={setSelectedApp}
             onStatusChange={handleStatusUpdate}
           />
         </div>
       </DndContext>
-
-      {pagination && (
-        <ApplicationsPagination
-          page={pagination.page}
-          pageSize={pagination.pageSize}
-          totalCount={pagination.totalCount}
-          totalPages={pagination.totalPages}
-        />
-      )}
 
       {/* Application Details Dialog */}
       <ApplicationDetailDialog
@@ -342,24 +555,28 @@ export function ApplicationsKanban({
         job={job}
         onStatusChange={handleStatusUpdate}
         onApplicationUpdate={(updated) => {
-          setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+          setColumnItems((prev) => ({
+            ...prev,
+            [updated.status]: (prev[updated.status] || []).map((a) => (a.id === updated.id ? updated : a)),
+          }))
           if (selectedApp?.id === updated.id) {
             setSelectedApp(updated)
           }
         }}
         onNavigatePrev={() => {
-          const idx = selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) : -1
-          if (idx > 0) setSelectedApp(filteredApplications[idx - 1])
+          const idx = selectedApp ? allVisibleApps.findIndex((a) => a.id === selectedApp.id) : -1
+          if (idx > 0) setSelectedApp(allVisibleApps[idx - 1])
         }}
         onNavigateNext={() => {
-          const idx = selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) : -1
-          if (idx >= 0 && idx < filteredApplications.length - 1) setSelectedApp(filteredApplications[idx + 1])
+          const idx = selectedApp ? allVisibleApps.findIndex((a) => a.id === selectedApp.id) : -1
+          if (idx >= 0 && idx < allVisibleApps.length - 1) setSelectedApp(allVisibleApps[idx + 1])
         }}
-        hasPrev={selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) > 0 : false}
-        hasNext={selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) < filteredApplications.length - 1 : false}
-        currentIndex={selectedApp ? filteredApplications.findIndex((a) => a.id === selectedApp.id) : 0}
-        totalInList={filteredApplications.length}
+        hasPrev={selectedApp ? allVisibleApps.findIndex((a) => a.id === selectedApp.id) > 0 : false}
+        hasNext={selectedApp ? allVisibleApps.findIndex((a) => a.id === selectedApp.id) < allVisibleApps.length - 1 : false}
+        currentIndex={selectedApp ? allVisibleApps.findIndex((a) => a.id === selectedApp.id) : 0}
+        totalInList={allVisibleApps.length}
       />
     </>
   )
 }
+

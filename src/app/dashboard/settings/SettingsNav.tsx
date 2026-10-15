@@ -3,14 +3,19 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { UserIcon, PaletteIcon, KeyRoundIcon, ShieldIcon, ServerIcon, FileCodeIcon } from "lucide-react"
-import { type Role, Role as RoleEnum } from "@/lib/auth/roles"
+import { type Role, Role as RoleEnum, canAccessApiDocs } from "@/lib/auth/roles"
 
 const BASE_NAV_ITEMS = [
   { href: "/dashboard/settings/profile",    label: "Personal Info", icon: UserIcon    },
   { href: "/dashboard/settings/appearance", label: "Appearance",    icon: PaletteIcon },
   { href: "/dashboard/settings/account",    label: "Account",       icon: KeyRoundIcon },
-  { href: "/dashboard/settings/api-docs",   label: "API Docs",      icon: FileCodeIcon },
 ]
+
+const API_DOCS_NAV_ITEM = {
+  href: "/dashboard/settings/api-docs",
+  label: "API Docs",
+  icon: FileCodeIcon,
+}
 
 const ADMIN_NAV_ITEMS = [
   { href: "/dashboard/settings/api-tokens", label: "API Tokens",   icon: ShieldIcon  },
@@ -22,12 +27,12 @@ const SUPER_ADMIN_NAV_ITEMS = [
 
 export function SettingsNav({ role }: { role: Role }) {
   const pathname = usePathname()
-  const navItems =
-    role === RoleEnum.SUPER_ADMIN
-      ? [...BASE_NAV_ITEMS, ...SUPER_ADMIN_NAV_ITEMS]
-      : role === RoleEnum.ADMIN
-      ? [...BASE_NAV_ITEMS, ...ADMIN_NAV_ITEMS]
-      : BASE_NAV_ITEMS
+  const navItems = [
+    ...BASE_NAV_ITEMS,
+    ...(canAccessApiDocs(role) ? [API_DOCS_NAV_ITEM] : []),
+    ...(role === RoleEnum.ADMIN ? ADMIN_NAV_ITEMS : []),
+    ...(role === RoleEnum.SUPER_ADMIN ? SUPER_ADMIN_NAV_ITEMS : []),
+  ]
 
   return (
     <div className="space-y-4">
