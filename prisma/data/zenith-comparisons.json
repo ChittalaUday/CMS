@@ -648,5 +648,132 @@
       "internal-audit-and-process-review",
       "due-diligence-and-project-reports"
     ]
+  },
+  {
+    "slug": "ways-to-get-filings-done",
+    "title": "Software, online service, marketplace or local professional: how to get your filings done",
+    "description": "Four common ways to handle tax filings and registrations in India, compared on who does the work, what you do yourself and what to check before you choose.",
+    "disclaimer": "General guidance only. Suitability and current statutory requirements must be reviewed for your circumstances.",
+    "options": [
+      {
+        "label": "Do-it-yourself software"
+      },
+      {
+        "label": "Online service with assigned experts (Zenith Filings)",
+        "serviceSlug": null
+      },
+      {
+        "label": "Marketplace of independent professionals"
+      },
+      {
+        "label": "Local professional"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Who prepares the filing",
+        "values": [
+          "You, guided by the software",
+          "Our Experts, who are verified before they take work",
+          "An independent professional chosen through the platform",
+          "The professional you hire"
+        ]
+      },
+      {
+        "label": "What you do yourself",
+        "values": [
+          "Enter the data and submit",
+          "Answer a guided form and upload your documents",
+          "Share documents and answer the professional's questions",
+          "Hand over documents and answer questions"
+        ]
+      },
+      {
+        "label": "Seeing progress",
+        "values": [
+          "Usually inside the software",
+          "Status of each request and a message thread online",
+          "Depends on the platform",
+          "Depends on the professional"
+        ]
+      },
+      {
+        "label": "Best suited to",
+        "values": [
+          "Simple, repeat filings you are comfortable doing",
+          "Registrations and recurring filings you want handled for you",
+          "Buyers who want to pick from several professionals",
+          "Ongoing, personal advice close to you"
+        ]
+      },
+      {
+        "label": "What to check before you choose",
+        "values": [
+          "Whether it covers your income or filing type and who helps with notices",
+          "What is included in the quote and how notices and corrections are handled",
+          "Who is accountable if the work goes wrong",
+          "Fees, availability and how documents are shared"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "gst-registration",
+      "individual-itr-filing",
+      "private-limited-company-registration"
+    ]
+  },
+  {
+    "slug": "online-filing-services-compared",
+    "title": "Zenith Filings, ClearTax, Zolvit and IndiaFilings: what each is known for",
+    "description": "A neutral look at four online services for tax filing and compliance in India, based on how each describes itself publicly. Check each site for current offerings and prices.",
+    "disclaimer": "Based on the public descriptions of each service and may be out of date. We have not compared prices or response times. Check each provider's own site for current offerings, prices and terms.",
+    "options": [
+      {
+        "label": "Zenith Filings"
+      },
+      {
+        "label": "ClearTax"
+      },
+      {
+        "label": "Zolvit (formerly Vakilsearch)"
+      },
+      {
+        "label": "IndiaFilings"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Known for",
+        "values": [
+          "Registrations and filings handled by verified experts, tracked online",
+          "Software and services for income tax return filing, GST and TDS",
+          "Legal and compliance services such as company incorporation and GST registration and filing",
+          "Company registration, trademark filing, GST and tax compliance services"
+        ]
+      },
+      {
+        "label": "Way of working",
+        "values": [
+          "You raise a request per service, answer a guided form and follow the work in one place",
+          "Software-led, with assisted services",
+          "Connects clients with professionals for legal and compliance work",
+          "Online platform that prepares and files on the government portals"
+        ]
+      },
+      {
+        "label": "Where to check prices",
+        "values": [
+          "The service page, or the quote for your request",
+          "ClearTax's own site",
+          "Zolvit's own site",
+          "IndiaFilings' own site"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "gst-registration",
+      "gst-return-filing",
+      "individual-itr-filing"
+    ]
   }
 ]
