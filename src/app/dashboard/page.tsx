@@ -3,10 +3,9 @@ import {
   canAccessBlogs,
   canAccessCareers,
   isDeveloper,
-  isSuperAdmin,
 } from "@/lib/auth/roles"
 import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
+import { getClientScope } from "@/lib/utils/client-context"
 import {
   FileText,
   Eye,
@@ -36,14 +35,7 @@ export default async function Page({
   const { days: daysParam } = await searchParams
   const days = Math.min(Math.max(Number(daysParam ?? 30), 7), 90)
 
-  // Resolve active clientId
-  let clientId: string | null = null
-  if (isSuperAdmin(user.role)) {
-    const jar = await cookies()
-    clientId = jar.get("cms_active_client")?.value ?? null
-  } else {
-    clientId = user.clientId ?? null
-  }
+  const clientId = await getClientScope()
 
   const [blog, careers] = await Promise.all([
     canAccessBlogs(user.role)

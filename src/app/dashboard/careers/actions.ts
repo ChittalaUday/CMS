@@ -1059,17 +1059,28 @@ export async function getAtsScore(applicationId: string, model?: string) {
   queueEvents.emit("change")
 }
 
+/** Queue rows of one client: applications through their job, jobs directly. Empty filters mean every client (super admin without an active client). */
+async function queueScope() {
+  const clientId = await getClientScope()
+  return {
+    apps: clientId ? { job: { clientId } } : {},
+    jobs: clientId ? { clientId } : {},
+  }
+}
+
 export async function getQueueStatus() {
   await requireCareersAccess()
+  const scope = await queueScope()
   const { atsQueue, keywordQueue } = await import("@/lib/careers/queue-manager")
 
   // 1. ATS Queue Stats
   const [atsPending, atsProcessing, atsCompleted, atsFailed, atsItems] = await Promise.all([
-    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.PENDING } }),
-    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.PROCESSING } }),
-    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.COMPLETED } }),
-    prisma.jobApplication.count({ where: { atsStatus: QueueStatus.FAILED } }),
+    prisma.jobApplication.count({ where: { ...scope.apps, atsStatus: QueueStatus.PENDING } }),
+    prisma.jobApplication.count({ where: { ...scope.apps, atsStatus: QueueStatus.PROCESSING } }),
+    prisma.jobApplication.count({ where: { ...scope.apps, atsStatus: QueueStatus.COMPLETED } }),
+    prisma.jobApplication.count({ where: { ...scope.apps, atsStatus: QueueStatus.FAILED } }),
     prisma.jobApplication.findMany({
+      where: scope.apps,
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: {
@@ -1091,11 +1102,12 @@ export async function getQueueStatus() {
 
   // 2. Keyword Gen Queue Stats
   const [kwPending, kwProcessing, kwCompleted, kwFailed, kwItems] = await Promise.all([
-    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.PENDING } }),
-    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.PROCESSING } }),
-    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.COMPLETED } }),
-    prisma.jobPosting.count({ where: { keywordStatus: QueueStatus.FAILED } }),
+    prisma.jobPosting.count({ where: { ...scope.jobs, keywordStatus: QueueStatus.PENDING } }),
+    prisma.jobPosting.count({ where: { ...scope.jobs, keywordStatus: QueueStatus.PROCESSING } }),
+    prisma.jobPosting.count({ where: { ...scope.jobs, keywordStatus: QueueStatus.COMPLETED } }),
+    prisma.jobPosting.count({ where: { ...scope.jobs, keywordStatus: QueueStatus.FAILED } }),
     prisma.jobPosting.findMany({
+      where: scope.jobs,
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: {
@@ -1141,26 +1153,27 @@ export async function triggerQueueWorker() {
 
 export async function resetFailedQueueItems() {
   await requireCareersAccess()
+  const scope = await queueScope()
 
   // 1. Reset failed application scans
   const failedApps = await prisma.jobApplication.findMany({
-    where: { atsStatus: QueueStatus.FAILED },
+    where: { ...scope.apps, atsStatus: QueueStatus.FAILED },
     select: { id: true }
   })
 
   await prisma.jobApplication.updateMany({
-    where: { atsStatus: QueueStatus.FAILED },
+    where: { ...scope.apps, atsStatus: QueueStatus.FAILED },
     data: { atsStatus: QueueStatus.PENDING, atsScore: null, atsJustification: null },
   })
 
   // 2. Reset failed keyword gens
   const failedJobs = await prisma.jobPosting.findMany({
-    where: { keywordStatus: QueueStatus.FAILED },
+    where: { ...scope.jobs, keywordStatus: QueueStatus.FAILED },
     select: { id: true }
   })
 
   await prisma.jobPosting.updateMany({
-    where: { keywordStatus: QueueStatus.FAILED },
+    where: { ...scope.jobs, keywordStatus: QueueStatus.FAILED },
     data: { keywordStatus: QueueStatus.PENDING },
   })
 
@@ -1238,9 +1251,11 @@ export async function getExportData(filters: {
   search?: string
 }) {
   const user = await requireCareersAccess()
+  const clientId = await getClientScope()
 
   const where: Prisma.JobPostingWhereInput = {
     status: { in: ["PUBLISHED", "CLOSED"] },
+    ...(clientId ? { clientId } : {}),
   }
   if (!(ADMIN_ROLES as readonly Role[]).includes(user.role)) {
     where.createdById = user.id

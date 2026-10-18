@@ -3,6 +3,8 @@
 import { uploadToStorage, getImageDimensions } from '@/lib/upload';
 import { prisma } from '@/lib/db/prisma';
 import { getSession } from '@/lib/auth/session';
+import { getClientScope } from '@/lib/utils/client-context';
+import { freeShaKey } from '@/lib/upload/sha-key';
 
 export async function uploadImageAction(formData: FormData) {
   const user = await getSession();
@@ -18,7 +20,8 @@ export async function uploadImageAction(formData: FormData) {
   try {
     const { shaKey, buffer, url } = await uploadToStorage(file, "uploads")
 
-    const existing = await prisma.media.findUnique({ where: { shaKey } })
+    const clientId = await getClientScope()
+    const existing = await prisma.media.findFirst({ where: { shaKey, clientId } })
     if (existing) {
       return { success: true, url: existing.url, media: existing }
     }
@@ -34,7 +37,8 @@ export async function uploadImageAction(formData: FormData) {
         width: dimensions?.width ?? null,
         height: dimensions?.height ?? null,
         userId: user.id,
-        shaKey,
+        shaKey: await freeShaKey(shaKey),
+        clientId,
       },
     })
 
