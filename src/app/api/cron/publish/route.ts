@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client"
 
 export async function GET(req: Request) {
   const secret = req.headers.get("authorization")?.replace("Bearer ", "")
-  if (secret !== process.env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return new Response("Unauthorized", { status: 401 })
   }
 

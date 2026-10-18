@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { getSession } from "@/lib/auth/session"
 import { uploadToStorage, deleteFromStorage, getImageDimensions } from "@/lib/upload"
+import { freeShaKey } from "@/lib/upload/sha-key"
 import { Role } from "@/generated/prisma/enums"
 
 import {
@@ -1002,11 +1003,11 @@ export async function uploadMediaItem(formData: FormData) {
 
     const mediaUserInclude = { user: { select: { name: true, email: true } } } as const
 
-    const existing = await prisma.media.findUnique({ where: { shaKey }, include: mediaUserInclude })
+    const clientId = await getClientScope()
+    const existing = await prisma.media.findFirst({ where: { shaKey, clientId }, include: mediaUserInclude })
     if (existing) return existing
 
     const dimensions = getImageDimensions(buffer, file.type)
-    const clientId = await getClientScope()
 
     const media = await prisma.media.create({
       data: {
@@ -1017,7 +1018,7 @@ export async function uploadMediaItem(formData: FormData) {
         width: dimensions?.width ?? null,
         height: dimensions?.height ?? null,
         userId: user.id,
-        shaKey,
+        shaKey: await freeShaKey(shaKey),
         clientId,
       },
       include: mediaUserInclude,
@@ -1042,9 +1043,13 @@ export async function deleteMediaItem(id: string) {
   const match = media.url.match(/uploads\/.*$/)
   const key = match ? match[0] : media.url.split("/").pop()!
 
-  await deleteFromStorage(key).catch((err: unknown) => {
-    console.warn(`Could not delete R2 object at key ${key}:`, err)
-  })
+  // another client may hold a row for the same stored object (see freeShaKey): keep the object while one does
+  const sharedWithOthers = await prisma.media.count({ where: { url: media.url, id: { not: id } } })
+  if (sharedWithOthers === 0) {
+    await deleteFromStorage(key).catch((err: unknown) => {
+      console.warn(`Could not delete R2 object at key ${key}:`, err)
+    })
+  }
 
   try {
     await prisma.media.delete({ where: { id } })

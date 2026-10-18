@@ -159,10 +159,9 @@ export const createEditor = actionClient
     const code = randomBytes(4).toString("hex").toUpperCase()
     const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS)
 
-    const clientId = await getClientScope()
-    const assignedClientId = sessionUser.role === Role.SUPER_ADMIN
-      ? (sessionUser.clientId ?? clientId)
-      : sessionUser.clientId
+    // The client being worked in: the header's active client for a super admin (never the super admin's own
+    // client), the user's own client for everyone else.
+    const assignedClientId = await getClientScope()
 
     if (targetRole !== Role.SUPER_ADMIN && !assignedClientId) {
       throw new Error("Please select an active client from the header before inviting a user.")
