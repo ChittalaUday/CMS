@@ -25,6 +25,7 @@ async function main() {
   const { prisma } = require("../../src/lib/db/prisma")
   const { createEditor } = require("../../src/app/_actions/users")
   const { toggleFeatured } = require("../../src/app/dashboard/blogs/actions")
+  const { moveRecordToClient } = require("../../src/app/dashboard/clients/move-actions")
 
   const tag = Date.now()
   const [own, other] = await Promise.all(
@@ -71,6 +72,12 @@ async function main() {
     activeClient = null
     await assert.rejects(() => toggleFeatured(post.id))
     assert.equal((await prisma.post.findUnique({ where: { id: post.id } })).featured, post.featured)
+
+    // Only a super admin can move a record to another client.
+    await assert.rejects(() => moveRecordToClient("post", post.id, own.id), /SUPER_ADMIN only/)
+    session = superAdmin
+    await moveRecordToClient("post", post.id, own.id)
+    assert.equal((await prisma.post.findUnique({ where: { id: post.id } })).clientId, own.id)
 
     console.log("tenancy: ok")
   } finally {

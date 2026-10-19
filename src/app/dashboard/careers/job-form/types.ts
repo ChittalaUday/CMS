@@ -67,6 +67,7 @@ export interface ExistingJob {
     options: unknown;
   }[];
   keywords: string[];
+  clientId?: string | null;
 }
 
 export const JOB_TYPE_LABELS: Record<JobType, string> = {

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ClientSelect } from "@/components/ClientSelect"
+import { ClientMove } from "@/components/ClientMove"
 import {
   Dialog,
   DialogContent,
@@ -772,6 +773,9 @@ export function JobForm({ job, clients = [], defaultClientId = null }: JobFormPr
       
       {step === 1 && !isEdit && (
         <ClientSelect clients={clients} value={clientId} onChange={setClientId} className="max-w-sm space-y-2" />
+      )}
+      {step === 1 && job && !hasParent && (
+        <ClientMove kind="job" id={job.id} currentClientId={job.clientId ?? null} clients={clients} redirectTo="/dashboard/careers" className="max-w-sm space-y-2" />
       )}
 
       {step === 1 && (

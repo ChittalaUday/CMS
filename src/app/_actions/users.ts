@@ -104,6 +104,7 @@ export async function getEditorsPaginated(params: {
         role: true,
         onboardingCompleted: true,
         createdAt: true,
+        clientId: true,
         invite: {
           select: { token: true, code: true, expiresAt: true, usedAt: true },
         },

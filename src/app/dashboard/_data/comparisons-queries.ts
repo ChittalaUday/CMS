@@ -127,5 +127,5 @@ export async function getComparisonForEdit(id: string, clientId: string | null) 
     options: row.options.map((o) => ({ label: o.label, linkSlug: o.linkSlug ?? "" })),
     criteria: row.criteria.map((c) => ({ label: c.label, values: valuesFor(c, row.options) })),
   }
-  return { id: row.id, values }
+  return { id: row.id, clientId: row.clientId, values }
 }

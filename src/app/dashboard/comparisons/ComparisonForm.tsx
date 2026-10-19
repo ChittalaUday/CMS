@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ClientSelect } from "@/components/ClientSelect"
+import { ClientMove } from "@/components/ClientMove"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -317,7 +318,11 @@ export function ComparisonForm({ comparisonId, initial = EMPTY, clients = [], de
         <div className="space-y-4 min-w-0">
           {/* Details */}
           <section className={panel}>
-            {!comparisonId && <ClientSelect clients={clients} value={clientId} onChange={setClientId} className="space-y-1.5" />}
+            {comparisonId ? (
+              <ClientMove kind="comparison" id={comparisonId} currentClientId={defaultClientId} clients={clients} redirectTo="/dashboard/comparisons" disabled={saving} className="space-y-1.5" />
+            ) : (
+              <ClientSelect clients={clients} value={clientId} onChange={setClientId} className="space-y-1.5" />
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="cmp-title" className={sectionLabel}>Title</Label>
               <Input

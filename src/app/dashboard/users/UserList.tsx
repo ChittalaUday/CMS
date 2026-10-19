@@ -18,6 +18,7 @@ import {
 import { Role } from "@/lib/auth/roles"
 import PasswordIndicator from "@/components/PasswordIndicator"
 import { ClientSelect } from "@/components/ClientSelect"
+import { ClientMove } from "@/components/ClientMove"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -43,6 +44,7 @@ type EditorUser = {
   role: Role
   onboardingCompleted: boolean
   createdAt: Date
+  clientId: string | null
   invite: { token: string; code: string; expiresAt: Date; usedAt: Date | null } | null
 }
 
@@ -701,6 +703,9 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
 
             <form onSubmit={handleEdit} className="p-5 space-y-4">
               <FieldGroup>
+                {selectedEditor.role !== Role.SUPER_ADMIN && (
+                  <ClientMove kind="user" id={selectedEditor.id} currentClientId={selectedEditor.clientId} clients={clients} redirectTo="/dashboard/users" disabled={isPending} />
+                )}
                 <Field>
                   <FieldLabel htmlFor="e-name">Full Name</FieldLabel>
                   <Input id="e-name" placeholder="Jane Doe" {...editForm.register("name")} disabled={isPending} className="h-9 bg-muted/30 border-border/80 text-sm" />

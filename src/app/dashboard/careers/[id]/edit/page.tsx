@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation"
 import { Role, CAREERS_ACCESS_ROLES } from "@/lib/auth/roles"
 import { JobForm, type ExistingJob } from "../../JobForm"
 import { getJobPostingById } from "../../actions"
+import { getClientChoices } from "@/lib/utils/client-context"
 
 export const dynamic = "force-dynamic"
 
@@ -51,7 +52,9 @@ export default async function EditCareerPage({ params }: EditCareerPageProps) {
       options: q.options,
     })),
     keywords: job.keywords,
+    clientId: job.clientId,
   }
+  const { clients } = await getClientChoices()
 
   const isDraft = job.status === "DRAFT"
   const pageTitle = isDraft && job.draftParentId ? "Edit Draft" : "Edit Job Posting"
@@ -65,7 +68,7 @@ export default async function EditCareerPage({ params }: EditCareerPageProps) {
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{pageTitle}</h1>
         <p className="text-muted-foreground text-sm max-w-xl">{pageDesc}</p>
       </div>
-      <JobForm job={existingJob} />
+      <JobForm job={existingJob} clients={clients} />
     </div>
   )
 }

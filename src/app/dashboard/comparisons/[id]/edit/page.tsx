@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { getClientScope } from "@/lib/utils/client-context"
+import { getClientChoices, getClientScope } from "@/lib/utils/client-context"
 import { getComparisonForEdit } from "../../../_data/comparisons-queries"
 import { ComparisonForm } from "../../ComparisonForm"
 
@@ -9,6 +9,7 @@ export default async function EditComparisonPage({ params }: { params: Promise<{
   const { id } = await params
   const comparison = await getComparisonForEdit(id, await getClientScope())
   if (!comparison) notFound()
+  const { clients } = await getClientChoices()
 
   return (
     <div className="space-y-5 w-full px-1 py-3">
@@ -18,7 +19,7 @@ export default async function EditComparisonPage({ params }: { params: Promise<{
           Changes reach your website through the API only while the comparison is published.
         </p>
       </div>
-      <ComparisonForm comparisonId={comparison.id} initial={comparison.values} />
+      <ComparisonForm comparisonId={comparison.id} initial={comparison.values} clients={clients} defaultClientId={comparison.clientId} />
     </div>
   )
 }

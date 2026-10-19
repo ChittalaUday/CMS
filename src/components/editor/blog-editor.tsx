@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ClientSelect } from '@/components/ClientSelect';
+import { ClientMove } from '@/components/ClientMove';
 import { Textarea } from '@/components/ui/textarea';
 import { MediaSelectorModal } from '@/components/MediaSelectorModal';
 import { EmojiPickerButton } from '@/components/ui/emoji-picker-button';
@@ -280,6 +281,7 @@ export function BlogEditor({
   const [seoDescription, setSeoDescription] = useState("");
   const [extraMeta, setExtraMeta] = useState<ExtraMeta>(EMPTY_EXTRA_META);
   const [clientId, setClientId] = useState(defaultClientId ?? '');
+  const [recordClientId, setRecordClientId] = useState<string | null>(null);
 
   // Editor states
   const [isTableActive, setIsTableActive] = useState(false);
@@ -589,6 +591,7 @@ export function BlogEditor({
                 setSeoDescription((existingDraft.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
                 setTagsInput((((existingDraft.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
                 setExtraMeta(pickExtraMeta(existingDraft.metadata));
+                setRecordClientId(existingDraft.clientId ?? null);
                 if (existingDraft.contentJson) {
                   const val = existingDraft.contentJson as unknown as Value;
                   setContentJson(val);
@@ -608,6 +611,7 @@ export function BlogEditor({
                 setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
                 setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
                 setExtraMeta(pickExtraMeta(post.metadata));
+                setRecordClientId(post.clientId ?? null);
                 if (post.contentJson) {
                   const val = post.contentJson as unknown as Value;
                   setContentJson(val);
@@ -630,6 +634,7 @@ export function BlogEditor({
               setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
               setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
               setExtraMeta(pickExtraMeta(post.metadata));
+              setRecordClientId(post.clientId ?? null);
               if (post.contentJson) {
                 const val = post.contentJson as unknown as Value;
                 setContentJson(val);
@@ -650,6 +655,7 @@ export function BlogEditor({
               setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
               setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
               setExtraMeta(pickExtraMeta(post.metadata));
+              setRecordClientId(post.clientId ?? null);
               if (post.contentJson) {
                 const val = post.contentJson as unknown as Value;
                 setContentJson(val);
@@ -1246,6 +1252,15 @@ export function BlogEditor({
           <h3 className="font-bold text-sm text-foreground">Post Settings</h3>
         </div>
 
+        {id && (
+          <ClientMove
+            kind="post"
+            id={parentPostId ?? id}
+            currentClientId={recordClientId}
+            clients={clients}
+            redirectTo="/dashboard/blogs"
+          />
+        )}
         {!id && (
           <ClientSelect
             clients={clients}
