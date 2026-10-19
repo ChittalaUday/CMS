@@ -2,7 +2,9 @@
 title: PF and ESI registration: when employers must register and what it involves
 category: HR and Payroll
 tags: PF registration, ESI registration, EPF, ESIC, employer compliance, payroll compliance
-description: When an employer has to register for Provident Fund (EPF) and Employees' State Insurance (ESIC), what each covers, the usual monthly steps and what a missed payment can cost.
+description: When employers must register for Provident Fund (EPF) and ESI (ESIC), what each covers, the monthly steps and what a missed payment can cost.
+seoTitle: PF and ESI Registration for Employers
+coverAlt: Three employees at a shared desk with a shield and heart for health insurance and a piggy bank for savings above them
 ---
 If you employ people, you may have to register for Provident Fund (PF) and Employees' State Insurance (ESI). This guide explains when each applies and what an employer does after registering.
 

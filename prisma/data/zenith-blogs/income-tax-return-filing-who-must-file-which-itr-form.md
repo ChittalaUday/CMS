@@ -3,7 +3,8 @@ title: Income tax return filing: who must file, due dates and which ITR form
 category: Income Tax
 tags: ITR filing, income tax return, ITR forms, due date, Form 16
 description: Who has to file an income tax return in India, the usual due dates, how to pick between ITR-1, ITR-2, ITR-3 and ITR-4, and the documents to gather.
-featured: true
+seoTitle: ITR Filing: Who Must File and Which Form
+coverAlt: A man in a slate shirt with four tax form sheets fanned out, a calculator, a rupee coin and a laptop
 ---
 Most people with taxable income in India have to file an income tax return every year. This guide explains who must file, the usual due dates, how to choose your ITR form and what to keep ready.
 

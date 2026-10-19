@@ -3,6 +3,9 @@ title: Annual compliance for a Private Limited company and an LLP in India
 category: Company Compliance
 tags: annual compliance, ROC filing, AOC-4, MGT-7, LLP Form 11, LLP Form 8, director KYC
 description: The yearly filings a Private Limited company and an LLP must make in India, who files what, the usual due dates and what happens if you miss them.
+seoTitle: Annual Compliance: Pvt Ltd Company and LLP
+coverAlt: A woman in a slate blazer beside a wall calendar with filing dates marked, folders of annual filings and a laptop checklist
+featured: true
 ---
 A company or LLP in India has filing duties every year, whether or not it earned anything. This checklist covers what a Private Limited company and an LLP usually have to file, and when.
 

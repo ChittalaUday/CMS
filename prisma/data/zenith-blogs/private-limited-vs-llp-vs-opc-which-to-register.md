@@ -3,6 +3,8 @@ title: Private Limited vs LLP vs OPC: which should you register in India?
 category: Company Registration
 tags: private limited company, LLP, OPC, business structure, company registration
 description: A plain comparison of a Private Limited company, an LLP and a One Person Company in India: ownership, liability, compliance and when each one fits.
+seoTitle: Private Limited vs LLP vs OPC: Which to Pick
+coverAlt: A woman in a coral top at a desk with three choice cards, one person, two people and a small team, and a decision arrow
 ---
 A Private Limited company suits businesses that want to raise investment, an LLP suits professionals and small partnerships, and a One Person Company suits a single founder. Here is how they differ and how to choose.
 

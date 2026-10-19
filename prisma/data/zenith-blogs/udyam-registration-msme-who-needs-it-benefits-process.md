@@ -3,6 +3,8 @@ title: Udyam registration (MSME): who needs it, benefits and how to register
 category: Business Registrations
 tags: Udyam registration, MSME registration, MSME certificate, micro small medium enterprise, Udyam portal
 description: What Udyam registration is, which businesses can register as micro, small or medium enterprises, the documents you need and how the online process works.
+seoTitle: Udyam (MSME) Registration: Who Needs It
+coverAlt: A shop owner in a coral apron at his small shop holding a phone that shows a certificate with a tick
 ---
 Udyam registration is the government's way of recognising a business as a micro, small or medium enterprise (MSME). This guide explains who can register, what you need and what registration does and does not do for you.
 

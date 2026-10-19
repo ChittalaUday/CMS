@@ -3,6 +3,8 @@ title: GST annual return (GSTR-9): who must file, due date and what to reconcile
 category: GST
 tags: GSTR-9, GSTR-9C, GST annual return, GST reconciliation, GST late fee
 description: Who has to file the GST annual return GSTR-9 and the reconciliation statement GSTR-9C, the usual due date and what to reconcile before you file.
+seoTitle: GSTR-9 Annual Return: Who Files and Due Date
+coverAlt: A man in a coral shirt matching two ledgers with ticks beside a large year calendar and a laptop
 ---
 Besides the monthly or quarterly returns, most GST-registered businesses have to file an annual return. This guide explains who files it, when and what to check first.
 

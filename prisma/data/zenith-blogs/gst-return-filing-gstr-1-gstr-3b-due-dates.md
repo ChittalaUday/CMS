@@ -3,6 +3,9 @@ title: GST return filing: GSTR-1, GSTR-3B, due dates and late fees
 category: GST
 tags: GST return filing, GSTR-1, GSTR-3B, GST due date, QRMP, composition scheme
 description: How GST return filing works in India: what GSTR-1 and GSTR-3B are, the usual due dates, nil returns and what happens if you file late.
+seoTitle: GST Return Filing: GSTR-1, GSTR-3B, Due Dates
+coverAlt: A man in a coral shirt at a laptop showing an invoice list, with a calendar with two dates marked and a stack of invoices
+featured: true
 ---
 Every GST-registered business has to file returns on a fixed schedule, even in a month with no sales. This guide explains the main returns, the usual due dates and what a missed date can cost you.
 
