@@ -3,6 +3,8 @@ title: Advance tax: who must pay, instalment dates and interest
 category: Income Tax
 tags: advance tax, advance tax due dates, section 234B, section 234C, income tax payment, self assessment tax
 description: Who has to pay advance tax in India, the usual instalment dates, how presumptive taxpayers pay and what interest applies if you pay too little or too late.
+seoTitle: Advance Tax in India: Who Pays and Due Dates
+coverAlt: A woman in a teal sweater with a calendar showing four tax dates, a stack of coins, a piggy bank and a small clock
 ---
 Income tax is not only paid when you file your return. If your tax for the year is above a limit, you pay it in instalments during the year, which is called advance tax. This guide explains who pays, when and what happens if you do not.
 

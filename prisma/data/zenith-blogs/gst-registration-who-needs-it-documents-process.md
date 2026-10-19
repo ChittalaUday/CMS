@@ -3,6 +3,8 @@ title: GST registration in India: who needs it, documents and process
 category: GST
 tags: GST registration, GSTIN, GST threshold, documents for GST registration
 description: Who must register for GST in India, the turnover limits, the documents you need and how the application works, answered in plain language.
+seoTitle: GST Registration: Who Needs It and Documents
+coverAlt: A business owner holding a PAN card and address proof at a desk with a laptop, a folder and a GST registration certificate
 featured: true
 ---
 GST registration is compulsory in India once your turnover crosses the prescribed limit, and in some cases even before it. Here is who needs it, what to keep ready and how the process works.

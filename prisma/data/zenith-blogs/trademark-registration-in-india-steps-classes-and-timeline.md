@@ -3,6 +3,8 @@ title: Trademark registration in India: steps, classes and what to expect
 category: Intellectual Property
 tags: trademark registration, trademark classes, brand name, logo registration, trademark opposition, trademark renewal
 description: How to register a trademark in India: what can be registered, how classes work, the steps from search to certificate and how long the registration lasts.
+seoTitle: Trademark Registration in India: Steps, Classes
+coverAlt: A woman designer presenting a logo on a small shop sign with a registered badge, a TM mark and a magnifying glass
 ---
 A trademark protects the name, logo or other mark that identifies your products or services. This guide explains how trademark registration works in India, from the first search to the registration certificate.
 

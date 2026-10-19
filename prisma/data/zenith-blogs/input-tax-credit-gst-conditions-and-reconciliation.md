@@ -3,6 +3,8 @@ title: Input tax credit (ITC) under GST: conditions, blocked credits and reconci
 category: GST
 tags: input tax credit, ITC, GSTR-2B, GST reconciliation, blocked credit, reverse charge
 description: What input tax credit under GST is, the conditions to claim it, which credits are blocked and how to reconcile your purchases with GSTR-2B.
+seoTitle: GST Input Tax Credit: Conditions, Reconciliation
+coverAlt: A man in a slate shirt matching two columns of invoice sheets with ticks, a price tag with a percent sign and a laptop
 ---
 Input tax credit (ITC) lets a registered business reduce the GST it pays on sales by the GST it paid on purchases. It is one of the main benefits of GST registration and one of the most common sources of notices. This guide explains the basics.
 

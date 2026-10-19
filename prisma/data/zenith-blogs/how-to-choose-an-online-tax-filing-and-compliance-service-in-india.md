@@ -3,7 +3,8 @@ title: How to choose an online tax filing and compliance service in India
 category: Guides
 tags: online tax filing, compliance services India, Zenith Filings, ClearTax, Zolvit, IndiaFilings
 description: Eight questions to ask before you pick an online tax filing or compliance service in India, and how Zenith Filings, ClearTax, Zolvit and IndiaFilings differ.
-featured: true
+seoTitle: How to Choose an Online Tax Filing Service
+coverAlt: A woman in a teal sweater comparing two service cards with ticks, a magnifying glass and a checklist
 ---
 The right online filing service depends on what you need done and how much you want to do yourself. Here are the questions to ask, followed by a neutral look at some well-known services.
 

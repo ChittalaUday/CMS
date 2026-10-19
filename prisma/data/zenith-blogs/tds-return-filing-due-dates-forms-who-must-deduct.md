@@ -3,6 +3,8 @@ title: TDS return filing: forms, due dates and who must deduct TDS
 category: Income Tax
 tags: TDS return, TDS due date, Form 24Q, Form 26Q, TAN, Form 16
 description: Who has to deduct TDS in India, which TDS return form applies, the quarterly due dates and what happens if you pay or file late.
+seoTitle: TDS Return Filing: Forms and Due Dates
+coverAlt: A woman in a slate blazer handing over a payslip as a rupee coin splits towards a government building and a person icon
 ---
 If you pay salaries or certain other payments above set limits, you may have to deduct tax at source (TDS), deposit it and file a quarterly TDS return. Here is how it works.
 

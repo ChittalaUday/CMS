@@ -3,6 +3,9 @@ title: How to register a Private Limited company in India: step by step
 category: Company Registration
 tags: private limited company registration, SPICe+, MCA, certificate of incorporation, DIN
 description: The steps to register a Private Limited company in India, from name approval and SPICe+ to the certificate of incorporation and what to do right after.
+seoTitle: Private Limited Company Registration: Steps
+coverAlt: Two founders at a table holding a company incorporation certificate, with an office building icon and a stack of documents
+featured: true
 ---
 Registering a Private Limited company in India is done online with the Ministry of Corporate Affairs (MCA). These are the steps, the documents you need and what to do once you have the certificate.
 
