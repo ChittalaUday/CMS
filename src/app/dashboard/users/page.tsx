@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { Role, ADMIN_ROLES } from "@/lib/auth/roles"
 import { getEditorsPaginated } from "@/app/_actions/users"
 import { UserList } from "./UserList"
+import { getClientChoices } from "@/lib/utils/client-context"
 
 type PageProps = {
   searchParams: Promise<{ search?: string; role?: string; page?: string }>
@@ -34,6 +35,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
     pageSize,
   })
 
+  const { clients, activeClientId } = await getClientChoices()
+
   return (
     <div className="space-y-6">
       <div>
@@ -51,6 +54,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
         currentSearch={search}
         currentRole={role}
         currentUserRole={user.role}
+        clients={clients}
+        defaultClientId={activeClientId}
       />
     </div>
   )

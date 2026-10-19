@@ -50,6 +50,22 @@ async function main() {
     assert.equal(invited.clientId, other.id, "invited user must take the active client")
     assert.equal(invited.invite.clientId, other.id, "invite must take the active client")
 
+    // Super admin with no active client picks one in the form.
+    activeClient = null
+    const picked = await createEditor({ email: `pick-${tag}@t.test`, username: `pick_${tag}`, name: "Pick", role: "EDITOR", clientId: other.id })
+    assert.ok(picked?.data, `createEditor with a picked client failed: ${JSON.stringify(picked?.serverError)}`)
+    assert.equal((await prisma.user.findUnique({ where: { id: picked.data.id } })).clientId, other.id)
+
+    // ...and with neither a pick nor an active client it refuses.
+    const none = await createEditor({ email: `none-${tag}@t.test`, username: `none_${tag}`, name: "None", role: "EDITOR" })
+    assert.ok(none?.serverError, "creating without any client must fail")
+
+    // An ADMIN passing another client's id is ignored: the user lands in the admin's own client.
+    session = adminA
+    const sneaky = await createEditor({ email: `sn-${tag}@t.test`, username: `sn_${tag}`, name: "Sn", role: "EDITOR", clientId: other.id })
+    assert.ok(sneaky?.data, `createEditor as admin failed: ${JSON.stringify(sneaky?.serverError)}`)
+    assert.equal((await prisma.user.findUnique({ where: { id: sneaky.data.id } })).clientId, own.id)
+
     // An ADMIN of `own` cannot change a post of `other`.
     session = adminA
     activeClient = null

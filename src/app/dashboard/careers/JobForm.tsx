@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ClientSelect } from "@/components/ClientSelect"
 import {
   Dialog,
   DialogContent,
@@ -59,7 +60,12 @@ import { CareersConfigData } from "./GlobalTemplateConfigButton"
 
 import { toSlug } from "@/lib/careers/slug-helper"
 
-export interface JobFormProps { job?: ExistingJob }
+export interface JobFormProps {
+  job?: ExistingJob
+  /** Super admin only: clients a new job can be created for. */
+  clients?: { id: string; name: string }[]
+  defaultClientId?: string | null
+}
 export type { ExistingJob }
 // --- Helpers ---
 
@@ -105,9 +111,11 @@ function StepIndicator({ current }: { current: Step }) {
 
 // --- Main Component ---
 
-export function JobForm({ job }: JobFormProps) {
+export function JobForm({ job, clients = [], defaultClientId = null }: JobFormProps) {
   const router = useRouter()
   const isEdit = !!job
+  const [clientId, setClientId] = useState(defaultClientId ?? "")
+  const newJobClientId = isEdit ? undefined : clientId || undefined
   const isDraft = job?.status === "DRAFT"
   const hasParent = !!job?.draftParentId
   const [isPending, startTransition] = useTransition()
@@ -260,7 +268,7 @@ export function JobForm({ job }: JobFormProps) {
       return { available: true }
     }
 
-    const cacheKey = `${clean}_${job?.id ?? "new"}`
+    const cacheKey = `${clean}_${job?.id ?? "new"}_${newJobClientId ?? ""}`
     if (slugCacheRef.current.has(cacheKey)) {
       const cached = slugCacheRef.current.get(cacheKey)!
       setSlugStatus(cached.available ? "available" : "unavailable")
@@ -290,7 +298,7 @@ export function JobForm({ job }: JobFormProps) {
 
     setSlugStatus("checking")
     try {
-      const res = await checkJobSlugAvailability(clean, job?.id)
+      const res = await checkJobSlugAvailability(clean, job?.id, newJobClientId)
       slugCacheRef.current.set(cacheKey, res)
 
       if (res.available) {
@@ -322,7 +330,7 @@ export function JobForm({ job }: JobFormProps) {
       setSlugStatus("idle")
       return { available: true }
     }
-  }, [job])
+  }, [job, newJobClientId])
 
   const handleTitleBlur = useCallback(() => {
     if (!basic.title.trim()) return
@@ -437,6 +445,7 @@ export function JobForm({ job }: JobFormProps) {
   // --- Payload builder ---
   function buildPayload(): JobPostingInput {
     const salary = getSalaryPayload()
+    if (clients.length > 0 && !isEdit && !clientId) throw new Error("Select a client for this job.")
 
     const finalQuestions: QuestionInput[] = []
     let orderIdx = 0
@@ -474,6 +483,7 @@ export function JobForm({ job }: JobFormProps) {
     }
 
     return {
+      clientId: newJobClientId,
       title: basic.title || "Untitled",
       slug: basic.slug || toSlug(basic.title || "untitled"),
       department: basic.department || "—",
@@ -760,6 +770,10 @@ export function JobForm({ job }: JobFormProps) {
       <StepIndicator current={step} />
 
       
+      {step === 1 && !isEdit && (
+        <ClientSelect clients={clients} value={clientId} onChange={setClientId} className="max-w-sm space-y-2" />
+      )}
+
       {step === 1 && (
         <JobFormStep1
           basic={basic}

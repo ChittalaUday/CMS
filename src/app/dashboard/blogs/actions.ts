@@ -12,7 +12,7 @@ import {
   ADMIN_ROLES,
   BLOG_ACCESS_ROLES,
 } from "@/lib/auth/roles"
-import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
+import { getClientScope, requireClientScope, resolveCreateClientId } from "@/lib/utils/client-context"
 import { sanitizeBlogHtml } from "@/lib/utils/sanitize"
 import { getClientIdFromRequestHeaders } from "@/lib/auth/api-auth"
 
@@ -283,11 +283,17 @@ export type PostInput = {
   featuredImageId?: string | null
   categoryIds?: string[]
   metadata?: Prisma.InputJsonValue
+  /** Only honoured for a super admin creating a post. */
+  clientId?: string
 }
 
 export async function createPost(data: PostInput) {
   const user = await requireBlogAccess()
-  const clientId = await requireClientScope()
+  const clientId = await resolveCreateClientId(data.clientId)
+  // Only categories of this client may be attached
+  const categoryIds = data.categoryIds?.length
+    ? (await prisma.category.findMany({ where: { id: { in: data.categoryIds }, clientId }, select: { id: true } })).map((c) => c.id)
+    : data.categoryIds
   const safeContent = sanitizeBlogHtml(data.content)
 
   try {
@@ -303,9 +309,9 @@ export async function createPost(data: PostInput) {
         featuredImageId: data.featuredImageId || null,
         metadata: data.metadata || {},
         clientId,
-        categories: data.categoryIds
+        categories: categoryIds
           ? {
-              create: data.categoryIds.map((id) => ({
+              create: categoryIds.map((id) => ({
                 categoryId: id,
               })),
             }

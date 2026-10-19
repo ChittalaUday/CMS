@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { Role } from "@/lib/auth/roles"
 import PasswordIndicator from "@/components/PasswordIndicator"
+import { ClientSelect } from "@/components/ClientSelect"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -207,9 +208,13 @@ interface UserListProps {
   currentSearch: string
   currentRole: string
   currentUserRole: Role
+  /** Super admin only: clients a new user can be created for. */
+  clients?: { id: string; name: string }[]
+  defaultClientId?: string | null
 }
 
-export function UserList({ initialEditors, totalCount, totalPages, currentPage, currentSearch, currentRole, currentUserRole }: UserListProps) {
+export function UserList({ initialEditors, totalCount, totalPages, currentPage, currentSearch, currentRole, currentUserRole, clients = [], defaultClientId = null }: UserListProps) {
+  const [clientId, setClientId] = useState(defaultClientId ?? "")
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -321,10 +326,11 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
   }
 
   const handleCreate = createForm.handleSubmit((data) => {
+    if (clients.length > 0 && !clientId) { toast.error("Select a client for this user"); return }
     startTransition(async () => {
       const toastId = toast.loading("Creating user…")
       try {
-        const result = await createEditor({ email: data.email, username: data.username, name: data.name, role: data.role })
+        const result = await createEditor({ email: data.email, username: data.username, name: data.name, role: data.role, clientId: clientId || undefined })
         if (result?.serverError || result?.validationErrors) {
           throw new Error(result?.serverError || "Failed to create user")
         }
@@ -617,6 +623,7 @@ export function UserList({ initialEditors, totalCount, totalPages, currentPage, 
               </p>
 
               <FieldGroup>
+                <ClientSelect clients={clients} value={clientId} onChange={setClientId} disabled={isPending} />
                 <Field>
                   <FieldLabel htmlFor="c-name">Full Name</FieldLabel>
                   <Input id="c-name" placeholder="Jane Doe" {...createForm.register("name")} disabled={isPending} className="h-9 bg-muted/30 border-border/80 text-sm" />

@@ -12,7 +12,7 @@ import {
   CAREERS_ACCESS_ROLES,
   CAREERS_ADMIN_ROLES,
 } from "@/lib/auth/roles"
-import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
+import { getClientScope, resolveCreateClientId } from "@/lib/utils/client-context"
 import { getClientIdFromRequestHeaders } from "@/lib/auth/api-auth"
 import { sanitizePlainText, checkForSqlInjection } from "@/lib/utils/sanitize"
 import { z } from "zod"
@@ -139,6 +139,8 @@ export type JobPostingInput = {
   closingDate?: string | null
   questions?: QuestionInput[]
   keywords?: string[]
+  /** Only honoured for a super admin creating a job. */
+  clientId?: string
 }
 
 // --- Validation schemas ---
@@ -353,11 +355,12 @@ function buildQuestionsCreate(questions: QuestionInput[]) {
 
 export async function checkJobSlugAvailability(
   slug: string,
-  excludeJobId?: string
+  excludeJobId?: string,
+  forClientId?: string
 ): Promise<{ available: boolean; suggestedSlug?: string }> {
   try {
     await requireCareersAccess()
-    const clientId = await requireClientScope()
+    const clientId = await resolveCreateClientId(forClientId)
 
     const cleanSlug = toSlug(slug)
     if (!cleanSlug) {
@@ -410,7 +413,7 @@ export async function createJobPosting(data: JobPostingInput) {
   jobPostingSchema.parse(data)
   const user = await requireCareersAccess()
   await assertDraftLimit(user.id)
-  const clientId = await requireClientScope()
+  const clientId = await resolveCreateClientId(data.clientId)
 
   const slug = data.slug?.trim() || toSlug(data.title)
 

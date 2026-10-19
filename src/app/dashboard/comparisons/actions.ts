@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { actionClient } from "@/lib/utils/safe-action"
 import { getSession } from "@/lib/auth/session"
 import { COMPARISONS_ACCESS_ROLES, ADMIN_ROLES, type Role } from "@/lib/auth/roles"
-import { getClientScope, requireClientScope } from "@/lib/utils/client-context"
+import { getClientScope, requireClientScope, resolveCreateClientId } from "@/lib/utils/client-context"
 import { comparisonInputSchema } from "@/lib/comparisons/schema"
 import {
   createComparison,
@@ -42,11 +42,11 @@ function revalidate(id?: string) {
 }
 
 export const createComparisonAction = actionClient
-  .inputSchema(comparisonInputSchema)
-  .action(async ({ parsedInput }) => {
+  .inputSchema(comparisonInputSchema.extend({ clientId: z.string().optional() }))
+  .action(async ({ parsedInput: { clientId: requested, ...input } }) => {
     await requireComparisonsAccess()
-    const clientId = await requireClientScope()
-    const comparison = await createComparison(clientId, parsedInput)
+    const clientId = await resolveCreateClientId(requested)
+    const comparison = await createComparison(clientId, input)
     revalidate()
     return { id: comparison.id }
   })
@@ -88,10 +88,12 @@ export const reorderComparisonAction = actionClient
 
 export async function checkComparisonSlugAvailability(
   slug: string,
-  excludeId?: string
+  excludeId?: string,
+  forClientId?: string
 ): Promise<{ available: boolean; suggestedSlug?: string }> {
   await requireComparisonsAccess()
-  const clientId = await requireClientScope()
+  // Editing keeps the active client's scope; a new comparison may target the client picked in the form
+  const clientId = excludeId ? await requireClientScope() : await resolveCreateClientId(forClientId)
   const clean = toSlug(slug)
   if (!clean) return { available: true }
 

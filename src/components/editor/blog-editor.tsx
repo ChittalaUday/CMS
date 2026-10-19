@@ -40,6 +40,7 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ClientSelect } from '@/components/ClientSelect';
 import { Textarea } from '@/components/ui/textarea';
 import { MediaSelectorModal } from '@/components/MediaSelectorModal';
 import { EmojiPickerButton } from '@/components/ui/emoji-picker-button';
@@ -98,6 +99,7 @@ import { ImageElement } from '@/components/ui/image-element';
 interface Category {
   id: string;
   name: string;
+  clientId?: string | null;
 }
 
 // Plate's editor instance is a plain mutable object at runtime; attaching a custom
@@ -210,7 +212,47 @@ function ListToolbarButton({ nodeType, children, tooltip }: { nodeType: string, 
   );
 }
 
-export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigured?: boolean; isAdmin?: boolean }) {
+// Extra post fields kept in Post.metadata as plain strings (relatedServices is comma-separated slugs).
+const EXTRA_META_KEYS = ['seoTitle', 'coverAlt', 'reviewer', 'reviewedAt', 'relatedServices'] as const;
+type ExtraMeta = Record<(typeof EXTRA_META_KEYS)[number], string>;
+const EMPTY_EXTRA_META = Object.fromEntries(EXTRA_META_KEYS.map((k) => [k, ''])) as ExtraMeta;
+
+function pickExtraMeta(metadata: unknown): ExtraMeta {
+  const m = (metadata ?? {}) as Record<string, unknown>;
+  const rel = m.relatedServiceSlugs;
+  return {
+    seoTitle: (m.seoTitle as string) || '',
+    coverAlt: (m.coverAlt as string) || '',
+    reviewer: (m.reviewer as string) || '',
+    reviewedAt: (m.reviewedAt as string) || '',
+    relatedServices: Array.isArray(rel) ? rel.join(', ') : '',
+  };
+}
+
+// Empty values are left out so the stored metadata stays small.
+function extraMetaToJson(e: ExtraMeta) {
+  const out: Record<string, unknown> = {};
+  if (e.seoTitle.trim()) out.seoTitle = e.seoTitle.trim();
+  if (e.coverAlt.trim()) out.coverAlt = e.coverAlt.trim();
+  if (e.reviewer.trim()) out.reviewer = e.reviewer.trim();
+  if (e.reviewedAt) out.reviewedAt = e.reviewedAt;
+  const slugs = e.relatedServices.split(',').map((t) => t.trim()).filter(Boolean);
+  if (slugs.length) out.relatedServiceSlugs = slugs;
+  return out;
+}
+
+export function BlogEditor({
+  aiConfigured = true,
+  isAdmin = false,
+  clients = [],
+  defaultClientId = null,
+}: {
+  aiConfigured?: boolean;
+  isAdmin?: boolean;
+  /** Super admin only: clients a new post can be created for. */
+  clients?: { id: string; name: string }[];
+  defaultClientId?: string | null;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialPostId = searchParams.get('id');
@@ -236,6 +278,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
   const [tagsInput, setTagsInput] = useState("");
   const [tagInputValue, setTagInputValue] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
+  const [extraMeta, setExtraMeta] = useState<ExtraMeta>(EMPTY_EXTRA_META);
+  const [clientId, setClientId] = useState(defaultClientId ?? '');
 
   // Editor states
   const [isTableActive, setIsTableActive] = useState(false);
@@ -544,6 +588,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                 setSelectedCategoryIds(existingDraft.categories.map((c) => c.categoryId));
                 setSeoDescription((existingDraft.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
                 setTagsInput((((existingDraft.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
+                setExtraMeta(pickExtraMeta(existingDraft.metadata));
                 if (existingDraft.contentJson) {
                   const val = existingDraft.contentJson as unknown as Value;
                   setContentJson(val);
@@ -562,6 +607,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
                 setSelectedCategoryIds(post.categories.map(c => c.categoryId));
                 setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
                 setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
+                setExtraMeta(pickExtraMeta(post.metadata));
                 if (post.contentJson) {
                   const val = post.contentJson as unknown as Value;
                   setContentJson(val);
@@ -583,6 +629,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               setSelectedCategoryIds(post.categories.map(c => c.categoryId));
               setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
               setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
+              setExtraMeta(pickExtraMeta(post.metadata));
               if (post.contentJson) {
                 const val = post.contentJson as unknown as Value;
                 setContentJson(val);
@@ -602,6 +649,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
               setSelectedCategoryIds(post.categories.map(c => c.categoryId));
               setSeoDescription((post.metadata as Record<string, unknown> | null)?.seoDescription as string || "");
               setTagsInput((((post.metadata as Record<string, unknown> | null)?.tags as string[]) || []).join(", "));
+              setExtraMeta(pickExtraMeta(post.metadata));
               if (post.contentJson) {
                 const val = post.contentJson as unknown as Value;
                 setContentJson(val);
@@ -632,6 +680,10 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
   // DRAFT CREATION: Triggered explicitly when user commits the title (blur or Enter)
   const handleTitleCommit = async () => {
     if (id || !title.trim()) return;
+    if (clients.length > 0 && !clientId) {
+      toast.error('Select a client for this post first.');
+      return;
+    }
     setSaveStatus('saving');
     try {
       const generatedSlug = title
@@ -650,6 +702,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         published: false,
         featured: false,
         categoryIds: selectedCategoryIds,
+        clientId: clientId || undefined,
         metadata: {
           seoDescription,
           tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
@@ -668,6 +721,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
       }
     } catch (err) {
       console.error("Draft creation error:", err);
+      toast.error(getErrorMessage(err, "Could not create the draft"));
       setSaveStatus('error');
     }
   };
@@ -700,7 +754,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           featured,
           featuredImageId,
           categoryIds: selectedCategoryIds,
-          metadata: { seoDescription, tags: parsedTags },
+          metadata: { seoDescription, tags: parsedTags, ...extraMetaToJson(extraMeta) },
         };
 
         if (parentPostId && id === parentPostId) {
@@ -725,7 +779,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
     }, 1500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [id, parentPostId, title, slug, content, contentJson, published, featured, featuredImageId, selectedCategoryIds, tagsInput, seoDescription]);
+  }, [id, parentPostId, title, slug, content, contentJson, published, featured, featuredImageId, selectedCategoryIds, tagsInput, seoDescription, extraMeta]);
 
   // Handle publish / publish-revision
   const handlePublishToggle = async () => {
@@ -747,7 +801,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           const draft = await upsertPostDraftRevision(parentPostId, {
             title, slug, content, contentJson: contentJson as unknown as Prisma.InputJsonValue, published: false, featured, featuredImageId,
             categoryIds: selectedCategoryIds,
-            metadata: { seoDescription, tags: parsedTags },
+            metadata: { seoDescription, tags: parsedTags, ...extraMetaToJson(extraMeta) },
           });
           revisionId = draft?.id ?? null;
         }
@@ -776,7 +830,7 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
         featured,
         featuredImageId,
         categoryIds: selectedCategoryIds,
-        metadata: { seoDescription, tags: parsedTags },
+        metadata: { seoDescription, tags: parsedTags, ...extraMetaToJson(extraMeta) },
       });
       if (updated) {
         setPublished(updated.published);
@@ -1150,6 +1204,8 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
   const { charCount, wordCount } = getStats();
 
   const renderSettingsContent = () => {
+    // In All Clients mode the list holds every client's categories; a new post only shows its own client's
+    const visibleCategories = !id && clientId ? availableCategories.filter((c) => !c.clientId || c.clientId === clientId) : availableCategories;
     const renderCategoryCheckbox = (cat: Category) => {
       return (
         <div
@@ -1189,6 +1245,14 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
           <Settings className="size-4 text-primary" />
           <h3 className="font-bold text-sm text-foreground">Post Settings</h3>
         </div>
+
+        {!id && (
+          <ClientSelect
+            clients={clients}
+            value={clientId}
+            onChange={(v) => { setClientId(v); setSelectedCategoryIds([]); }}
+          />
+        )}
 
         {/* Featured Image Selector */}
         <div className="space-y-2">
@@ -1358,12 +1422,12 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             </PopoverTrigger>
             <PopoverContent align="end" className="w-60 p-2 border border-border/70 rounded-xl bg-popover shadow-md space-y-2">
               <div className="max-h-48 overflow-y-auto space-y-1 p-1">
-                {availableCategories.length === 0 ? (
+                {visibleCategories.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground/50 text-center py-4 italic">
                     No categories defined.
                   </p>
                 ) : (
-                  availableCategories.map(renderCategoryCheckbox)
+                  visibleCategories.map(renderCategoryCheckbox)
                 )}
               </div>
 
@@ -1434,6 +1498,61 @@ export function BlogEditor({ aiConfigured = true, isAdmin = false }: { aiConfigu
             onChange={(e) => setSeoDescription(e.target.value)}
             placeholder="Enter a brief search snippet..."
             className="text-xs bg-background/50 min-h-[70px] resize-none rounded-xl"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">SEO Title</Label>
+          <Input
+            type="text"
+            value={extraMeta.seoTitle}
+            onChange={(e) => setExtraMeta((m) => ({ ...m, seoTitle: e.target.value }))}
+            placeholder="Defaults to the post title"
+            className="text-xs bg-background/50 rounded-xl"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Cover image alt text</Label>
+          <Input
+            type="text"
+            value={extraMeta.coverAlt}
+            onChange={(e) => setExtraMeta((m) => ({ ...m, coverAlt: e.target.value }))}
+            placeholder="Describe the cover image"
+            className="text-xs bg-background/50 rounded-xl"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Reviewed by</Label>
+          <Input
+            type="text"
+            value={extraMeta.reviewer}
+            onChange={(e) => setExtraMeta((m) => ({ ...m, reviewer: e.target.value }))}
+            placeholder="Name or team (shown as a label, not a publish gate)"
+            className="text-xs bg-background/50 rounded-xl"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Reviewed on</Label>
+          <Input
+            type="date"
+            value={extraMeta.reviewedAt}
+            onChange={(e) => setExtraMeta((m) => ({ ...m, reviewedAt: e.target.value }))}
+            placeholder=""
+            className="text-xs bg-background/50 rounded-xl"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground">Related services</Label>
+          <Input
+            type="text"
+            value={extraMeta.relatedServices}
+            onChange={(e) => setExtraMeta((m) => ({ ...m, relatedServices: e.target.value }))}
+            placeholder="Service slugs, comma separated"
+            className="text-xs bg-background/50 rounded-xl"
           />
         </div>
       </div>

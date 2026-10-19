@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
         updatedAt: true,
         author: { select: { id: true, name: true, avatarUrl: true } },
         featuredImage: { select: { id: true, filename: true, url: true, mimeType: true, size: true } },
+        metadata: true,
         categories: { select: { category: { select: { id: true, name: true, slug: true } } } },
       },
     })

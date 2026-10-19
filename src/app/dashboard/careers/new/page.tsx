@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import { Role, CAREERS_ACCESS_ROLES } from "@/lib/auth/roles"
 import { JobForm } from "../JobForm"
+import { getClientChoices } from "@/lib/utils/client-context"
 
 export const dynamic = "force-dynamic"
 
@@ -9,6 +10,8 @@ export default async function NewCareerPage() {
   const user = await getSession()
   if (!user) redirect("/")
   if (!(CAREERS_ACCESS_ROLES as readonly Role[]).includes(user.role)) redirect("/dashboard/blogs")
+
+  const { clients, activeClientId } = await getClientChoices()
 
   return (
     <div className="space-y-5 w-full px-1 py-3">
@@ -20,7 +23,7 @@ export default async function NewCareerPage() {
           Fill in the details below. You can save as a draft and publish later.
         </p>
       </div>
-      <JobForm />
+      <JobForm clients={clients} defaultClientId={activeClientId} />
     </div>
   )
 }

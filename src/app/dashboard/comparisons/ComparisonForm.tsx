@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { ClientSelect } from "@/components/ClientSelect"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -95,10 +96,14 @@ interface Props {
   /** Present when editing an existing comparison. */
   comparisonId?: string
   initial?: ComparisonFormValues
+  /** Super admin only: clients a new comparison can be created for. */
+  clients?: { id: string; name: string }[]
+  defaultClientId?: string | null
 }
 
-export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
+export function ComparisonForm({ comparisonId, initial = EMPTY, clients = [], defaultClientId = null }: Props) {
   const router = useRouter()
+  const [clientId, setClientId] = useState(defaultClientId ?? "")
   const [fields, setFields] = useState(() => ({
     title: initial.title,
     slug: initial.slug,
@@ -184,7 +189,7 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
     setSlugStatus({ state: "checking" })
     slugTimerRef.current = setTimeout(async () => {
       try {
-        const res = await checkComparisonSlugAvailability(slug, comparisonId)
+        const res = await checkComparisonSlugAvailability(slug, comparisonId, clientId || undefined)
         if (request !== slugRequestRef.current) return
         setSlugStatus(res.available ? { state: "available" } : { state: "taken", suggestion: res.suggestedSlug })
       } catch {
@@ -266,7 +271,10 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
     setErrors({})
     sentRef.current = snapshot(toSend)
     if (comparisonId) update.execute({ id: comparisonId, data: result.data })
-    else create.execute(result.data)
+    else if (clients.length > 0 && !clientId) {
+      toast.error("Select a client for this comparison")
+      return
+    } else create.execute({ ...result.data, clientId: clientId || undefined })
   }
 
   const leave = () => {
@@ -309,6 +317,7 @@ export function ComparisonForm({ comparisonId, initial = EMPTY }: Props) {
         <div className="space-y-4 min-w-0">
           {/* Details */}
           <section className={panel}>
+            {!comparisonId && <ClientSelect clients={clients} value={clientId} onChange={setClientId} className="space-y-1.5" />}
             <div className="space-y-1.5">
               <Label htmlFor="cmp-title" className={sectionLabel}>Title</Label>
               <Input

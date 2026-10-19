@@ -15,7 +15,7 @@ import {
   MANAGEABLE_BY_ADMIN,
 } from "@/lib/auth/roles"
 import { INVITE_EXPIRY_MS } from "@/lib/auth/invite-utils"
-import { getClientScope } from "@/lib/utils/client-context"
+import { getClientScope, resolveCreateClientId } from "@/lib/utils/client-context"
 
 const SALT_ROUNDS = 12
 
@@ -131,6 +131,7 @@ export const createEditor = actionClient
       username: z.string().min(3, "Username must be at least 3 characters").max(30).regex(/^[a-zA-Z0-9_-]+$/, "Username cannot contain spaces or special characters"),
       name: z.string().min(1, "Name is required"),
       role: z.enum(["ADMIN", "HR", "EDITOR"]).optional(),
+      clientId: z.string().optional(),
     })
   )
   .action(async ({ parsedInput: data }) => {
@@ -159,13 +160,8 @@ export const createEditor = actionClient
     const code = randomBytes(4).toString("hex").toUpperCase()
     const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS)
 
-    // The client being worked in: the header's active client for a super admin (never the super admin's own
-    // client), the user's own client for everyone else.
-    const assignedClientId = await getClientScope()
-
-    if (targetRole !== Role.SUPER_ADMIN && !assignedClientId) {
-      throw new Error("Please select an active client from the header before inviting a user.")
-    }
+    // A super admin picks the client (default: the header's active client, never their own); everyone else uses their own.
+    const assignedClientId = await resolveCreateClientId(data.clientId)
 
     const user = await prisma.user.create({
       data: {
@@ -175,7 +171,7 @@ export const createEditor = actionClient
         password: tempPassword,
         role: targetRole,
         onboardingCompleted: false,
-        clientId: assignedClientId ?? undefined,
+        clientId: assignedClientId,
         invite: {
           create: {
             token,
@@ -183,7 +179,7 @@ export const createEditor = actionClient
             email: data.email,
             invitedById: sessionUser.id,
             expiresAt,
-            clientId: assignedClientId ?? undefined,
+            clientId: assignedClientId,
           },
         },
       },

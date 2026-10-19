@@ -1,9 +1,11 @@
 import { ComparisonForm } from "../ComparisonForm"
+import { getClientChoices } from "@/lib/utils/client-context"
 
 export const dynamic = "force-dynamic"
 
 // Access is enforced by ../layout.tsx
-export default function NewComparisonPage() {
+export default async function NewComparisonPage() {
+  const { clients, activeClientId } = await getClientChoices()
   return (
     <div className="space-y-5 w-full px-1 py-3">
       <div className="pb-5 border-b border-border/60 space-y-1">
@@ -12,7 +14,7 @@ export default function NewComparisonPage() {
           Add the columns you are comparing, the rows to compare them on, then fill in each cell.
         </p>
       </div>
-      <ComparisonForm />
+      <ComparisonForm clients={clients} defaultClientId={activeClientId} />
     </div>
   )
 }
