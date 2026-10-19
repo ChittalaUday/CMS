@@ -775,5 +775,187 @@
       "gst-return-filing",
       "individual-itr-filing"
     ]
+  },
+  {
+    "slug": "udyam-gst-shop-establishment-registrations",
+    "title": "Udyam, GST and Shop and Establishment: which registration is for what",
+    "description": "Three registrations that small businesses often mix up: what each is for, who issues it and what to check before you apply.",
+    "disclaimer": "General information. Limits, rules and procedures differ by business, state and year, so check the official portals or ask our Experts before you apply.",
+    "options": [
+      {
+        "label": "Udyam registration",
+        "serviceSlug": "udyam-registration"
+      },
+      {
+        "label": "GST registration",
+        "serviceSlug": "gst-registration"
+      },
+      {
+        "label": "Shop and Establishment registration",
+        "serviceSlug": "shops-and-establishment-registration"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "What it is",
+        "values": [
+          "Government recognition of a business as a micro, small or medium enterprise",
+          "Registration for goods and services tax, which gives you a GSTIN",
+          "State-level registration of a place of business under the state's shops and establishments law"
+        ]
+      },
+      {
+        "label": "Who issues it",
+        "values": [
+          "The Ministry of MSME, through the Udyam portal",
+          "The GST authorities, through the GST portal",
+          "The state labour department or local authority, depending on the state"
+        ]
+      },
+      {
+        "label": "When it is needed",
+        "values": [
+          "Optional. Useful if you want MSME schemes, loan programmes or tender preferences",
+          "Required above a turnover limit and in specific cases such as certain inter-state supplies or e-commerce sales",
+          "Required in most states for shops, offices and commercial establishments, with rules that differ by state"
+        ]
+      },
+      {
+        "label": "What to check",
+        "values": [
+          "Your investment and turnover category on the portal; the registration itself is free on the official site",
+          "The current turnover limits and which scheme (regular or composition) suits you",
+          "Your state's rules, the headcount triggers and the renewal conditions"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "udyam-registration",
+      "gst-registration",
+      "shops-and-establishment-registration"
+    ]
+  },
+  {
+    "slug": "gst-returns-compared",
+    "title": "GSTR-1, GSTR-3B, CMP-08 and GSTR-9: what each GST return is for",
+    "description": "The main GST returns side by side: what each one reports, who files it and how often.",
+    "disclaimer": "General information. Due dates, forms and turnover limits change by notification, so confirm them on the GST portal.",
+    "options": [
+      {
+        "label": "GSTR-1",
+        "serviceSlug": "gst-return-filing"
+      },
+      {
+        "label": "GSTR-3B",
+        "serviceSlug": "gst-return-filing"
+      },
+      {
+        "label": "CMP-08"
+      },
+      {
+        "label": "GSTR-9",
+        "serviceSlug": "gst-annual-return-gstr-9"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "What it reports",
+        "values": [
+          "Details of your sales (outward supplies) for the period",
+          "A summary of sales, input tax credit and the tax you pay",
+          "The tax a composition taxpayer pays for the quarter",
+          "The full year's sales, purchases, credit and tax paid in one return"
+        ]
+      },
+      {
+        "label": "Who files it",
+        "values": [
+          "Regular taxpayers, monthly or quarterly depending on the scheme chosen",
+          "Regular taxpayers, monthly or quarterly depending on the scheme chosen",
+          "Taxpayers under the composition scheme",
+          "Most regular taxpayers, subject to a turnover limit"
+        ]
+      },
+      {
+        "label": "How often",
+        "values": [
+          "Monthly, or quarterly under the quarterly scheme",
+          "Monthly, or quarterly with monthly payment under the quarterly scheme",
+          "Quarterly",
+          "Once a year, after the financial year ends"
+        ]
+      },
+      {
+        "label": "What to keep in mind",
+        "values": [
+          "Your buyers' credit depends on what you report here",
+          "Credit claimed should match GSTR-2B",
+          "It is a payment statement; composition taxpayers also file an annual return",
+          "Match it with your monthly returns and books first; it cannot be revised after filing"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "gst-return-filing",
+      "gst-annual-return-gstr-9",
+      "gst-itc-reconciliation"
+    ]
+  },
+  {
+    "slug": "payroll-in-house-vs-outsourced",
+    "title": "Payroll: in-house, software or outsourced",
+    "description": "Three ways to run payroll for a small business and what each means for the work you still have to do.",
+    "disclaimer": "General information about ways of working. It is not a recommendation for your business; the right choice depends on your headcount, states and records.",
+    "options": [
+      {
+        "label": "In-house, by your own team"
+      },
+      {
+        "label": "Payroll software you run yourself"
+      },
+      {
+        "label": "Outsourced payroll service",
+        "serviceSlug": "payroll-processing"
+      }
+    ],
+    "criteria": [
+      {
+        "label": "Who does the work",
+        "values": [
+          "Your accountant or HR person calculates salaries, deductions and payslips",
+          "You or your team enter the data and the software calculates and produces payslips",
+          "A service provider calculates, prepares payslips and the statutory figures from the data you send"
+        ]
+      },
+      {
+        "label": "Good fit when",
+        "values": [
+          "You have a small team and someone who knows the rules",
+          "You want control and have a person who can set up and check the software",
+          "You want the monthly work and the statutory calculations handled for you"
+        ]
+      },
+      {
+        "label": "What you still do",
+        "values": [
+          "Everything: calculation, deductions, payments and returns",
+          "Enter changes, check the output and file the returns and payments",
+          "Send attendance, joiners, leavers and changes on time, and approve the figures"
+        ]
+      },
+      {
+        "label": "What to check",
+        "values": [
+          "That PF, ESI, professional tax and TDS on salary are calculated and paid on time",
+          "That the software is set up for your state's rules and kept updated",
+          "What is included, who files the returns and how mistakes are corrected"
+        ]
+      }
+    ],
+    "relatedServiceSlugs": [
+      "payroll-processing",
+      "pf-registration",
+      "esi-registration"
+    ]
   }
 ]
