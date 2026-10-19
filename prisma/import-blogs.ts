@@ -3,7 +3,8 @@
  * Idempotent: a post is matched by (slug, client), so a second run updates instead of duplicating, and rows of
  * other clients are never touched.
  *
- * Usage: npm run content:import -- --dir prisma/data/zenith-blogs --client zenith-filings --author zenith_admin [--dry-run]
+ * Usage: npm run content:import -- --dir prisma/data/zenith-blogs --client zenith-filings [--author <username>] [--dry-run]
+ * Without --author the posts have no author (the public API sends `author: null`). A named author must belong to the client.
  *
  * Front matter keys: title, category, tags (comma separated), description (meta description), featured, published.
  */
@@ -57,9 +58,10 @@ function parseArticle(file: string, source: string): Article {
   }
 }
 
-async function findScope(clientSlug: string, username: string) {
+async function findScope(clientSlug: string, username?: string) {
   const client = await prisma.client.findUnique({ where: { slug: clientSlug } })
   if (!client) throw new Error(`No client with slug "${clientSlug}"`)
+  if (!username) return { client, author: null }
   const author = await prisma.user.findUnique({ where: { username } })
   if (!author) throw new Error(`No user "${username}"`)
   if (author.clientId !== client.id) throw new Error(`User "${username}" does not belong to client "${clientSlug}"`)
@@ -71,7 +73,7 @@ async function main() {
   const clientSlug = arg("client")
   const username = arg("author")
   const dryRun = process.argv.includes("--dry-run")
-  if (!dir || !clientSlug || !username) throw new Error("Usage: --dir <folder> --client <slug> --author <username> [--dry-run]")
+  if (!dir || !clientSlug) throw new Error("Usage: --dir <folder> --client <slug> [--author <username>] [--dry-run]")
 
   const articles = readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
@@ -104,7 +106,7 @@ async function main() {
       })
     } else {
       await prisma.post.create({
-        data: { ...data, slug: a.slug, authorId: author.id, clientId: client.id, categories: { create: [{ categoryId: category.id }] } },
+        data: { ...data, slug: a.slug, authorId: author?.id ?? null, clientId: client.id, categories: { create: [{ categoryId: category.id }] } },
       })
     }
   }
